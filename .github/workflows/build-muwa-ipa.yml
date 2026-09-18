@@ -1,0 +1,109 @@
+name: Build Muwa IPA
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['README.md', 'docs/**']
+  workflow_dispatch:
+    inputs:
+      floot_export_url:
+        description: 'Optional HTTPS URL of a Floot native export ZIP'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: muwa-ios-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source:
+    name: Verify or import Floot export
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: write
+    outputs:
+      commit: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve source export
+        id: source
+        shell: bash
+        env:
+          INPUT_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.floot_export_url || '' }}
+          BOOTSTRAP_URL: https://20d2f317-3710-4331-80ee-ea6072056928.sandbox.floot.app/_cdn/static/e96069d6-90df-43a5-bab3-74b5d88221ef-muwa-native-trim.zip
+        run: |
+          if [[ -n "$INPUT_URL" ]]; then
+            echo "url=$INPUT_URL" >> "$GITHUB_OUTPUT"
+          elif [[ ! -f ios/App/Podfile ]]; then
+            echo "url=$BOOTSTRAP_URL" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Import Floot export
+        if: steps.source.outputs.url != ''
+        env:
+          EXPORT_URL: ${{ steps.source.outputs.url }}
+        run: python3 scripts/floot_export.py --from-url "$EXPORT_URL"
+
+      - name: Verify imported source
+        run: python3 scripts/floot_export.py --check
+
+      - name: Save imported source and select exact commit
+        id: commit
+        env:
+          MUWA_BRANCH: ${{ github.ref_name }}
+        run: |
+          git add ios package.json pnpm-lock.yaml capacitor.config.json floot-export.json
+          if ! git diff --cached --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'chore: import Floot native export [skip ci]'
+            git push origin "HEAD:refs/heads/$MUWA_BRANCH"
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Xcode archive and unsigned IPA
+    needs: source
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.source.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Build unsigned Muwa.ipa
+        run: bash scripts/build-ipa.sh
+      - name: Upload IPA
+        id: ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: Muwa-IPA-${{ github.run_number }}
+          path: |
+            build/Muwa.ipa
+            build/Muwa.ipa.sha256
+            build/build-info.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Muwa-build-logs-${{ github.run_number }}
+          path: |
+            build/xcodebuild.log
+            build/xcode-version.txt
+            build/Podfile.lock
+          if-no-files-found: ignore
+          retention-days: 14
