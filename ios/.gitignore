@@ -1,0 +1,6 @@
+# Floot exports include bundled public/ and generated native config.
+App/build/
+App/Pods/
+App/output/
+DerivedData/
+xcuserdata/

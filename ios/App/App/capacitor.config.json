@@ -1,0 +1,86 @@
+{
+  "appId": "app.muwa.nasheeds",
+  "appName": "Muwa Nasheeds",
+  "webDir": "dist",
+  "plugins": {
+    "CapacitorCookies": {
+      "enabled": true
+    },
+    "StatusBar": {
+      "overlaysWebView": false,
+      "backgroundColor": "#000000",
+      "style": "DARK"
+    },
+    "SystemBars": {
+      "style": "DARK"
+    }
+  },
+  "android": {
+    "includePlugins": [
+      "@capacitor/android",
+      "@capacitor/app",
+      "@capacitor/assets",
+      "@capacitor/browser",
+      "@capacitor/cli",
+      "@capacitor/core",
+      "@capacitor/ios",
+      "@hookform/resolvers",
+      "@radix-ui/react-accordion",
+      "@radix-ui/react-avatar",
+      "@radix-ui/react-collapsible",
+      "@radix-ui/react-context-menu",
+      "@radix-ui/react-dialog",
+      "@radix-ui/react-dropdown-menu",
+      "@radix-ui/react-hover-card",
+      "@radix-ui/react-popover",
+      "@radix-ui/react-progress",
+      "@radix-ui/react-radio-group",
+      "@radix-ui/react-scroll-area",
+      "@radix-ui/react-select",
+      "@radix-ui/react-separator",
+      "@radix-ui/react-slider",
+      "@radix-ui/react-slot",
+      "@radix-ui/react-switch",
+      "@radix-ui/react-tabs",
+      "@radix-ui/react-toggle",
+      "@radix-ui/react-toggle-group",
+      "@radix-ui/react-tooltip",
+      "@tanstack/react-query",
+      "@vitejs/plugin-react-swc",
+      "acorn",
+      "acorn-walk",
+      "cmdk",
+      "date-fns",
+      "embla-carousel",
+      "embla-carousel-react",
+      "glob",
+      "happy-dom",
+      "lucide-react",
+      "magic-string",
+      "plist",
+      "react",
+      "react-big-calendar",
+      "react-day-picker",
+      "react-dom",
+      "react-helmet",
+      "react-helmet-async",
+      "react-hook-form",
+      "react-resizable-panels",
+      "react-router-dom",
+      "recharts",
+      "sharp",
+      "sonner",
+      "superjson",
+      "vite",
+      "vite-plugin-minify",
+      "vite-plugin-node-polyfills",
+      "vite-plugin-optimize-css-modules",
+      "zod"
+    ]
+  },
+  "packageClassList": [
+    "AppPlugin",
+    "CAPBrowserPlugin",
+    "StatusBarPlugin"
+  ]
+}
