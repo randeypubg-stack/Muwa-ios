@@ -1,0 +1,133 @@
+name: Build Native SwiftUI IPA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: muwa-native-ios-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build native SwiftUI unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare native source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build-src build
+          mkdir -p build-src build
+          unzip -q native-source.zip -d build-src
+          ROOT="$PWD/build-src/muwa_github_payload"
+          test -f "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
+          test -f "$ROOT/MuwaNasheeds.xcodeproj/xcshareddata/xcschemes/MuwaNasheeds.xcscheme"
+
+          ICON_URL="https://20d2f317-3710-4331-80ee-ea6072056928.sandbox.floot.app/_cdn/static/158afa48-c82f-461a-bc25-e921d95ea6a0.png"
+          ICON_PATH="$ROOT/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"
+          MARK_PATH="$ROOT/Resources/Assets.xcassets/AppMark.imageset/AppMark.png"
+          curl --fail --location --retry 3 --retry-delay 2 "$ICON_URL" -o "$ICON_PATH"
+          cp "$ICON_PATH" "$MARK_PATH"
+
+          WIDTH="$(sips -g pixelWidth "$ICON_PATH" | awk '/pixelWidth/{print $2}')"
+          HEIGHT="$(sips -g pixelHeight "$ICON_PATH" | awk '/pixelHeight/{print $2}')"
+          test "$WIDTH" = "1024"
+          test "$HEIGHT" = "1024"
+
+          echo "SOURCE_ROOT=$ROOT" >> "$GITHUB_ENV"
+
+      - name: Xcode environment
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcodebuild -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj" -scheme MuwaNasheeds -list
+
+      - name: Build Release for physical iOS device
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find "$PWD/build/DerivedData/Build/Products/Release-iphoneos" -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP_PATH"
+          test -f "$APP_PATH/Info.plist"
+
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")"
+          BUILD_NO="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist")"
+          EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Info.plist")"
+
+          test "$BUNDLE_ID" = "app.muwa.nasheeds"
+          test "$VERSION" = "1.4.0"
+          test "$BUILD_NO" = "8"
+          test -x "$APP_PATH/$EXECUTABLE"
+
+          lipo -info "$APP_PATH/$EXECUTABLE" | tee build/architecture.txt
+          lipo -info "$APP_PATH/$EXECUTABLE" | grep -q arm64
+
+          rm -rf build/package
+          mkdir -p build/package/Payload
+          ditto "$APP_PATH" "build/package/Payload/Muwa Nasheeds.app"
+          find build/package/Payload -type d -name _CodeSignature -prune -exec rm -rf '{}' +
+          find build/package/Payload -type f -name embedded.mobileprovision -delete
+
+          (
+            cd build/package
+            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build8-unsigned.ipa Payload
+          )
+
+          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build8-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build8-unsigned.ipa.sha256
+
+          cat > build/build-info.json <<EOF
+          {
+            "app": "Muwa Nasheeds",
+            "bundle_id": "$BUNDLE_ID",
+            "version": "$VERSION",
+            "build": "$BUILD_NO",
+            "architecture": "arm64",
+            "swiftui_native": true,
+            "webview": false,
+            "signed": false,
+            "source_commit": "${GITHUB_SHA}",
+            "source_archive_sha256": "e4527ee1540e8abbac69efc493eb4b87a83f5e3f687b407fa7ce53685f4bcd4a",
+            "run_url": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          }
+          EOF
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Muwa-Nasheeds-Native-IPA-${{ github.run_number }}
+          path: |
+            build/Muwa-Nasheeds-v1.4.0-build8-unsigned.ipa
+            build/Muwa-Nasheeds-v1.4.0-build8-unsigned.ipa.sha256
+            build/build-info.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+
+      - name: Upload Xcode log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Muwa-Nasheeds-build-log-${{ github.run_number }}
+          path: |
+            build/xcodebuild.log
+            build/architecture.txt
+          if-no-files-found: ignore
+          retention-days: 14
