@@ -295,7 +295,7 @@ struct MorphingPlayerView: View {
             : -pageDistance + drag
         )
         .scaleEffect(0.985 + (normalized * 0.015))
-        .opacity(0.72 + (normalized * 0.28))
+        .opacity(Double(0.72 + (normalized * 0.28)))
       }
 
       artworkPage(
@@ -307,7 +307,7 @@ struct MorphingPlayerView: View {
       )
       .offset(x: drag)
       .scaleEffect(1 - (normalized * 0.018))
-      .opacity(1 - (normalized * 0.08))
+      .opacity(Double(1 - (normalized * 0.08)))
     }
     .frame(width: size, height: size)
     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
