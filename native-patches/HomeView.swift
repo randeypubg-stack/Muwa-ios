@@ -15,24 +15,41 @@ struct HomeView: View {
     GeometryReader { proxy in
       let layout = AdaptiveLayout(size: proxy.size, safeArea: proxy.safeAreaInsets)
 
-      ScrollView(showsIndicators: false) {
-        VStack(alignment: .leading, spacing: layout.isWide ? 34 : 28) {
-          ScreenHeader(title: "Главная", searchAction: openSearch)
+      VStack(spacing: 0) {
+        ScreenHeader(title: "Главная", searchAction: openSearch)
+          .padding(.horizontal, layout.horizontalPadding)
+          .padding(.top, layout.isCompactLandscapePhone ? 6 : 10)
+          .padding(.bottom, 10)
+          .adaptiveFrame(maxWidth: layout.contentMaxWidth)
+          .background(
+            LinearGradient(
+              colors: [
+                Color.black.opacity(0.58),
+                Color.black.opacity(0.28),
+              ],
+              startPoint: .top,
+              endPoint: .bottom
+            )
+          )
+          .zIndex(10)
 
-          continueListening(layout: layout)
+        ScrollView(showsIndicators: false) {
+          VStack(alignment: .leading, spacing: layout.isWide ? 34 : 28) {
+            continueListening(layout: layout)
 
-          if layout.isWide {
-            recommendationsGrid(layout: layout)
-            popularGrid(layout: layout)
-          } else {
-            recommendationsCarousel
-            popularList
+            if layout.isWide {
+              recommendationsGrid(layout: layout)
+              popularGrid(layout: layout)
+            } else {
+              recommendationsCarousel
+              popularList
+            }
           }
+          .padding(.horizontal, layout.horizontalPadding)
+          .padding(.top, layout.isCompactLandscapePhone ? 8 : 14)
+          .padding(.bottom, layout.isCompactLandscapePhone ? 132 : 170)
+          .adaptiveFrame(maxWidth: layout.contentMaxWidth)
         }
-        .padding(.horizontal, layout.horizontalPadding)
-        .padding(.top, layout.isCompactLandscapePhone ? 10 : 18)
-        .padding(.bottom, layout.isCompactLandscapePhone ? 132 : 170)
-        .adaptiveFrame(maxWidth: layout.contentMaxWidth)
       }
     }
   }

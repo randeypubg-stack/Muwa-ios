@@ -10,16 +10,16 @@ struct AppBackground: View {
       ZStack {
         LinearGradient(
           colors: [
-            Color(red: 0.035, green: 0.075, blue: 0.12),
-            Color(red: 0.018, green: 0.038, blue: 0.065),
-            Color(red: 0.008, green: 0.014, blue: 0.025),
+            Color(red: 0.010, green: 0.020, blue: 0.034),
+            Color(red: 0.005, green: 0.011, blue: 0.020),
+            Color(red: 0.002, green: 0.005, blue: 0.010),
           ],
           startPoint: .top,
           endPoint: .bottom
         )
 
         Circle()
-          .fill(Color(red: 0.18, green: 0.36, blue: 0.72).opacity(0.18))
+          .fill(Color(red: 0.10, green: 0.24, blue: 0.52).opacity(0.085))
           .frame(width: span * 0.92, height: span * 0.92)
           .blur(radius: span * 0.18)
           .offset(
@@ -29,7 +29,7 @@ struct AppBackground: View {
           .scaleEffect(animateGlow ? 1.04 : 0.96)
 
         Circle()
-          .fill(Color.cyan.opacity(0.055))
+          .fill(Color.cyan.opacity(0.018))
           .frame(width: span * 0.74, height: span * 0.74)
           .blur(radius: span * 0.17)
           .offset(
@@ -41,7 +41,7 @@ struct AppBackground: View {
         LinearGradient(
           colors: [
             .clear,
-            Color.black.opacity(0.18),
+            Color.black.opacity(0.34),
           ],
           startPoint: .top,
           endPoint: .bottom

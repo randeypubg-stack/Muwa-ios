@@ -39,7 +39,7 @@ struct MorphingPlayerView: View {
       let miniWidth = min(miniWidthLimit, usableWidth)
       let miniHeight: CGFloat = 58
 
-      let bottomBarHeight: CGFloat = 68
+      let bottomBarHeight: CGFloat = 62
       let playerBarGap: CGFloat = 8
       let miniCenterY =
         viewportHeight
@@ -117,14 +117,32 @@ struct MorphingPlayerView: View {
             settle(to: 1)
           }
         }
-                .position(x: viewportWidth / 2, y: playerCenterY)
+        .simultaneousGesture(
+          expansionDragGesture(
+            travel: travel,
+            miniCenterY: miniCenterY,
+            miniWidth: miniWidth,
+            miniHeight: miniHeight,
+            viewportWidth: viewportWidth
+          )
+        )
+        .position(x: viewportWidth / 2, y: playerCenterY)
 
         sharedArtwork(
           size: artworkSize,
           cornerRadius: lerp(13, 36, p),
           progress: p
         )
-                .position(
+        .simultaneousGesture(
+          expansionDragGesture(
+            travel: travel,
+            miniCenterY: miniCenterY,
+            miniWidth: miniWidth,
+            miniHeight: miniHeight,
+            viewportWidth: viewportWidth
+          )
+        )
+        .position(
           x: ((viewportWidth - playerWidth) / 2) + artworkX,
           y: playerCenterY - (playerHeight / 2) + artworkY
         )
@@ -133,7 +151,17 @@ struct MorphingPlayerView: View {
           width: metadataWidth,
           progress: p
         )
-                .position(
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+          expansionDragGesture(
+            travel: travel,
+            miniCenterY: miniCenterY,
+            miniWidth: miniWidth,
+            miniHeight: miniHeight,
+            viewportWidth: viewportWidth
+          )
+        )
+        .position(
           x: ((viewportWidth - playerWidth) / 2) + metadataLeft + (metadataWidth / 2),
           y: playerCenterY - (playerHeight / 2) + metadataY
         )
@@ -170,16 +198,6 @@ struct MorphingPlayerView: View {
         )
       }
       .frame(width: viewportWidth, height: viewportHeight)
-      .contentShape(Rectangle())
-      .simultaneousGesture(
-        expansionDragGesture(
-          travel: travel,
-          miniCenterY: miniCenterY,
-          miniWidth: miniWidth,
-          miniHeight: miniHeight,
-          viewportWidth: viewportWidth
-        )
-      )
     }
     .sheet(isPresented: $premiumPresented) {
       PremiumView(compact: true)
@@ -455,7 +473,8 @@ struct MorphingPlayerView: View {
         .position(x: localCenterX, y: actionsY)
     }
     .opacity(Double(opacity))
-    .allowsHitTesting(opacity > 0.72)
+    .allowsHitTesting(opacity > 0.60)
+    .zIndex(30)
   }
 
   private func fullTopBar(width: CGFloat) -> some View {
