@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct RootView: View {
   @EnvironmentObject private var player: PlayerManager
@@ -46,42 +47,63 @@ struct RootView: View {
     GeometryReader { proxy in
       let layout = AdaptiveLayout(size: proxy.size, safeArea: proxy.safeAreaInsets)
       let progress = min(max(playerExpansion, 0), 1)
+      let windowInsets = activeWindowSafeAreaInsets
+      let safeTop = max(proxy.safeAreaInsets.top, windowInsets.top)
+      let safeBottom = max(proxy.safeAreaInsets.bottom, windowInsets.bottom)
+
       let chromeLimit = layout.bottomChromeMaxWidth.isFinite
         ? layout.bottomChromeMaxWidth
         : max(0, layout.viewportWidth - layout.horizontalPadding * 2)
+
       let chromeWidth = min(
         chromeLimit,
         max(0, layout.viewportWidth - layout.horizontalPadding * 2)
       )
 
+      let chromeDrop: CGFloat =
+        layout.isPhone
+        ? max(safeBottom - 4, 12)
+        : 0
+
       ZStack(alignment: .bottom) {
         tabContent
-          .blur(radius: 1.35 * progress)
-          .scaleEffect(1 - (0.004 * progress))
+          .blur(radius: 1.10 * progress)
+          .scaleEffect(1 - (0.003 * progress))
 
         if player.currentTrack != nil {
           MorphingPlayerView(
             selection: $selection,
-            expansion: $playerExpansion
+            expansion: $playerExpansion,
+            chromeDrop: chromeDrop,
+            safeTopInset: safeTop,
+            safeBottomInset: safeBottom
           )
-          .ignoresSafeArea()
+          .opacity(Double(min(1, progress * 10)))
+          .allowsHitTesting(progress > 0.004)
           .zIndex(20)
         }
 
-        BottomBar(
-          selection: $selection,
-          playerActive: progress > 0.56,
-          openPlayer: expandPlayer,
-          selectTab: { tab in
-            selection = tab
-            if progress > 0.001 {
-              collapsePlayer()
-            }
+        VStack(spacing: 8) {
+          if player.currentTrack != nil {
+            MiniPlayerView(openPlayer: expandPlayer)
+              .opacity(Double(1 - smoothStep(progress / 0.18)))
+              .allowsHitTesting(progress < 0.08)
           }
-        )
+
+          BottomBar(
+            selection: $selection,
+            playerActive: progress > 0.56,
+            openPlayer: expandPlayer,
+            selectTab: { tab in
+              selection = tab
+              if progress > 0.001 {
+                collapsePlayer()
+              }
+            }
+          )
+        }
         .frame(width: chromeWidth)
-        .padding(.horizontal, layout.horizontalPadding)
-        .padding(.bottom, layout.isPhone ? 2 : max(proxy.safeAreaInsets.bottom, 10))
+        .offset(y: chromeDrop)
         .zIndex(40)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -116,7 +138,7 @@ struct RootView: View {
 
   private func expandPlayer() {
     withAnimation(
-      .spring(response: 0.50, dampingFraction: 0.92, blendDuration: 0.10)
+      .spring(response: 0.50, dampingFraction: 0.94, blendDuration: 0.12)
     ) {
       playerExpansion = 1
     }
@@ -124,10 +146,24 @@ struct RootView: View {
 
   private func collapsePlayer() {
     withAnimation(
-      .spring(response: 0.46, dampingFraction: 0.94, blendDuration: 0.12)
+      .spring(response: 0.48, dampingFraction: 0.96, blendDuration: 0.14)
     ) {
       playerExpansion = 0
     }
+  }
+
+  private var activeWindowSafeAreaInsets: UIEdgeInsets {
+    UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .filter { $0.activationState == .foregroundActive }
+      .flatMap { $0.windows }
+      .first(where: \ .isKeyWindow)?
+      .safeAreaInsets ?? .zero
+  }
+
+  private func smoothStep(_ value: CGFloat) -> CGFloat {
+    let x = min(1, max(0, value))
+    return x * x * (3 - (2 * x))
   }
 }
 

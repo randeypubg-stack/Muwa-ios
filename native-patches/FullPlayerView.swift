@@ -8,6 +8,9 @@ struct MorphingPlayerView: View {
 
   @Binding var selection: AppTab
   @Binding var expansion: CGFloat
+  let chromeDrop: CGFloat
+  let safeTopInset: CGFloat
+  let safeBottomInset: CGFloat
 
   @State private var premiumPresented = false
   @State private var queuePresented = false
@@ -36,24 +39,25 @@ struct MorphingPlayerView: View {
       let miniWidth = min(miniWidthLimit, usableWidth)
       let miniHeight: CGFloat = 58
 
-      let bottomInset: CGFloat =
-        layout.isPhone
-        ? 2
-        : max(proxy.safeAreaInsets.bottom, 10)
       let bottomBarHeight: CGFloat = 68
-      let playerBarGap: CGFloat = 10
+      let playerBarGap: CGFloat = 8
       let miniCenterY =
         viewportHeight
-        - bottomInset
         - bottomBarHeight
         - playerBarGap
         - (miniHeight / 2)
+        + chromeDrop
 
-      let fullCenterY = viewportHeight / 2
+      let fullSurfaceHeight =
+        viewportHeight
+        + safeTopInset
+        + safeBottomInset
+      let fullCenterY =
+        (viewportHeight + safeBottomInset - safeTopInset) / 2
       let travel = max(1, miniCenterY - fullCenterY)
 
       let playerWidth = lerp(miniWidth, viewportWidth, p)
-      let playerHeight = lerp(miniHeight, viewportHeight, p)
+      let playerHeight = lerp(miniHeight, fullSurfaceHeight, p)
       let playerCenterY = lerp(miniCenterY, fullCenterY, p)
       let cornerRadius = lerp(27, 0, p)
 
@@ -65,7 +69,7 @@ struct MorphingPlayerView: View {
       )
 
       let fullArtworkTop =
-        proxy.safeAreaInsets.top + (isShortPhone ? 50 : 72)
+        safeTopInset + (isShortPhone ? 44 : 58)
       let fullArtworkY = fullArtworkTop + (fullArtworkSize / 2)
 
       let miniArtworkSize: CGFloat = 42
@@ -160,7 +164,9 @@ struct MorphingPlayerView: View {
           artworkSize: fullArtworkSize,
           metadataY: fullMetadataY,
           opacity: fullOpacity,
-          isShortPhone: isShortPhone
+          isShortPhone: isShortPhone,
+          chromeDrop: chromeDrop,
+          safeTopInset: safeTopInset
         )
       }
       .frame(width: viewportWidth, height: viewportHeight)
@@ -388,7 +394,9 @@ struct MorphingPlayerView: View {
     artworkSize: CGFloat,
     metadataY: CGFloat,
     opacity: CGFloat,
-    isShortPhone: Bool
+    isShortPhone: Bool,
+    chromeDrop: CGFloat,
+    safeTopInset: CGFloat
   ) -> some View {
     let containerTop = centerY - (playerHeight / 2)
     let localCenterX = layout.viewportWidth / 2
@@ -407,9 +415,9 @@ struct MorphingPlayerView: View {
       + (isShortPhone ? 64 : 78)
 
     let chromeTop =
-      containerTop
-      + playerHeight
-      - 70
+      layout.viewportHeight
+      - 68
+      + chromeDrop
     let actionsY = min(
       proposedActionsY,
       chromeTop - 42
@@ -419,7 +427,7 @@ struct MorphingPlayerView: View {
       fullTopBar(width: contentWidth)
         .position(
           x: localCenterX,
-          y: containerTop + max(34, layout.safeArea.top + 28)
+          y: containerTop + safeTopInset + 28
         )
 
       Button {
