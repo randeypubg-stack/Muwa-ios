@@ -14,6 +14,7 @@ struct FullPlayerView: View {
   @State private var subtitleLanguage: SubtitleLanguage = .arabic
   @State private var downloadError: String?
   @GestureState private var coverDragX: CGFloat = 0
+  @GestureState private var dismissDragY: CGFloat = 0
 
   private var track: Track {
     player.currentTrack ?? Track.catalog[0]
@@ -22,14 +23,20 @@ struct FullPlayerView: View {
   var body: some View {
     GeometryReader { proxy in
       let layout = AdaptiveLayout(size: proxy.size, safeArea: proxy.safeAreaInsets)
-      let availableWidth = max(0, proxy.size.width - layout.horizontalPadding * 2)
+      let viewportWidth = layout.viewportWidth
+      let viewportHeight = layout.viewportHeight
+      let availableWidth = max(0, viewportWidth - layout.horizontalPadding * 2)
       let contentWidth = min(layout.contentMaxWidth, availableWidth)
       let chromeLimit = layout.bottomChromeMaxWidth.isFinite
         ? layout.bottomChromeMaxWidth : availableWidth
       let chromeWidth = min(chromeLimit, availableWidth)
+      let dragY = max(0, dismissDragY)
 
       ZStack(alignment: .bottom) {
-        ArtworkBackdrop(url: track.artworkURL).ignoresSafeArea()
+        ArtworkBackdrop(url: track.artworkURL)
+          .frame(width: viewportWidth, height: viewportHeight)
+          .clipped()
+          .ignoresSafeArea()
 
         ScrollView(.vertical, showsIndicators: false) {
           VStack(spacing: 14) {
@@ -49,9 +56,9 @@ struct FullPlayerView: View {
             Spacer(minLength: layout.isCompactLandscapePhone ? 88 : 128)
           }
           .frame(width: contentWidth)
-          .frame(maxWidth: .infinity, alignment: .center)
         }
-        .frame(width: proxy.size.width)
+        .frame(width: viewportWidth, height: viewportHeight, alignment: .top)
+        .clipped()
 
         BottomBar(
           selection: $selection,
@@ -65,6 +72,30 @@ struct FullPlayerView: View {
         .frame(width: chromeWidth)
         .padding(.bottom, max(proxy.safeAreaInsets.bottom, layout.isCompactLandscapePhone ? 4 : 10))
       }
+      .frame(width: viewportWidth, height: viewportHeight, alignment: .topLeading)
+      .contentShape(Rectangle())
+      .offset(y: dragY)
+      .scaleEffect(1 - min(dragY / 1400, 0.025), anchor: .top)
+      .simultaneousGesture(
+        DragGesture(minimumDistance: 14, coordinateSpace: .global)
+          .updating($dismissDragY) { value, state, _ in
+            let vertical = value.translation.height
+            let horizontal = abs(value.translation.width)
+            if vertical > 0 && vertical > horizontal * 1.15 {
+              state = min(vertical, 260)
+            }
+          }
+          .onEnded { value in
+            let vertical = value.translation.height
+            let horizontal = abs(value.translation.width)
+            guard vertical > 0, vertical > horizontal * 1.15 else { return }
+
+            if vertical > 100 || value.predictedEndTranslation.height > 180 {
+              dismiss()
+            }
+          }
+      )
+      .animation(.interactiveSpring(response: 0.30, dampingFraction: 0.86), value: dismissDragY)
     }
     .sheet(isPresented: $premiumPresented) {
       PremiumView(compact: true)
@@ -96,7 +127,7 @@ struct FullPlayerView: View {
       }
 
       progress
-      transport(compact: false)
+      transport(compact: layout.isPhone || layout.viewportWidth < 390)
       smallActions
     }
     .frame(maxWidth: .infinity)
