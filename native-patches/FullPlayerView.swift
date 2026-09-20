@@ -66,7 +66,11 @@ struct FullPlayerView: View {
         .padding(.bottom, max(proxy.safeAreaInsets.bottom, layout.isCompactLandscapePhone ? 4 : 10))
       }
     }
-    .sheet(isPresented: $premiumPresented) { PremiumView() }
+    .sheet(isPresented: $premiumPresented) {
+      PremiumView(compact: true)
+        .presentationDetents([.fraction(0.60), .large])
+        .presentationDragIndicator(.hidden)
+    }
     .sheet(isPresented: $queuePresented) { QueueView() }
     .alert(
       "Не удалось скачать",
