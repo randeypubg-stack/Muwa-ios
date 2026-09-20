@@ -50,6 +50,12 @@ struct RootView: View {
       let windowInsets = activeWindowSafeAreaInsets
       let safeTop = max(proxy.safeAreaInsets.top, windowInsets.top)
       let safeBottom = max(proxy.safeAreaInsets.bottom, windowInsets.bottom)
+      let safeLeading = max(proxy.safeAreaInsets.leading, windowInsets.left)
+      let safeTrailing = max(proxy.safeAreaInsets.trailing, windowInsets.right)
+      let chromeSideInset = max(
+        layout.horizontalPadding,
+        max(safeLeading, safeTrailing)
+      )
 
       let chromeLimit = layout.bottomChromeMaxWidth.isFinite
         ? layout.bottomChromeMaxWidth
@@ -57,7 +63,7 @@ struct RootView: View {
 
       let chromeWidth = min(
         chromeLimit,
-        max(0, layout.viewportWidth - layout.horizontalPadding * 2)
+        max(0, layout.viewportWidth - chromeSideInset * 2)
       )
 
       let chromeDrop: CGFloat =
@@ -76,7 +82,13 @@ struct RootView: View {
             expansion: $playerExpansion,
             chromeDrop: chromeDrop,
             safeTopInset: safeTop,
-            safeBottomInset: safeBottom
+            safeBottomInset: safeBottom,
+            safeLeadingInset: safeLeading,
+            safeTrailingInset: safeTrailing
+          )
+          .ignoresSafeArea(
+            .container,
+            edges: layout.isLandscape ? .horizontal : []
           )
           .opacity(Double(min(1, progress * 10)))
           .allowsHitTesting(progress > 0.004)

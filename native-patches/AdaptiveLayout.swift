@@ -18,19 +18,18 @@ struct AdaptiveLayout {
   }
 
   var isLandscape: Bool {
+    let delta = size.width - size.height
+    if abs(delta) > 1 {
+      return delta > 0
+    }
+
     if let orientation = activeOrientation {
       if orientation.isLandscape { return true }
       if orientation.isPortrait { return false }
     }
 
-    if isPhone {
-      let screen = UIScreen.main.bounds.size
-      if screen.width != screen.height {
-        return screen.width > screen.height
-      }
-    }
-
-    return size.width > size.height
+    let screen = UIScreen.main.bounds.size
+    return screen.width > screen.height
   }
 
   // On iPhone, clamp SwiftUI's proposed geometry to the actual physical screen
@@ -43,7 +42,8 @@ struct AdaptiveLayout {
     let screen = UIScreen.main.bounds.size
     let portraitWidth = min(screen.width, screen.height)
     let landscapeWidth = max(screen.width, screen.height)
-    let physicalWidth = isLandscape ? landscapeWidth : portraitWidth
+    let proposedLandscape = size.width > size.height
+    let physicalWidth = proposedLandscape ? landscapeWidth : portraitWidth
     return min(proposed, physicalWidth)
   }
 
@@ -54,7 +54,8 @@ struct AdaptiveLayout {
     let screen = UIScreen.main.bounds.size
     let portraitHeight = max(screen.width, screen.height)
     let landscapeHeight = min(screen.width, screen.height)
-    let physicalHeight = isLandscape ? landscapeHeight : portraitHeight
+    let proposedLandscape = size.width > size.height
+    let physicalHeight = proposedLandscape ? landscapeHeight : portraitHeight
     return min(proposed, physicalHeight)
   }
 
@@ -83,6 +84,9 @@ struct AdaptiveLayout {
   var contentMaxWidth: CGFloat {
     let width = viewportWidth
     if isPhone {
+      if isLandscape {
+        return max(0, width - horizontalPadding * 2)
+      }
       return max(0, min(width - horizontalPadding * 2, 620))
     }
     if width >= 1000 { return min(width - horizontalPadding * 2, 1180) }
@@ -137,8 +141,13 @@ struct AdaptiveLayout {
     if isPhone {
       return max(0, viewportWidth - horizontalPadding * 2)
     }
+    if isLandscape {
+      return min(
+        max(0, viewportWidth - horizontalPadding * 2),
+        max(720, viewportWidth * 0.82)
+      )
+    }
     if viewportWidth >= 700 { return 720 }
-    if isLandscape { return 680 }
     return .infinity
   }
 

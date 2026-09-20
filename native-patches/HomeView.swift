@@ -16,6 +16,7 @@ struct HomeView: View {
   let openSearch: () -> Void
 
   @State private var scrollOffset: CGFloat = 0
+  @State private var scrollOrigin: CGFloat?
 
   var body: some View {
     GeometryReader { proxy in
@@ -62,7 +63,10 @@ struct HomeView: View {
         }
         .coordinateSpace(name: "home-scroll")
         .onPreferenceChange(HomeScrollOffsetKey.self) { value in
-          scrollOffset = value
+          if scrollOrigin == nil {
+            scrollOrigin = value
+          }
+          scrollOffset = value - (scrollOrigin ?? value)
         }
 
         collapsingHeader(
@@ -119,7 +123,6 @@ struct HomeView: View {
     .padding(.bottom, lerp(8, 5, collapse))
     .adaptiveFrame(maxWidth: layout.contentMaxWidth)
     .background(Color.clear)
-    .animation(.interactiveSpring(response: 0.24, dampingFraction: 0.92), value: collapse)
   }
 
   private func resumeListening(

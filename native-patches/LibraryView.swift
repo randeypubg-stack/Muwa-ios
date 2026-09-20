@@ -257,9 +257,7 @@ struct LibraryView: View {
     subtitle: String,
     icon: String
   ) -> some View {
-    Button {
-      path.append(destination)
-    } label: {
+    NavigationLink(value: destination) {
       HStack(spacing: 12) {
         Image(systemName: icon)
           .font(.title3)
@@ -281,6 +279,7 @@ struct LibraryView: View {
       }
       .padding(15)
       .frame(maxWidth: .infinity, minHeight: 62)
+      .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
     .glassPanel(cornerRadius: 20)
