@@ -5,12 +5,9 @@ struct RootView: View {
   @EnvironmentObject private var auth: AuthManager
 
   @State private var selection: AppTab = .home
-  @State private var fullPlayerPresented = false
-  @State private var playerCollapseProgress: CGFloat = 0
+  @State private var playerExpansion: CGFloat = 0
   @State private var searchPresented = false
   @State private var requestedLibraryDestination: LibraryDestination?
-
-  @Namespace private var playerTransition
 
   var body: some View {
     ZStack {
@@ -38,8 +35,8 @@ struct RootView: View {
     .fullScreenCover(isPresented: $searchPresented) {
       SearchView(openPlayer: {
         searchPresented = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-          openFullPlayer()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+          expandPlayer()
         }
       })
     }
@@ -48,106 +45,88 @@ struct RootView: View {
   private var appShell: some View {
     GeometryReader { proxy in
       let layout = AdaptiveLayout(size: proxy.size, safeArea: proxy.safeAreaInsets)
-      let reveal = min(max(playerCollapseProgress, 0), 1)
+      let progress = min(max(playerExpansion, 0), 1)
+      let chromeLimit = layout.bottomChromeMaxWidth.isFinite
+        ? layout.bottomChromeMaxWidth
+        : max(0, layout.viewportWidth - layout.horizontalPadding * 2)
+      let chromeWidth = min(
+        chromeLimit,
+        max(0, layout.viewportWidth - layout.horizontalPadding * 2)
+      )
 
-      ZStack {
-        shellContent(layout: layout)
-          .blur(radius: fullPlayerPresented ? 6.5 * (1 - reveal) : 0)
-          .scaleEffect(fullPlayerPresented ? 0.986 + (0.014 * reveal) : 1)
-          .animation(.linear(duration: 0.06), value: playerCollapseProgress)
+      ZStack(alignment: .bottom) {
+        tabContent
+          .blur(radius: 4.2 * progress)
+          .scaleEffect(1 - (0.008 * progress))
+          .animation(.linear(duration: 0.04), value: playerExpansion)
 
-        if fullPlayerPresented {
-          FullPlayerView(
-            selection: $selection,
-            transitionNamespace: playerTransition,
-            collapseProgress: $playerCollapseProgress,
-            onCollapse: collapseFullPlayer
-          )
-          .zIndex(30)
-          .transition(.identity)
-        }
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-  }
-
-  private func shellContent(layout: AdaptiveLayout) -> some View {
-    ZStack {
-      AppBackground().ignoresSafeArea()
-
-      Group {
-        switch selection {
-        case .home:
-          HomeView(
-            openPlayer: openFullPlayer,
-            openSearch: { searchPresented = true }
-          )
-
-        case .library:
-          LibraryView(
-            requestedDestination: $requestedLibraryDestination,
-            openSearch: { searchPresented = true }
-          )
-
-        case .profile:
-          ProfileView(
-            openSearch: { searchPresented = true }
-          )
-        }
-      }
-      .transition(.opacity)
-    }
-    .safeAreaInset(edge: .bottom, spacing: 10) {
-      VStack(spacing: 10) {
         if player.currentTrack != nil {
-          MiniPlayerView(
-            openPlayer: openFullPlayer,
-            transitionNamespace: playerTransition,
-            isExpanded: fullPlayerPresented
+          MorphingPlayerView(
+            selection: $selection,
+            expansion: $playerExpansion
           )
-          .opacity(
-            fullPlayerPresented
-              ? min(1, max(0.02, playerCollapseProgress * 1.45))
-              : 1
-          )
+          .zIndex(20)
         }
 
         BottomBar(
           selection: $selection,
-          playerActive: false,
-          openPlayer: openFullPlayer
+          playerActive: progress > 0.56,
+          openPlayer: expandPlayer,
+          selectTab: { tab in
+            selection = tab
+            if progress > 0.001 {
+              collapsePlayer()
+            }
+          }
         )
-        .opacity(
-          fullPlayerPresented
-            ? min(1, max(0, playerCollapseProgress * 1.25))
-            : 1
-        )
+        .frame(width: chromeWidth)
+        .padding(.horizontal, layout.horizontalPadding)
+        .padding(.bottom, max(proxy.safeAreaInsets.bottom, layout.isCompactLandscapePhone ? 4 : 10))
+        .zIndex(40)
       }
-      .frame(maxWidth: layout.bottomChromeMaxWidth)
-      .padding(.horizontal, layout.horizontalPadding)
-      .padding(.bottom, layout.isCompactLandscapePhone ? 4 : 10)
-      .frame(maxWidth: .infinity)
-      .allowsHitTesting(!fullPlayerPresented)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background(AppBackground().ignoresSafeArea())
     }
   }
 
-  private func openFullPlayer() {
-    playerCollapseProgress = 0
-    withAnimation(.spring(response: 0.42, dampingFraction: 0.88)) {
-      fullPlayerPresented = true
+  @ViewBuilder
+  private var tabContent: some View {
+    Group {
+      switch selection {
+      case .home:
+        HomeView(
+          openPlayer: expandPlayer,
+          openSearch: { searchPresented = true }
+        )
+
+      case .library:
+        LibraryView(
+          requestedDestination: $requestedLibraryDestination,
+          openSearch: { searchPresented = true }
+        )
+
+      case .profile:
+        ProfileView(
+          openSearch: { searchPresented = true }
+        )
+      }
+    }
+    .transition(.opacity)
+  }
+
+  private func expandPlayer() {
+    withAnimation(
+      .spring(response: 0.50, dampingFraction: 0.92, blendDuration: 0.10)
+    ) {
+      playerExpansion = 1
     }
   }
 
-  private func collapseFullPlayer() {
-    withAnimation(.interactiveSpring(response: 0.38, dampingFraction: 0.88)) {
-      playerCollapseProgress = 1
-      fullPlayerPresented = false
-    }
-
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) {
-      if !fullPlayerPresented {
-        playerCollapseProgress = 0
-      }
+  private func collapsePlayer() {
+    withAnimation(
+      .spring(response: 0.46, dampingFraction: 0.94, blendDuration: 0.12)
+    ) {
+      playerExpansion = 0
     }
   }
 }
