@@ -28,16 +28,24 @@ jobs:
           set -euo pipefail
           rm -rf build-src build
           mkdir -p build-src build
-          unzip -q native-source.zip -d build-src
-          ROOT="$PWD/build-src/muwa_github_payload"
+
+          SOURCE_URL="https://muwa-app.floot.app/_cdn/static/4ea4d5ab-c161-4578-af19-d782d6bd191b-muwa-native-source-v8-icon-synced.zip"
+          SOURCE_ZIP="$PWD/build/muwa-native-source.zip"
+          EXPECTED_SOURCE_SHA="86348b95b269ff8320d20ece96ed15e76a6d5d5479a937ad12d904ed2c23d269"
+          EXPECTED_ICON_SHA="ac533d8fe8db72557b1c2a27f8986895dc9edb387709141e632dad82b68a9af5"
+
+          curl --fail --location --retry 3 --retry-delay 2 "$SOURCE_URL" -o "$SOURCE_ZIP"
+          echo "$EXPECTED_SOURCE_SHA  $SOURCE_ZIP" | shasum -a 256 -c -
+          unzip -q "$SOURCE_ZIP" -d build-src
+
+          ROOT="$PWD/build-src/MuwaNasheedsNative"
           test -f "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
           test -f "$ROOT/MuwaNasheeds.xcodeproj/xcshareddata/xcschemes/MuwaNasheeds.xcscheme"
 
-          ICON_URL="https://20d2f317-3710-4331-80ee-ea6072056928.sandbox.floot.app/_cdn/static/158afa48-c82f-461a-bc25-e921d95ea6a0.png"
           ICON_PATH="$ROOT/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"
           MARK_PATH="$ROOT/Resources/Assets.xcassets/AppMark.imageset/AppMark.png"
-          curl --fail --location --retry 3 --retry-delay 2 "$ICON_URL" -o "$ICON_PATH"
-          cp "$ICON_PATH" "$MARK_PATH"
+          echo "$EXPECTED_ICON_SHA  $ICON_PATH" | shasum -a 256 -c -
+          echo "$EXPECTED_ICON_SHA  $MARK_PATH" | shasum -a 256 -c -
 
           WIDTH="$(sips -g pixelWidth "$ICON_PATH" | awk '/pixelWidth/{print $2}')"
           HEIGHT="$(sips -g pixelHeight "$ICON_PATH" | awk '/pixelHeight/{print $2}')"
@@ -104,7 +112,7 @@ jobs:
             "webview": false,
             "signed": false,
             "source_commit": "${GITHUB_SHA}",
-            "source_archive_sha256": "e4527ee1540e8abbac69efc493eb4b87a83f5e3f687b407fa7ce53685f4bcd4a",
+            "source_archive_sha256": "86348b95b269ff8320d20ece96ed15e76a6d5d5479a937ad12d904ed2c23d269",
             "run_url": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           }
           EOF
