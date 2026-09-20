@@ -275,10 +275,15 @@ struct MorphingPlayerView: View {
     cornerRadius: CGFloat,
     progress: CGFloat
   ) -> some View {
-    let pageGap = max(14, size * 0.055)
-    let pageDistance = size + pageGap
+    let travel = max(120, size * 0.78)
     let drag = progress > 0.74 ? coverDragX : 0
-    let normalized = min(1, abs(drag) / max(1, pageDistance))
+    let swipeProgress = min(1, abs(drag) / max(1, travel))
+    let eased = smoothStep(swipeProgress)
+
+    let currentScale = 1 - (0.15 * eased)
+    let currentOpacity = 1 - (0.30 * eased)
+    let incomingScale = 0.82 + (0.18 * eased)
+    let incomingOpacity = 0.22 + (0.78 * eased)
 
     return ZStack {
       if let coverSwipeTrack, coverSwipeDirection != 0 {
@@ -291,11 +296,11 @@ struct MorphingPlayerView: View {
         )
         .offset(
           x: coverSwipeDirection < 0
-            ? pageDistance + drag
-            : -pageDistance + drag
+            ? travel + drag
+            : -travel + drag
         )
-        .scaleEffect(0.985 + (normalized * 0.015))
-        .opacity(Double(0.72 + (normalized * 0.28)))
+        .scaleEffect(incomingScale)
+        .opacity(Double(incomingOpacity))
       }
 
       artworkPage(
@@ -305,9 +310,9 @@ struct MorphingPlayerView: View {
         showSubtitle: true,
         progress: progress
       )
-      .offset(x: drag)
-      .scaleEffect(1 - (normalized * 0.018))
-      .opacity(Double(1 - (normalized * 0.08)))
+      .offset(x: drag * 0.92)
+      .scaleEffect(currentScale)
+      .opacity(Double(currentOpacity))
     }
     .frame(width: size, height: size)
     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
@@ -333,11 +338,10 @@ struct MorphingPlayerView: View {
             coverSwipeTrack = swipeNeighbor(direction: direction)
           }
 
-          let hasNeighbor = coverSwipeTrack != nil
-          if hasNeighbor {
-            coverDragX = min(pageDistance, max(-pageDistance, horizontal))
+          if coverSwipeTrack != nil {
+            coverDragX = min(travel, max(-travel, horizontal))
           } else {
-            coverDragX = rubberBand(horizontal, limit: size * 0.12)
+            coverDragX = rubberBand(horizontal, limit: size * 0.10)
           }
         }
         .onEnded { value in
@@ -351,10 +355,10 @@ struct MorphingPlayerView: View {
           }
 
           let projected = value.predictedEndTranslation.width
-          let threshold = max(46, size * 0.17)
+          let threshold = max(48, size * 0.15)
           let shouldPage =
             abs(horizontal) >= threshold
-            || abs(projected) >= threshold * 1.35
+            || abs(projected) >= threshold * 1.40
 
           guard shouldPage, let destination = coverSwipeTrack else {
             resetCoverPaging()
@@ -362,15 +366,15 @@ struct MorphingPlayerView: View {
           }
 
           coverPaging = true
-          let target: CGFloat = coverSwipeDirection < 0 ? -pageDistance : pageDistance
+          let target: CGFloat = coverSwipeDirection < 0 ? -travel : travel
 
           withAnimation(
-            .spring(response: 0.30, dampingFraction: 0.90, blendDuration: 0.10)
+            .spring(response: 0.34, dampingFraction: 0.92, blendDuration: 0.10)
           ) {
             coverDragX = target
           }
 
-          DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) {
             player.play(destination)
 
             var transaction = Transaction()
