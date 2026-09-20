@@ -21,7 +21,7 @@ struct BottomBar: View {
       .padding(5)
       .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
       .overlay(
-        RoundedRectangle(cornerRadius: 30, style: .continuous)
+        RoundedRectangle(cornerRadius: 28, style: .continuous)
           .stroke(.white.opacity(0.14), lineWidth: 1)
       )
       .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
