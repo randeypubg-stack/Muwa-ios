@@ -72,6 +72,7 @@ jobs:
           grep -Fq 'DragGesture(minimumDistance: 6' "$ROOT/Sources/Views/Components/BottomBar.swift"
           grep -Fq '.frame(height: 62)' "$ROOT/Sources/Views/Components/BottomBar.swift"
           grep -Fq '.frame(height: 52)' "$ROOT/Sources/Views/Components/BottomBar.swift"
+          grep -Fq 'cornerRadius: 28' "$ROOT/Sources/Views/Components/BottomBar.swift"
           grep -Fq 'var viewportWidth' "$ROOT/Sources/Theme/AdaptiveLayout.swift"
           grep -Fq 'UIDevice.current.userInterfaceIdiom' "$ROOT/Sources/Theme/AdaptiveLayout.swift"
           grep -Fq 'predictedEndTranslation.height' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
@@ -93,6 +94,8 @@ jobs:
           grep -Fq 'let chromeDrop' "$ROOT/Sources/App/RootView.swift"
           grep -Fq 'max(safeBottom - 5, 11)' "$ROOT/Sources/App/RootView.swift"
           grep -Fq 'padding(.bottom, layout.isPhone ? 6 : 0)' "$ROOT/Sources/App/RootView.swift"
+          grep -Fq 'padding(.horizontal, layout.isPhone ? 4 : 0)' "$ROOT/Sources/App/RootView.swift"
+          grep -Fq 'offset(y: layout.isPhone ? -2 : 0)' "$ROOT/Sources/App/RootView.swift"
           grep -Fq 'return 5' "$ROOT/Sources/Theme/AdaptiveLayout.swift"
           grep -Fq 'fullSurfaceHeight' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
           grep -Fq 'safeTopInset + 28' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
@@ -126,7 +129,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
-          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='17'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='18'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
         shell: bash
@@ -143,7 +146,7 @@ jobs:
 
           test "$BUNDLE_ID" = "app.muwa.nasheeds"
           test "$VERSION" = "1.4.0"
-          test "$BUILD_NO" = "17"
+          test "$BUILD_NO" = "18"
           test -x "$APP_PATH/$EXECUTABLE"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist")" = "true"
 
@@ -158,10 +161,10 @@ jobs:
 
           (
             cd build/package
-            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build17-shortchrome-unsigned.ipa Payload
+            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build18-cornerclearance-unsigned.ipa Payload
           )
 
-          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build17-shortchrome-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build17-shortchrome-unsigned.ipa.sha256
+          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build18-cornerclearance-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build18-cornerclearance-unsigned.ipa.sha256
 
           cat > build/build-info.json <<EOF
           {
@@ -196,6 +199,8 @@ jobs:
             "bottom_bar_height_fix": "68-to-62pt-trimmed-from-bottom",
             "bottom_bar_content_fix": "52pt-inner-height-icons-and-labels-rescaled",
             "chrome_stack_fix": "6pt-bottom-compensation-preserves-top-edge",
+            "bottom_corner_clearance": "4pt-horizontal-inset-and-2pt-up-only-on-tabbar",
+            "bottom_bar_outline_fix": "matched-28pt-background-and-stroke-radius",
             "touch_interception_fix": "morph-player-disabled-at-mini-state",
             "mini_player_render_fix": "standalone-mini-player-synced-with-bottom-chrome",
             "player_alignment_fix": "shared-safe-area-and-chrome-coordinate-system",
@@ -208,8 +213,8 @@ jobs:
         with:
           name: Muwa-Nasheeds-Native-IPA-${{ github.run_number }}
           path: |
-            build/Muwa-Nasheeds-v1.4.0-build17-shortchrome-unsigned.ipa
-            build/Muwa-Nasheeds-v1.4.0-build17-shortchrome-unsigned.ipa.sha256
+            build/Muwa-Nasheeds-v1.4.0-build18-cornerclearance-unsigned.ipa
+            build/Muwa-Nasheeds-v1.4.0-build18-cornerclearance-unsigned.ipa.sha256
             build/build-info.json
           if-no-files-found: error
           compression-level: 0
