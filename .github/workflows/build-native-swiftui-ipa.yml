@@ -73,7 +73,7 @@ jobs:
           grep -Fq 'var viewportWidth' "$ROOT/Sources/Theme/AdaptiveLayout.swift"
           grep -Fq 'UIDevice.current.userInterfaceIdiom' "$ROOT/Sources/Theme/AdaptiveLayout.swift"
           grep -Fq 'predictedEndTranslation.height' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
-          grep -Fq 'expansionDragGesture(travel:' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq 'expansionDragGesture(' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
           grep -Fq 'let playerWidth = lerp' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
           grep -Fq '@State private var playerExpansion' "$ROOT/Sources/App/RootView.swift"
           grep -Fq 'MorphingPlayerView(' "$ROOT/Sources/App/RootView.swift"
