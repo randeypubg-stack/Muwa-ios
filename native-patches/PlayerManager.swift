@@ -3,6 +3,12 @@ import MediaPlayer
 import SwiftUI
 import UIKit
 
+struct PlaybackResumeCandidate: Equatable {
+  let trackID: String
+  let position: TimeInterval
+  let duration: TimeInterval
+}
+
 @MainActor
 final class PlayerManager: ObservableObject {
   @Published var currentTrack: Track?
@@ -13,6 +19,7 @@ final class PlayerManager: ObservableObject {
   @Published var shuffleOn = false
   @Published var repeatOn = false
   @Published private(set) var hasStartedPlaybackThisSession = false
+  @Published private(set) var resumeCandidate: PlaybackResumeCandidate?
 
   private var player: AVPlayer?
   private var timeObserver: Any?
@@ -22,6 +29,15 @@ final class PlayerManager: ObservableObject {
   private var interruptionObserver: NSObjectProtocol?
   private var routeChangeObserver: NSObjectProtocol?
   private var wasPlayingBeforeInterruption = false
+  private var lastResumePersistBucket = -1
+
+  private let defaults = UserDefaults.standard
+
+  private enum ResumeKey {
+    static let trackID = "muwa.native.resume.track"
+    static let position = "muwa.native.resume.position"
+    static let duration = "muwa.native.resume.duration"
+  }
 
   private let library: LibraryStore
   private let downloads: DownloadManager
@@ -35,6 +51,7 @@ final class PlayerManager: ObservableObject {
     // A fresh app process must not expose stale system Now Playing metadata
     // from a previous listening session before the user starts a track again.
     MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    restoreResumeCandidate()
 
     configureAudioSession()
     configureRemoteCommands()
@@ -49,8 +66,43 @@ final class PlayerManager: ObservableObject {
     artworkTask?.cancel()
   }
 
+  var resumeTrack: Track? {
+    guard let candidate = resumeCandidate else { return nil }
+    return Track.track(id: candidate.trackID)
+  }
+
+  func dismissResumeCandidate() {
+    clearResumeCandidate()
+  }
+
+  func resumeSavedPlayback(autoplay: Bool = true) {
+    guard let candidate = resumeCandidate, let track = Track.track(id: candidate.trackID) else {
+      clearResumeCandidate()
+      return
+    }
+
+    let savedPosition = candidate.position
+    play(track, autoplay: false)
+
+    let baseDuration = duration > 0 ? duration : max(candidate.duration, track.duration)
+    if baseDuration > 0 {
+      let clampedSeconds = min(max(0, savedPosition), max(0, baseDuration - 0.5))
+      seek(to: clampedSeconds / baseDuration)
+    }
+
+    if autoplay {
+      player?.play()
+      isPlaying = true
+      updateNowPlaying()
+    }
+
+    persistResumeCandidate(force: true)
+  }
+
   func play(_ track: Track, autoplay: Bool = true) {
     hasStartedPlaybackThisSession = true
+    clearResumeCandidate()
+    lastResumePersistBucket = -1
     currentTrack = track
     library.ensureQueueContains(track)
     library.recordHistory(track)
@@ -89,6 +141,7 @@ final class PlayerManager: ObservableObject {
       return
     }
     if isPlaying {
+      persistResumeCandidate(force: true)
       player.pause()
       isPlaying = false
     } else {
@@ -111,6 +164,7 @@ final class PlayerManager: ObservableObject {
     player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
     currentTime = seconds
     progress = clamped
+    persistResumeCandidate(force: true)
     updateNowPlaying()
   }
 
@@ -142,6 +196,7 @@ final class PlayerManager: ObservableObject {
       isPlaying = false
       currentTime = duration
       progress = duration > 0 ? 1 : 0
+      clearResumeCandidate()
       updateNowPlaying()
     }
   }
@@ -227,6 +282,7 @@ final class PlayerManager: ObservableObject {
   func handleScenePhase(_ phase: ScenePhase) {
     switch phase {
     case .background:
+      persistResumeCandidate(force: true)
       guard !premium.isPremium else { return }
       player?.pause()
       isPlaying = false
@@ -303,6 +359,7 @@ final class PlayerManager: ObservableObject {
         let actual = player.currentItem?.duration.seconds ?? self.duration
         if actual.isFinite && actual > 0 { self.duration = actual }
         self.progress = self.duration > 0 ? min(1, max(0, self.currentTime / self.duration)) : 0
+        self.persistResumeCandidate()
         self.updateNowPlaying()
       }
     }
@@ -351,6 +408,65 @@ final class PlayerManager: ObservableObject {
         // Artwork is optional; playback should never fail because of it.
       }
     }
+  }
+
+  private func restoreResumeCandidate() {
+    guard
+      let trackID = defaults.string(forKey: ResumeKey.trackID),
+      Track.track(id: trackID) != nil
+    else {
+      clearResumeCandidate()
+      return
+    }
+
+    let position = defaults.double(forKey: ResumeKey.position)
+    let savedDuration = defaults.double(forKey: ResumeKey.duration)
+    guard position >= 1, savedDuration > 1, position < savedDuration - 1 else {
+      clearResumeCandidate()
+      return
+    }
+
+    resumeCandidate = PlaybackResumeCandidate(
+      trackID: trackID,
+      position: position,
+      duration: savedDuration
+    )
+  }
+
+  private func persistResumeCandidate(force: Bool = false) {
+    guard let track = currentTrack else { return }
+
+    let effectiveDuration = duration > 0 ? duration : track.duration
+    guard effectiveDuration > 1 else { return }
+
+    let position = currentTime
+    if position >= effectiveDuration - 1 {
+      clearResumeCandidate()
+      return
+    }
+
+    guard position >= 1 else { return }
+
+    let bucket = Int(position / 2)
+    if !force, bucket == lastResumePersistBucket { return }
+    lastResumePersistBucket = bucket
+
+    let candidate = PlaybackResumeCandidate(
+      trackID: track.id,
+      position: position,
+      duration: effectiveDuration
+    )
+    resumeCandidate = candidate
+    defaults.set(track.id, forKey: ResumeKey.trackID)
+    defaults.set(position, forKey: ResumeKey.position)
+    defaults.set(effectiveDuration, forKey: ResumeKey.duration)
+  }
+
+  private func clearResumeCandidate() {
+    resumeCandidate = nil
+    defaults.removeObject(forKey: ResumeKey.trackID)
+    defaults.removeObject(forKey: ResumeKey.position)
+    defaults.removeObject(forKey: ResumeKey.duration)
   }
 
   private func updateNowPlaying() {
