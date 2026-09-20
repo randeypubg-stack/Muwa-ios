@@ -553,6 +553,53 @@ struct MorphingPlayerView: View {
           Label("Добавить в очередь", systemImage: "text.badge.plus")
         }
 
+        Menu {
+          Button {
+            player.startSleepTimer(minutes: 15)
+          } label: {
+            Label("15 минут", systemImage: "timer")
+          }
+
+          Button {
+            player.startSleepTimer(minutes: 30)
+          } label: {
+            Label("30 минут", systemImage: "timer")
+          }
+
+          Button {
+            player.startSleepTimer(minutes: 45)
+          } label: {
+            Label("45 минут", systemImage: "timer")
+          }
+
+          Button {
+            player.startSleepTimer(minutes: 60)
+          } label: {
+            Label("60 минут", systemImage: "timer")
+          }
+
+          Button {
+            player.sleepAfterCurrentTrackEnds()
+          } label: {
+            Label("После текущего нашида", systemImage: "moon.zzz")
+          }
+
+          if player.sleepTimerSummary != nil {
+            Divider()
+
+            Button(role: .destructive) {
+              player.cancelSleepTimer()
+            } label: {
+              Label("Выключить таймер", systemImage: "xmark.circle")
+            }
+          }
+        } label: {
+          Label(
+            player.sleepTimerSummary.map { "Таймер сна · \($0)" } ?? "Таймер сна",
+            systemImage: "moon.zzz"
+          )
+        }
+
         Divider()
 
         Button {
