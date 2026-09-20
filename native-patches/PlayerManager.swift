@@ -31,6 +31,11 @@ final class PlayerManager: ObservableObject {
     self.library = library
     self.downloads = downloads
     self.premium = premium
+
+    // A fresh app process must not expose stale system Now Playing metadata
+    // from a previous listening session before the user starts a track again.
+    MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+
     configureAudioSession()
     configureRemoteCommands()
     configureAudioNotifications()
