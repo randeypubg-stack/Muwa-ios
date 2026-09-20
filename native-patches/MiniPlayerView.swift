@@ -4,8 +4,6 @@ struct MiniPlayerView: View {
   @EnvironmentObject private var player: PlayerManager
 
   let openPlayer: () -> Void
-  let transitionNamespace: Namespace.ID
-  var isExpanded = false
 
   var body: some View {
     VStack(spacing: 0) {
@@ -18,13 +16,6 @@ struct MiniPlayerView: View {
               placeholderSystemImage: "waveform"
             )
             .frame(width: 42, height: 42)
-            .matchedGeometryEffect(
-              id: "player.artwork",
-              in: transitionNamespace,
-              properties: .frame,
-              anchor: .center,
-              isSource: !isExpanded
-            )
 
             VStack(alignment: .leading, spacing: 2) {
               Text(player.currentTrack?.title ?? "")
@@ -36,13 +27,6 @@ struct MiniPlayerView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             }
-            .matchedGeometryEffect(
-              id: "player.metadata",
-              in: transitionNamespace,
-              properties: .position,
-              anchor: .leading,
-              isSource: !isExpanded
-            )
 
             Spacer(minLength: 6)
           }
@@ -89,17 +73,10 @@ struct MiniPlayerView: View {
         .allowsHitTesting(false)
     }
     .frame(height: 58)
-    .background {
-      RoundedRectangle(cornerRadius: 27, style: .continuous)
-        .fill(.ultraThinMaterial)
-        .matchedGeometryEffect(
-          id: "player.surface",
-          in: transitionNamespace,
-          properties: .frame,
-          anchor: .center,
-          isSource: !isExpanded
-        )
-    }
+    .background(
+      .ultraThinMaterial,
+      in: RoundedRectangle(cornerRadius: 27, style: .continuous)
+    )
     .overlay(
       RoundedRectangle(cornerRadius: 27, style: .continuous)
         .stroke(.white.opacity(0.14), lineWidth: 1)
