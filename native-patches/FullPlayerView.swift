@@ -51,7 +51,7 @@ struct FullPlayerView: View {
         ArtworkBackdrop(url: track.artworkURL)
           .frame(width: viewportWidth, height: viewportHeight)
           .clipped()
-          .opacity(1 - (0.20 * reveal))
+          .opacity(Double(1 - (0.20 * reveal)))
           .ignoresSafeArea()
 
         ScrollView(.vertical, showsIndicators: false) {
@@ -93,7 +93,7 @@ struct FullPlayerView: View {
       .contentShape(Rectangle())
       .offset(y: dragY)
       .scaleEffect(1 - (0.045 * reveal), anchor: .top)
-      .shadow(color: .black.opacity(0.30 * reveal), radius: 28 * reveal, y: 12)
+      .shadow(color: .black.opacity(Double(0.30 * reveal)), radius: 28 * reveal, y: 12)
       .simultaneousGesture(
         DragGesture(minimumDistance: 12, coordinateSpace: .global)
           .updating($dismissDragY) { value, state, _ in
