@@ -10,16 +10,16 @@ struct AppBackground: View {
       ZStack {
         LinearGradient(
           colors: [
-            Color(red: 0.010, green: 0.020, blue: 0.034),
-            Color(red: 0.005, green: 0.011, blue: 0.020),
-            Color(red: 0.002, green: 0.005, blue: 0.010),
+            Color(red: 0.003, green: 0.004, blue: 0.006),
+            Color(red: 0.006, green: 0.007, blue: 0.010),
+            Color(red: 0.002, green: 0.002, blue: 0.003),
           ],
           startPoint: .top,
           endPoint: .bottom
         )
 
         Circle()
-          .fill(Color(red: 0.10, green: 0.24, blue: 0.52).opacity(0.085))
+          .fill(Color(red: 0.08, green: 0.12, blue: 0.18).opacity(0.045))
           .frame(width: span * 0.92, height: span * 0.92)
           .blur(radius: span * 0.18)
           .offset(
@@ -29,7 +29,7 @@ struct AppBackground: View {
           .scaleEffect(animateGlow ? 1.04 : 0.96)
 
         Circle()
-          .fill(Color.cyan.opacity(0.018))
+          .fill(Color.white.opacity(0.012))
           .frame(width: span * 0.74, height: span * 0.74)
           .blur(radius: span * 0.17)
           .offset(
@@ -41,7 +41,7 @@ struct AppBackground: View {
         LinearGradient(
           colors: [
             .clear,
-            Color.black.opacity(0.34),
+            Color.black.opacity(0.48),
           ],
           startPoint: .top,
           endPoint: .bottom
@@ -52,7 +52,7 @@ struct AppBackground: View {
       .onAppear {
         guard !animateGlow else { return }
         withAnimation(
-          .easeInOut(duration: 18)
+          .easeInOut(duration: 24)
             .repeatForever(autoreverses: true)
         ) {
           animateGlow = true
