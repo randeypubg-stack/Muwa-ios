@@ -19,74 +19,108 @@ struct LibraryView: View {
           .ignoresSafeArea()
 
         NavigationStack(path: $path) {
-          ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 18) {
-              ScreenHeader(
-                title: "Библиотека",
-                subtitle: "Сохранённое и ваши публикации",
-                searchAction: openSearch
+          VStack(spacing: 0) {
+            ScreenHeader(
+              title: "Библиотека",
+              subtitle: "Сохранённое и ваши публикации",
+              searchAction: openSearch
+            )
+            .padding(.horizontal, layout.horizontalPadding)
+            .padding(.top, layout.isCompactLandscapePhone ? 6 : 10)
+            .padding(.bottom, 10)
+            .adaptiveFrame(maxWidth: layout.contentMaxWidth)
+            .background(
+              LinearGradient(
+                colors: [
+                  Color.black.opacity(0.60),
+                  Color.black.opacity(0.30),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
               )
+            )
+            .zIndex(10)
 
-              libraryHero
+            ScrollView(showsIndicators: false) {
+              VStack(alignment: .leading, spacing: 18) {
+                libraryHero
 
-              Button {
-                startPublication()
-              } label: {
-                Label("Добавить нашид", systemImage: "plus")
-                  .font(.system(size: 14, weight: .bold))
-                  .foregroundStyle(.black)
-                  .frame(maxWidth: .infinity)
-                  .frame(height: 50)
-                  .background(
-                    .white,
-                    in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                Button {
+                  startPublication()
+                } label: {
+                  Label("Добавить нашид", systemImage: "plus")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(
+                      .white,
+                      in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    )
+                }
+                .buttonStyle(.plain)
+
+                LazyVGrid(
+                  columns: Array(
+                    repeating: GridItem(.flexible(), spacing: 10),
+                    count: layout.libraryColumns
+                  ),
+                  spacing: 10
+                ) {
+                  libraryCard(
+                    .favorites,
+                    "Избранные",
+                    "heart.fill",
+                    library.likedIDs.count,
+                    .pink
                   )
-              }
-              .buttonStyle(.plain)
+                  libraryCard(
+                    .history,
+                    "Недавно прослушано",
+                    "clock.arrow.circlepath",
+                    library.historyIDs.count,
+                    .blue
+                  )
+                  libraryCard(
+                    .playlist,
+                    "Мой плейлист",
+                    "music.note.list",
+                    library.playlistIDs.count,
+                    .cyan
+                  )
+                  libraryCard(
+                    .publications,
+                    "Мои публикации",
+                    "square.and.arrow.up",
+                    library.publications.count,
+                    .mint
+                  )
+                }
 
-              LazyVGrid(
-                columns: Array(
-                  repeating: GridItem(.flexible(), spacing: 10),
-                  count: layout.libraryColumns
-                ),
-                spacing: 10
-              ) {
-                libraryCard(
-                  .favorites,
-                  "Избранные",
-                  "heart.fill",
-                  library.likedIDs.count,
-                  .pink
-                )
-                libraryCard(
-                  .history,
-                  "Недавно прослушано",
-                  "clock.arrow.circlepath",
-                  library.historyIDs.count,
-                  .blue
-                )
-                libraryCard(
-                  .playlist,
-                  "Мой плейлист",
-                  "music.note.list",
-                  library.playlistIDs.count,
-                  .cyan
-                )
-                libraryCard(
-                  .publications,
-                  "Мои публикации",
-                  "square.and.arrow.up",
-                  library.publications.count,
-                  .mint
-                )
-              }
+                Text("Быстрый доступ")
+                  .font(.headline)
+                  .padding(.top, 4)
 
-              Text("Быстрый доступ")
-                .font(.headline)
-                .padding(.top, 4)
-
-              if layout.isWide {
-                HStack(spacing: 12) {
+                if layout.isWide {
+                  HStack(spacing: 12) {
+                    quickAccess(
+                      .drafts,
+                      title: "Черновики публикаций",
+                      subtitle: library.drafts.isEmpty
+                        ? "Нет незавершённых публикаций"
+                        : "\(library.drafts.count) черновик(а)",
+                      icon: "doc.text"
+                    )
+                    quickAccess(
+                      .downloads,
+                      title: "Загрузки",
+                      subtitle: downloads.downloadedIDs.isEmpty
+                        ? "Офлайн-сохранения появятся здесь"
+                        : "\(downloads.downloadedIDs.count) сохранено офлайн",
+                      icon: "arrow.down.circle"
+                    )
+                  }
+                } else {
                   quickAccess(
                     .drafts,
                     title: "Черновики публикаций",
@@ -104,29 +138,13 @@ struct LibraryView: View {
                     icon: "arrow.down.circle"
                   )
                 }
-              } else {
-                quickAccess(
-                  .drafts,
-                  title: "Черновики публикаций",
-                  subtitle: library.drafts.isEmpty
-                    ? "Нет незавершённых публикаций"
-                    : "\(library.drafts.count) черновик(а)",
-                  icon: "doc.text"
-                )
-                quickAccess(
-                  .downloads,
-                  title: "Загрузки",
-                  subtitle: downloads.downloadedIDs.isEmpty
-                    ? "Офлайн-сохранения появятся здесь"
-                    : "\(downloads.downloadedIDs.count) сохранено офлайн",
-                  icon: "arrow.down.circle"
-                )
               }
+              .padding(.horizontal, layout.horizontalPadding)
+              .padding(.top, layout.isCompactLandscapePhone ? 8 : 14)
+              .padding(.bottom, layout.isCompactLandscapePhone ? 132 : 170)
+              .adaptiveFrame(maxWidth: layout.contentMaxWidth)
             }
-            .padding(.horizontal, layout.horizontalPadding)
-            .padding(.top, layout.isCompactLandscapePhone ? 10 : 18)
-            .padding(.bottom, layout.isCompactLandscapePhone ? 132 : 170)
-            .adaptiveFrame(maxWidth: layout.contentMaxWidth)
+            .background(Color.clear)
           }
           .background(Color.clear)
           .navigationBarHidden(true)
