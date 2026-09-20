@@ -288,7 +288,11 @@ struct MorphingPlayerView: View {
       radius: 28 * smoothStep(progress),
       y: 16 * smoothStep(progress)
     )
-    .offset(x: progress > 0.74 ? coverDragX : 0)
+    .offset(
+      x: progress > 0.74
+        ? restrainedCoverOffset(coverDragX, artworkSize: size)
+        : 0
+    )
     .contentShape(Rectangle())
     .allowsHitTesting(progress > 0.74)
     .simultaneousGesture(
@@ -314,6 +318,15 @@ struct MorphingPlayerView: View {
         }
     )
     .animation(.spring(response: 0.34, dampingFraction: 0.84), value: track.id)
+  }
+
+  private func restrainedCoverOffset(
+    _ translation: CGFloat,
+    artworkSize: CGFloat
+  ) -> CGFloat {
+    let resisted = translation * 0.42
+    let limit = max(24, artworkSize * 0.18)
+    return min(limit, max(-limit, resisted))
   }
 
   private func sharedMetadata(
