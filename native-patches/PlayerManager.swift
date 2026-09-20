@@ -80,7 +80,10 @@ final class PlayerManager: ObservableObject {
       return "После текущего нашида"
     }
     guard let endDate = sleepTimerEndDate else { return nil }
-    let remaining = max(0, Int(endDate.timeIntervalSinceNow / 60.0.rounded(.up)))
+    let remaining = max(
+      0,
+      Int((endDate.timeIntervalSinceNow / 60.0).rounded(.up))
+    )
     return remaining > 0 ? "Осталось ~\(remaining) мин" : "Завершается"
   }
 
