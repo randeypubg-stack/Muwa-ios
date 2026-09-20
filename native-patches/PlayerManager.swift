@@ -20,6 +20,8 @@ final class PlayerManager: ObservableObject {
   @Published var repeatOn = false
   @Published private(set) var hasStartedPlaybackThisSession = false
   @Published private(set) var resumeCandidate: PlaybackResumeCandidate?
+  @Published private(set) var sleepTimerEndDate: Date?
+  @Published private(set) var sleepAfterCurrentTrack = false
 
   private var player: AVPlayer?
   private var timeObserver: Any?
@@ -30,6 +32,9 @@ final class PlayerManager: ObservableObject {
   private var routeChangeObserver: NSObjectProtocol?
   private var wasPlayingBeforeInterruption = false
   private var lastResumePersistBucket = -1
+  private var prefetchedTrackID: String?
+  private var prefetchedURL: URL?
+  private var prefetchedAsset: AVURLAsset?
 
   private let defaults = UserDefaults.standard
 
@@ -70,6 +75,31 @@ final class PlayerManager: ObservableObject {
     guard let candidate = resumeCandidate else { return nil }
     return Track.track(id: candidate.trackID)
   }
+  var sleepTimerSummary: String? {
+    if sleepAfterCurrentTrack {
+      return "После текущего нашида"
+    }
+    guard let endDate = sleepTimerEndDate else { return nil }
+    let remaining = max(0, Int(endDate.timeIntervalSinceNow / 60.0.rounded(.up)))
+    return remaining > 0 ? "Осталось ~\(remaining) мин" : "Завершается"
+  }
+
+  func startSleepTimer(minutes: Int) {
+    guard minutes > 0 else { return }
+    sleepAfterCurrentTrack = false
+    sleepTimerEndDate = Date().addingTimeInterval(TimeInterval(minutes * 60))
+  }
+
+  func sleepAfterCurrentTrackEnds() {
+    sleepTimerEndDate = nil
+    sleepAfterCurrentTrack = currentTrack != nil
+  }
+
+  func cancelSleepTimer() {
+    sleepTimerEndDate = nil
+    sleepAfterCurrentTrack = false
+  }
+
 
   func dismissResumeCandidate() {
     clearResumeCandidate()
@@ -116,7 +146,20 @@ final class PlayerManager: ObservableObject {
     let canUseOfflineCopy = premium.isPremium && downloads.isDownloaded(track)
     let playbackURL =
       canUseOfflineCopy ? (downloads.localURL(for: track) ?? track.audioURL) : track.audioURL
-    let item = AVPlayerItem(url: playbackURL)
+    let item: AVPlayerItem
+    if
+      prefetchedTrackID == track.id,
+      prefetchedURL == playbackURL,
+      let prefetchedAsset
+    {
+      item = AVPlayerItem(asset: prefetchedAsset)
+    } else {
+      item = AVPlayerItem(url: playbackURL)
+    }
+    prefetchedTrackID = nil
+    prefetchedURL = nil
+    prefetchedAsset = nil
+
     let newPlayer = AVPlayer(playerItem: item)
     player = newPlayer
     duration = track.duration
@@ -132,6 +175,7 @@ final class PlayerManager: ObservableObject {
       isPlaying = false
     }
     loadNowPlayingArtwork(for: track)
+    prefetchFollowingTrack(after: track)
     updateNowPlaying()
   }
 
@@ -360,6 +404,7 @@ final class PlayerManager: ObservableObject {
         if actual.isFinite && actual > 0 { self.duration = actual }
         self.progress = self.duration > 0 ? min(1, max(0, self.currentTime / self.duration)) : 0
         self.persistResumeCandidate()
+        self.enforceSleepTimerIfNeeded()
         self.updateNowPlaying()
       }
     }
@@ -378,6 +423,19 @@ final class PlayerManager: ObservableObject {
     ) { [weak self] _ in
       Task { @MainActor in
         guard let self else { return }
+
+        if self.sleepAfterCurrentTrack {
+          self.sleepAfterCurrentTrack = false
+          self.sleepTimerEndDate = nil
+          self.player?.pause()
+          self.isPlaying = false
+          self.currentTime = self.duration
+          self.progress = self.duration > 0 ? 1 : 0
+          self.clearResumeCandidate()
+          self.updateNowPlaying()
+          return
+        }
+
         if self.repeatOn, let track = self.currentTrack {
           self.play(track)
         } else {
@@ -390,6 +448,61 @@ final class PlayerManager: ObservableObject {
   private func removeEndObserver() {
     if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
     endObserver = nil
+  }
+
+  private func enforceSleepTimerIfNeeded() {
+    guard let endDate = sleepTimerEndDate, Date() >= endDate else { return }
+
+    sleepTimerEndDate = nil
+    sleepAfterCurrentTrack = false
+    persistResumeCandidate(force: true)
+    player?.pause()
+    isPlaying = false
+  }
+
+  private func prefetchFollowingTrack(after track: Track) {
+    guard !shuffleOn else {
+      prefetchedTrackID = nil
+      prefetchedURL = nil
+      prefetchedAsset = nil
+      return
+    }
+
+    let queue = library.queueTracks.isEmpty ? Track.catalog : library.queueTracks
+    guard !queue.isEmpty, let index = queue.firstIndex(where: { $0.id == track.id }) else {
+      return
+    }
+
+    let nextTrack: Track?
+    let nextIndex = index + 1
+    if nextIndex < queue.count {
+      nextTrack = queue[nextIndex]
+    } else if repeatOn {
+      nextTrack = queue.first
+    } else {
+      nextTrack = nil
+    }
+
+    guard let nextTrack else {
+      prefetchedTrackID = nil
+      prefetchedURL = nil
+      prefetchedAsset = nil
+      return
+    }
+
+    let canUseOfflineCopy = premium.isPremium && downloads.isDownloaded(nextTrack)
+    let url =
+      canUseOfflineCopy
+      ? (downloads.localURL(for: nextTrack) ?? nextTrack.audioURL)
+      : nextTrack.audioURL
+
+    let asset = AVURLAsset(url: url)
+    prefetchedTrackID = nextTrack.id
+    prefetchedURL = url
+    prefetchedAsset = asset
+
+    // Warm metadata/network resolution without starting playback.
+    asset.loadValuesAsynchronously(forKeys: ["playable"]) {}
   }
 
   private func loadNowPlayingArtwork(for track: Track) {
