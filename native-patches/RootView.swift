@@ -103,6 +103,7 @@ struct RootView: View {
           )
         }
         .frame(width: chromeWidth)
+        .padding(.bottom, layout.isPhone ? 6 : 0)
         .offset(y: chromeDrop)
         .zIndex(40)
       }

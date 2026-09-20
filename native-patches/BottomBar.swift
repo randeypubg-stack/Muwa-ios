@@ -17,9 +17,9 @@ struct BottomBar: View {
         item(.library, "Библиотека", "books.vertical.fill")
         item(.profile, "Профиль", "person.fill")
       }
-      .frame(height: 58)
+      .frame(height: 52)
       .padding(5)
-      .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+      .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
       .overlay(
         RoundedRectangle(cornerRadius: 30, style: .continuous)
           .stroke(.white.opacity(0.14), lineWidth: 1)
@@ -36,7 +36,7 @@ struct BottomBar: View {
           }
       )
     }
-    .frame(height: 68)
+    .frame(height: 62)
   }
 
   private var playerItem: some View {
@@ -91,17 +91,17 @@ struct BottomBar: View {
   }
 
   private func tabLabel(_ title: String, _ systemImage: String, active: Bool) -> some View {
-    VStack(spacing: 3) {
+    VStack(spacing: 2) {
       Image(systemName: systemImage)
-        .font(.system(size: 17, weight: .semibold))
+        .font(.system(size: 16, weight: .semibold))
       Text(title)
-        .font(.system(size: 9, weight: .medium))
+        .font(.system(size: 8.5, weight: .medium))
     }
     .foregroundStyle(active ? .white : .white.opacity(0.66))
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background {
       if active {
-        RoundedRectangle(cornerRadius: 23, style: .continuous)
+        RoundedRectangle(cornerRadius: 21, style: .continuous)
           .fill(
             LinearGradient(
               colors: [.white.opacity(0.12), .white.opacity(0.045)],
@@ -110,7 +110,7 @@ struct BottomBar: View {
             )
           )
           .overlay(
-            RoundedRectangle(cornerRadius: 23, style: .continuous)
+            RoundedRectangle(cornerRadius: 21, style: .continuous)
               .stroke(.white.opacity(0.12), lineWidth: 1)
           )
           .matchedGeometryEffect(id: "active-tab", in: highlight)
