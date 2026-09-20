@@ -21,7 +21,7 @@ struct HomeView: View {
   var body: some View {
     GeometryReader { proxy in
       let layout = AdaptiveLayout(size: proxy.size, safeArea: proxy.safeAreaInsets)
-      let collapse = min(1, max(0, -scrollOffset / 58))
+      let collapse = min(1, max(0, -scrollOffset / 72))
       let expandedHeaderHeight: CGFloat = layout.isCompactLandscapePhone ? 62 : 92
 
       ZStack(alignment: .top) {
@@ -33,7 +33,8 @@ struct HomeView: View {
                 value: marker.frame(in: .named("home-scroll")).minY
               )
           }
-          .frame(height: 0)
+          .frame(height: 1)
+          .padding(.bottom, -1)
 
           VStack(alignment: .leading, spacing: layout.isWide ? 34 : 28) {
             if
@@ -84,9 +85,9 @@ struct HomeView: View {
     collapse: CGFloat,
     expandedHeight: CGFloat
   ) -> some View {
-    let titleSize = lerp(42, 29, collapse)
-    let buttonSize = lerp(56, 44, collapse)
-    let headerHeight = lerp(expandedHeight, layout.isCompactLandscapePhone ? 52 : 62, collapse)
+    let titleSize = lerp(42, 25, collapse)
+    let buttonSize = lerp(56, 40, collapse)
+    let headerHeight = lerp(expandedHeight, layout.isCompactLandscapePhone ? 48 : 56, collapse)
 
     return HStack(spacing: 14) {
       Text("Главная")
