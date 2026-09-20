@@ -107,6 +107,13 @@ struct MorphingPlayerView: View {
           cornerRadius: cornerRadius,
           progress: p
         )
+        .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .onTapGesture {
+          if expansion < 0.18 {
+            settle(to: 1)
+          }
+        }
+        .simultaneousGesture(expansionDragGesture(travel: travel))
         .position(x: viewportWidth / 2, y: playerCenterY)
 
         sharedArtwork(
@@ -114,6 +121,7 @@ struct MorphingPlayerView: View {
           cornerRadius: lerp(13, 36, p),
           progress: p
         )
+        .simultaneousGesture(expansionDragGesture(travel: travel))
         .position(
           x: ((viewportWidth - playerWidth) / 2) + artworkX,
           y: playerCenterY - (playerHeight / 2) + artworkY
@@ -123,6 +131,7 @@ struct MorphingPlayerView: View {
           width: metadataWidth,
           progress: p
         )
+        .simultaneousGesture(expansionDragGesture(travel: travel))
         .position(
           x: ((viewportWidth - playerWidth) / 2) + metadataLeft + (metadataWidth / 2),
           y: playerCenterY - (playerHeight / 2) + metadataY
@@ -132,14 +141,16 @@ struct MorphingPlayerView: View {
           playerWidth: playerWidth,
           playerHeight: playerHeight,
           centerY: playerCenterY,
-          opacity: miniOpacity
+          opacity: miniOpacity,
+          viewportWidth: viewportWidth
         )
 
         miniProgressLine(
           playerWidth: playerWidth,
           playerHeight: playerHeight,
           centerY: playerCenterY,
-          opacity: miniOpacity
+          opacity: miniOpacity,
+          viewportWidth: viewportWidth
         )
 
         fullControls(
@@ -156,43 +167,6 @@ struct MorphingPlayerView: View {
         )
       }
       .frame(width: viewportWidth, height: viewportHeight)
-      .contentShape(Rectangle())
-      .simultaneousGesture(
-        DragGesture(minimumDistance: 4, coordinateSpace: .global)
-          .onChanged { value in
-            let vertical = value.translation.height
-            let horizontal = abs(value.translation.width)
-
-            guard abs(vertical) > horizontal * 1.08 else { return }
-
-            if dragStartExpansion == nil {
-              dragStartExpansion = expansion
-            }
-
-            let start = dragStartExpansion ?? expansion
-            let next = start - (vertical / travel)
-            expansion = clamp(next)
-          }
-          .onEnded { value in
-            defer { dragStartExpansion = nil }
-
-            let vertical = value.translation.height
-            let horizontal = abs(value.translation.width)
-            guard abs(vertical) > horizontal * 1.08 else { return }
-
-            let projectedDelta =
-              (value.predictedEndTranslation.height - value.translation.height)
-              / travel
-            let projected = clamp(expansion - (projectedDelta * 0.42))
-            let target: CGFloat = projected >= 0.54 ? 1 : 0
-
-            withAnimation(
-              .spring(response: 0.48, dampingFraction: 0.94, blendDuration: 0.14)
-            ) {
-              expansion = target
-            }
-          }
-      )
     }
     .sheet(isPresented: $premiumPresented) {
       PremiumView(compact: true)
@@ -340,9 +314,10 @@ struct MorphingPlayerView: View {
     playerWidth: CGFloat,
     playerHeight: CGFloat,
     centerY: CGFloat,
-    opacity: CGFloat
+    opacity: CGFloat,
+    viewportWidth: CGFloat
   ) -> some View {
-    let left = (UIScreen.main.bounds.width - playerWidth) / 2
+    let left = (viewportWidth - playerWidth) / 2
     let nextX = left + playerWidth - 7 - 17
     let playX = nextX - 34 - 10
 
@@ -373,7 +348,8 @@ struct MorphingPlayerView: View {
     playerWidth: CGFloat,
     playerHeight: CGFloat,
     centerY: CGFloat,
-    opacity: CGFloat
+    opacity: CGFloat,
+    viewportWidth: CGFloat
   ) -> some View {
     let lineWidth = max(10, playerWidth - 32)
     let y = centerY + (playerHeight / 2) - 2
@@ -390,7 +366,7 @@ struct MorphingPlayerView: View {
             anchor: .leading
           )
       }
-      .position(x: UIScreen.main.bounds.width / 2, y: y)
+      .position(x: viewportWidth / 2, y: y)
       .opacity(Double(opacity))
       .allowsHitTesting(false)
   }
@@ -408,7 +384,7 @@ struct MorphingPlayerView: View {
     isShortPhone: Bool
   ) -> some View {
     let containerTop = centerY - (playerHeight / 2)
-    let localCenterX = UIScreen.main.bounds.width / 2
+    let localCenterX = layout.viewportWidth / 2
 
     let progressY =
       containerTop
@@ -676,6 +652,43 @@ struct MorphingPlayerView: View {
         .buttonStyle(.plain)
       }
     }
+  }
+
+  private func expansionDragGesture(travel: CGFloat) -> some Gesture {
+    DragGesture(minimumDistance: 4, coordinateSpace: .global)
+      .onChanged { value in
+        let vertical = value.translation.height
+        let horizontal = abs(value.translation.width)
+
+        guard abs(vertical) > horizontal * 1.08 else { return }
+
+        if dragStartExpansion == nil {
+          dragStartExpansion = expansion
+        }
+
+        let start = dragStartExpansion ?? expansion
+        let next = start - (vertical / max(1, travel))
+        expansion = clamp(next)
+      }
+      .onEnded { value in
+        defer { dragStartExpansion = nil }
+
+        let vertical = value.translation.height
+        let horizontal = abs(value.translation.width)
+        guard abs(vertical) > horizontal * 1.08 else { return }
+
+        let projectedDelta =
+          (value.predictedEndTranslation.height - value.translation.height)
+          / max(1, travel)
+        let projected = clamp(expansion - (projectedDelta * 0.42))
+        let target: CGFloat = projected >= 0.54 ? 1 : 0
+
+        withAnimation(
+          .spring(response: 0.48, dampingFraction: 0.94, blendDuration: 0.14)
+        ) {
+          expansion = target
+        }
+      }
   }
 
   private func settle(to target: CGFloat) {
