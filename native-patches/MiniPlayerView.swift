@@ -5,7 +5,7 @@ struct MiniPlayerView: View {
   let openPlayer: () -> Void
 
   var body: some View {
-    ZStack(alignment: .bottomLeading) {
+    VStack(spacing: 0) {
       HStack(spacing: 10) {
         ArtworkView(
           url: player.currentTrack?.artworkURL, cornerRadius: 13, placeholderSystemImage: "waveform"
@@ -43,19 +43,27 @@ struct MiniPlayerView: View {
         }
         .buttonStyle(.plain)
       }
-      .padding(7)
+      .padding(.horizontal, 7)
+      .padding(.top, 7)
+      .padding(.bottom, 5)
 
-      GeometryReader { proxy in
-        Capsule()
-          .fill(.white.opacity(0.72))
-          .frame(width: proxy.size.width * max(0, min(1, player.progress)), height: 2)
-      }
-      .frame(height: 2)
-      .padding(.horizontal, 16)
-      .padding(.bottom, 1)
-      .frame(maxHeight: .infinity, alignment: .bottom)
-      .allowsHitTesting(false)
+      Capsule()
+        .fill(.white.opacity(0.12))
+        .frame(height: 2)
+        .overlay(alignment: .leading) {
+          Capsule()
+            .fill(.white.opacity(0.72))
+            .scaleEffect(
+              x: max(0, min(1, player.progress)),
+              y: 1,
+              anchor: .leading
+            )
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 1)
+        .allowsHitTesting(false)
     }
+    .frame(height: 58)
     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 27, style: .continuous))
     .overlay(
       RoundedRectangle(cornerRadius: 27, style: .continuous)
