@@ -1,13 +1,5 @@
 import SwiftUI
 
-private struct HomeScrollOffsetKey: PreferenceKey {
-  static var defaultValue: CGFloat = 0
-
-  static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-    value = nextValue()
-  }
-}
-
 struct HomeView: View {
   @EnvironmentObject private var player: PlayerManager
   @EnvironmentObject private var library: LibraryStore
@@ -15,26 +7,13 @@ struct HomeView: View {
   let openPlayer: () -> Void
   let openSearch: () -> Void
 
-  @State private var scrollOffset: CGFloat = 0
 
   var body: some View {
-    GeometryReader { proxy in
-      let layout = AdaptiveLayout(size: proxy.size, safeArea: proxy.safeAreaInsets)
-      let collapse = min(1, max(0, -scrollOffset / 72))
-      let expandedHeaderHeight: CGFloat = layout.isCompactLandscapePhone ? 62 : 92
+    NavigationStack {
+      GeometryReader { proxy in
+        let layout = AdaptiveLayout(size: proxy.size, safeArea: proxy.safeAreaInsets)
 
-      ZStack(alignment: .top) {
         ScrollView(showsIndicators: false) {
-          GeometryReader { marker in
-            Color.clear
-              .preference(
-                key: HomeScrollOffsetKey.self,
-                value: marker.frame(in: .named("home-scroll")).minY
-              )
-          }
-          .frame(height: 1)
-          .padding(.bottom, -1)
-
           VStack(alignment: .leading, spacing: layout.isWide ? 34 : 28) {
             if
               !player.hasStartedPlaybackThisSession,
@@ -57,69 +36,36 @@ struct HomeView: View {
             }
           }
           .padding(.horizontal, layout.horizontalPadding)
-          .padding(.top, expandedHeaderHeight + (layout.isCompactLandscapePhone ? 6 : 12))
+          .padding(.top, layout.isCompactLandscapePhone ? 4 : 8)
           .padding(.bottom, layout.isCompactLandscapePhone ? 132 : 170)
           .adaptiveFrame(maxWidth: layout.contentMaxWidth)
         }
-        .coordinateSpace(name: "home-scroll")
-        .onPreferenceChange(HomeScrollOffsetKey.self) { value in
-          scrollOffset = min(0, value)
-        }
-
-        collapsingHeader(
-          layout: layout,
-          collapse: collapse,
-          expandedHeight: expandedHeaderHeight
-        )
-        .zIndex(20)
+        .scrollContentBackground(.hidden)
       }
-    }
-  }
-
-  private func collapsingHeader(
-    layout: AdaptiveLayout,
-    collapse: CGFloat,
-    expandedHeight: CGFloat
-  ) -> some View {
-    let titleSize = lerp(42, 25, collapse)
-    let buttonSize = lerp(56, 40, collapse)
-    let headerHeight = lerp(expandedHeight, layout.isCompactLandscapePhone ? 48 : 56, collapse)
-
-    return HStack(spacing: 14) {
-      Text("Главная")
-        .font(.system(size: titleSize, weight: .bold, design: .rounded))
-        .lineLimit(1)
-        .minimumScaleFactor(0.9)
-
-      Spacer(minLength: 14)
-
-      Button(action: openSearch) {
-        Image(systemName: "magnifyingglass")
-          .font(.system(size: lerp(22, 18, collapse), weight: .semibold))
-          .frame(width: buttonSize, height: buttonSize)
-          .background(
-            .white.opacity(0.065),
-            in: RoundedRectangle(
-              cornerRadius: lerp(18, 15, collapse),
-              style: .continuous
-            )
-          )
-          .overlay {
-            RoundedRectangle(
-              cornerRadius: lerp(18, 15, collapse),
-              style: .continuous
-            )
-            .stroke(.white.opacity(0.08), lineWidth: 1)
+      .navigationTitle("Главная")
+      .navigationBarTitleDisplayMode(.large)
+      .toolbar {
+        ToolbarItem(placement: .topBarTrailing) {
+          Button(action: openSearch) {
+            Image(systemName: "magnifyingglass")
+              .font(.system(size: 20, weight: .semibold))
+              .frame(width: 42, height: 42)
+              .background(
+                .white.opacity(0.065),
+                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+              )
+              .overlay {
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                  .stroke(.white.opacity(0.08), lineWidth: 1)
+              }
           }
+          .buttonStyle(.plain)
+          .accessibilityLabel("Поиск")
+        }
       }
-      .buttonStyle(.plain)
-      .accessibilityLabel("Поиск")
+      .toolbarBackground(.hidden, for: .navigationBar)
+      .toolbarColorScheme(.dark, for: .navigationBar)
     }
-    .padding(.horizontal, layout.horizontalPadding)
-    .frame(height: headerHeight, alignment: .bottom)
-    .padding(.bottom, lerp(8, 5, collapse))
-    .adaptiveFrame(maxWidth: layout.contentMaxWidth)
-    .background(Color.clear)
   }
 
   private func resumeListening(
@@ -352,10 +298,6 @@ struct HomeView: View {
         library.ensureQueueContains(track)
       }
     )
-  }
-
-  private func lerp(_ from: CGFloat, _ to: CGFloat, _ t: CGFloat) -> CGFloat {
-    from + ((to - from) * min(1, max(0, t)))
   }
 
   private func format(_ seconds: TimeInterval) -> String {
