@@ -110,6 +110,7 @@ struct RootView: View {
         .zIndex(40)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .coordinateSpace(name: "playerContainer")
       .background(AppBackground().ignoresSafeArea())
     }
   }
@@ -210,3 +211,4 @@ private struct LaunchGateView: View {
 enum AppTab: Hashable {
   case home, library, profile
 }
+
