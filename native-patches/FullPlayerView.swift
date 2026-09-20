@@ -1,13 +1,16 @@
 import SwiftUI
 
 struct FullPlayerView: View {
-  @Environment(\.dismiss) private var dismiss
   @EnvironmentObject private var player: PlayerManager
   @EnvironmentObject private var library: LibraryStore
   @EnvironmentObject private var premium: PremiumManager
   @EnvironmentObject private var downloads: DownloadManager
 
   @Binding var selection: AppTab
+  let transitionNamespace: Namespace.ID
+  @Binding var collapseProgress: CGFloat
+  let onCollapse: () -> Void
+
   @State private var premiumPresented = false
   @State private var queuePresented = false
   @State private var subtitlesVisible = false
@@ -31,11 +34,24 @@ struct FullPlayerView: View {
         ? layout.bottomChromeMaxWidth : availableWidth
       let chromeWidth = min(chromeLimit, availableWidth)
       let dragY = max(0, dismissDragY)
+      let reveal = min(max(collapseProgress, 0), 1)
 
       ZStack(alignment: .bottom) {
+        RoundedRectangle(cornerRadius: 30 * reveal, style: .continuous)
+          .fill(Color.black.opacity(0.92))
+          .frame(width: viewportWidth, height: viewportHeight)
+          .matchedGeometryEffect(
+            id: "player.surface",
+            in: transitionNamespace,
+            properties: .frame,
+            anchor: .center,
+            isSource: true
+          )
+
         ArtworkBackdrop(url: track.artworkURL)
           .frame(width: viewportWidth, height: viewportHeight)
           .clipped()
+          .opacity(1 - (0.20 * reveal))
           .ignoresSafeArea()
 
         ScrollView(.vertical, showsIndicators: false) {
@@ -66,43 +82,64 @@ struct FullPlayerView: View {
           openPlayer: {},
           selectTab: { tab in
             selection = tab
-            dismiss()
+            onCollapse()
           }
         )
         .frame(width: chromeWidth)
         .padding(.bottom, max(proxy.safeAreaInsets.bottom, layout.isCompactLandscapePhone ? 4 : 10))
       }
       .frame(width: viewportWidth, height: viewportHeight, alignment: .topLeading)
+      .clipShape(RoundedRectangle(cornerRadius: 30 * reveal, style: .continuous))
       .contentShape(Rectangle())
       .offset(y: dragY)
-      .scaleEffect(1 - min(dragY / 1400, 0.025), anchor: .top)
+      .scaleEffect(1 - (0.045 * reveal), anchor: .top)
+      .shadow(color: .black.opacity(0.30 * reveal), radius: 28 * reveal, y: 12)
       .simultaneousGesture(
-        DragGesture(minimumDistance: 14, coordinateSpace: .global)
+        DragGesture(minimumDistance: 12, coordinateSpace: .global)
           .updating($dismissDragY) { value, state, _ in
             let vertical = value.translation.height
             let horizontal = abs(value.translation.width)
-            if vertical > 0 && vertical > horizontal * 1.15 {
-              state = min(vertical, 260)
+            if vertical > 0 && vertical > horizontal * 1.12 {
+              state = min(vertical, viewportHeight * 0.72)
             }
+          }
+          .onChanged { value in
+            let vertical = value.translation.height
+            let horizontal = abs(value.translation.width)
+            guard vertical > 0, vertical > horizontal * 1.12 else { return }
+            collapseProgress = min(1, max(0, vertical / max(320, viewportHeight * 0.52)))
           }
           .onEnded { value in
             let vertical = value.translation.height
             let horizontal = abs(value.translation.width)
-            guard vertical > 0, vertical > horizontal * 1.15 else { return }
+            guard vertical > 0, vertical > horizontal * 1.12 else {
+              withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.88)) {
+                collapseProgress = 0
+              }
+              return
+            }
 
-            if vertical > 100 || value.predictedEndTranslation.height > 180 {
-              dismiss()
+            if vertical > 105 || value.predictedEndTranslation.height > 190 {
+              onCollapse()
+            } else {
+              withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.88)) {
+                collapseProgress = 0
+              }
             }
           }
       )
-      .animation(.interactiveSpring(response: 0.30, dampingFraction: 0.86), value: dismissDragY)
+    }
+    .onAppear {
+      collapseProgress = 0
     }
     .sheet(isPresented: $premiumPresented) {
       PremiumView(compact: true)
         .presentationDetents([.fraction(0.60), .large])
         .presentationDragIndicator(.hidden)
     }
-    .sheet(isPresented: $queuePresented) { QueueView() }
+    .sheet(isPresented: $queuePresented) {
+      QueueView()
+    }
     .alert(
       "Не удалось скачать",
       isPresented: Binding(
@@ -164,7 +201,7 @@ struct FullPlayerView: View {
 
   private var topBar: some View {
     HStack {
-      Button(action: { dismiss() }) {
+      Button(action: onCollapse) {
         Image(systemName: "chevron.down")
           .font(.system(size: 18, weight: .semibold))
           .frame(width: 42, height: 42)
@@ -222,6 +259,13 @@ struct FullPlayerView: View {
   private func artwork(size: CGFloat) -> some View {
     ArtworkView(url: track.artworkURL, cornerRadius: 36)
       .frame(width: size, height: size)
+      .matchedGeometryEffect(
+        id: "player.artwork",
+        in: transitionNamespace,
+        properties: .frame,
+        anchor: .center,
+        isSource: true
+      )
       .overlay(alignment: .trailing) {
         if subtitlesVisible {
           PlayerSubtitleOverlay(
@@ -261,6 +305,14 @@ struct FullPlayerView: View {
           .font(.system(size: 13))
           .foregroundStyle(.secondary)
       }
+      .matchedGeometryEffect(
+        id: "player.metadata",
+        in: transitionNamespace,
+        properties: .position,
+        anchor: .leading,
+        isSource: true
+      )
+
       Spacer()
       Button {
         library.toggleLike(track)
