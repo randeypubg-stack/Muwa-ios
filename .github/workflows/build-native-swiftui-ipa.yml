@@ -42,6 +42,14 @@ jobs:
           test -f "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
           test -f "$ROOT/MuwaNasheeds.xcodeproj/xcshareddata/xcschemes/MuwaNasheeds.xcscheme"
 
+          # Apply device layout fixes after verifying the immutable source archive.
+          test -f "$PWD/native-patches/MiniPlayerView.swift"
+          test -f "$PWD/native-patches/FullPlayerView.swift"
+          cp "$PWD/native-patches/MiniPlayerView.swift" "$ROOT/Sources/Views/Components/MiniPlayerView.swift"
+          cp "$PWD/native-patches/FullPlayerView.swift" "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq '.frame(height: 2)' "$ROOT/Sources/Views/Components/MiniPlayerView.swift"
+          grep -Fq 'let availableWidth' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+
           ICON_PATH="$ROOT/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"
           MARK_PATH="$ROOT/Resources/Assets.xcassets/AppMark.imageset/AppMark.png"
           echo "$EXPECTED_ICON_SHA  $ICON_PATH" | shasum -a 256 -c -
@@ -65,7 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
-          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='9'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
         shell: bash
@@ -82,7 +90,7 @@ jobs:
 
           test "$BUNDLE_ID" = "app.muwa.nasheeds"
           test "$VERSION" = "1.4.0"
-          test "$BUILD_NO" = "8"
+          test "$BUILD_NO" = "9"
           test -x "$APP_PATH/$EXECUTABLE"
 
           lipo -info "$APP_PATH/$EXECUTABLE" | tee build/architecture.txt
@@ -96,10 +104,10 @@ jobs:
 
           (
             cd build/package
-            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build8-unsigned.ipa Payload
+            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build9-layoutfix-unsigned.ipa Payload
           )
 
-          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build8-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build8-unsigned.ipa.sha256
+          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build9-layoutfix-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build9-layoutfix-unsigned.ipa.sha256
 
           cat > build/build-info.json <<EOF
           {
@@ -113,6 +121,7 @@ jobs:
             "signed": false,
             "source_commit": "${GITHUB_SHA}",
             "source_archive_sha256": "f07bce80d5b9b39583a8bce19f3e3b71caed205332649f13ccb45a8b28997f84",
+            "layout_fix": "mini-player-geometry-and-full-player-width",
             "run_url": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           }
           EOF
@@ -122,8 +131,8 @@ jobs:
         with:
           name: Muwa-Nasheeds-Native-IPA-${{ github.run_number }}
           path: |
-            build/Muwa-Nasheeds-v1.4.0-build8-unsigned.ipa
-            build/Muwa-Nasheeds-v1.4.0-build8-unsigned.ipa.sha256
+            build/Muwa-Nasheeds-v1.4.0-build9-layoutfix-unsigned.ipa
+            build/Muwa-Nasheeds-v1.4.0-build9-layoutfix-unsigned.ipa.sha256
             build/build-info.json
           if-no-files-found: error
           compression-level: 0
