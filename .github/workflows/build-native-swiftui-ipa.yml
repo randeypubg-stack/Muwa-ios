@@ -73,6 +73,13 @@ jobs:
           cp "$PWD/native-patches/PlayerManager.swift" "$ROOT/Sources/Services/PlayerManager.swift"
           cp "$PWD/native-patches/MuwaNasheedsApp.swift" "$ROOT/Sources/App/MuwaNasheedsApp.swift"
           grep -Fq 'MPNowPlayingInfoCenter.default().nowPlayingInfo = nil' "$ROOT/Sources/Services/PlayerManager.swift"
+          grep -Fq 'resumeSavedPlayback' "$ROOT/Sources/Services/PlayerManager.swift"
+          grep -Fq 'muwa.native.resume.track' "$ROOT/Sources/Services/PlayerManager.swift"
+          grep -Fq 'persistResumeCandidate(force: true)' "$ROOT/Sources/Services/PlayerManager.swift"
+          grep -Fq 'HomeScrollOffsetKey' "$ROOT/Sources/Views/Home/HomeView.swift"
+          grep -Fq 'collapsingHeader' "$ROOT/Sources/Views/Home/HomeView.swift"
+          grep -Fq 'player.dismissResumeCandidate()' "$ROOT/Sources/Views/Home/HomeView.swift"
+          ! grep -Fq 'ScreenHeader(title: "Главная"' "$ROOT/Sources/Views/Home/HomeView.swift"
 
           # Allow ProMotion-capable iPhones to render above 60 Hz. iOS still
           # controls the actual adaptive refresh rate based on hardware/system state.
@@ -106,7 +113,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
-          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='22'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='23'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
         shell: bash
@@ -123,7 +130,7 @@ jobs:
 
           test "$BUNDLE_ID" = "app.muwa.nasheeds"
           test "$VERSION" = "1.4.0"
-          test "$BUILD_NO" = "22"
+          test "$BUILD_NO" = "23"
           test -x "$APP_PATH/$EXECUTABLE"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist")" = "true"
 
@@ -138,10 +145,10 @@ jobs:
 
           (
             cd build/package
-            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build22-combined-audit-unsigned.ipa Payload
+            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build23-collapsing-resume-unsigned.ipa Payload
           )
 
-          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build22-combined-audit-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build22-combined-audit-unsigned.ipa.sha256
+          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build23-collapsing-resume-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build23-collapsing-resume-unsigned.ipa.sha256
 
           cat > build/build-info.json <<EOF
           {
@@ -155,7 +162,7 @@ jobs:
             "signed": false,
             "source_commit": "${GITHUB_SHA}",
             "source_archive_sha256": "f07bce80d5b9b39583a8bce19f3e3b71caed205332649f13ccb45a8b28997f84",
-            "audit_fixes": ["named-playlist-actions", "stable-migration", "empty-queue-persistence", "library-scroll-clearance", "mini-player-morph-coordinates", "compact-landscape-player", "independent-startup-loading", "fresh-now-playing-cleanup"],
+            "audit_fixes": ["named-playlist-actions", "stable-migration", "empty-queue-persistence", "library-scroll-clearance", "mini-player-morph-coordinates", "compact-landscape-player", "independent-startup-loading", "fresh-now-playing-cleanup", "collapsing-transparent-home-header", "next-launch-resume-candidate", "compact-dismissible-resume-card"],
             "run_url": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           }
           EOF
@@ -165,8 +172,8 @@ jobs:
         with:
           name: Muwa-Nasheeds-Native-IPA-${{ github.run_number }}
           path: |
-            build/Muwa-Nasheeds-v1.4.0-build22-combined-audit-unsigned.ipa
-            build/Muwa-Nasheeds-v1.4.0-build22-combined-audit-unsigned.ipa.sha256
+            build/Muwa-Nasheeds-v1.4.0-build23-collapsing-resume-unsigned.ipa
+            build/Muwa-Nasheeds-v1.4.0-build23-collapsing-resume-unsigned.ipa.sha256
             build/build-info.json
           if-no-files-found: error
           compression-level: 0
@@ -185,7 +192,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Muwa-build22-review-screenshots
+          name: Muwa-build23-review-screenshots
           path: build/previews
           if-no-files-found: ignore
 
