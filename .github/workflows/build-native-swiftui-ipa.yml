@@ -29,9 +29,9 @@ jobs:
           rm -rf build-src build
           mkdir -p build-src build
 
-          SOURCE_URL="https://muwa-app.floot.app/_cdn/static/4ea4d5ab-c161-4578-af19-d782d6bd191b-muwa-native-source-v8-icon-synced.zip"
+          SOURCE_URL="https://muwa-app.floot.app/_cdn/static/ad6f99e3-3e5d-481e-8669-3d95d2345fea-muwa-native-source-v8-icon-synced-xcode-fixed.zip"
           SOURCE_ZIP="$PWD/build/muwa-native-source.zip"
-          EXPECTED_SOURCE_SHA="86348b95b269ff8320d20ece96ed15e76a6d5d5479a937ad12d904ed2c23d269"
+          EXPECTED_SOURCE_SHA="60ece12a1569072b3f47601ed325a47682a4a636b6d9c7e98c35a76b23bd9671"
           EXPECTED_ICON_SHA="ac533d8fe8db72557b1c2a27f8986895dc9edb387709141e632dad82b68a9af5"
 
           curl --fail --location --retry 3 --retry-delay 2 "$SOURCE_URL" -o "$SOURCE_ZIP"
