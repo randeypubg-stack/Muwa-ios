@@ -21,7 +21,10 @@ struct MorphingPlayerView: View {
   @State private var subtitleLanguage: SubtitleLanguage = .arabic
   @State private var downloadError: String?
   @State private var dragStartExpansion: CGFloat?
-  @GestureState private var coverDragX: CGFloat = 0
+  @State private var coverDragX: CGFloat = 0
+  @State private var coverSwipeTrack: Track?
+  @State private var coverSwipeDirection: Int = 0
+  @State private var coverPaging = false
 
   private var track: Track {
     player.currentTrack ?? Track.catalog[0]
@@ -272,16 +275,135 @@ struct MorphingPlayerView: View {
     cornerRadius: CGFloat,
     progress: CGFloat
   ) -> some View {
+    let pageGap = max(14, size * 0.055)
+    let pageDistance = size + pageGap
+    let drag = progress > 0.74 ? coverDragX : 0
+    let normalized = min(1, abs(drag) / max(1, pageDistance))
+
+    return ZStack {
+      if let coverSwipeTrack, coverSwipeDirection != 0 {
+        artworkPage(
+          track: coverSwipeTrack,
+          size: size,
+          cornerRadius: cornerRadius,
+          showSubtitle: false,
+          progress: progress
+        )
+        .offset(
+          x: coverSwipeDirection < 0
+            ? pageDistance + drag
+            : -pageDistance + drag
+        )
+        .scaleEffect(0.985 + (normalized * 0.015))
+        .opacity(0.72 + (normalized * 0.28))
+      }
+
+      artworkPage(
+        track: track,
+        size: size,
+        cornerRadius: cornerRadius,
+        showSubtitle: true,
+        progress: progress
+      )
+      .offset(x: drag)
+      .scaleEffect(1 - (normalized * 0.018))
+      .opacity(1 - (normalized * 0.08))
+    }
+    .frame(width: size, height: size)
+    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    .shadow(
+      color: .black.opacity(Double(0.34 * smoothStep(progress))),
+      radius: 28 * smoothStep(progress),
+      y: 16 * smoothStep(progress)
+    )
+    .contentShape(Rectangle())
+    .allowsHitTesting(progress > 0.74 && !coverPaging)
+    .simultaneousGesture(
+      DragGesture(minimumDistance: 10)
+        .onChanged { value in
+          guard expansion > 0.74, !coverPaging else { return }
+
+          let horizontal = value.translation.width
+          let vertical = value.translation.height
+          guard abs(horizontal) > abs(vertical) * 1.08 else { return }
+
+          let direction = horizontal < 0 ? -1 : 1
+          if coverSwipeDirection != direction || coverSwipeTrack == nil {
+            coverSwipeDirection = direction
+            coverSwipeTrack = swipeNeighbor(direction: direction)
+          }
+
+          let hasNeighbor = coverSwipeTrack != nil
+          if hasNeighbor {
+            coverDragX = min(pageDistance, max(-pageDistance, horizontal))
+          } else {
+            coverDragX = rubberBand(horizontal, limit: size * 0.12)
+          }
+        }
+        .onEnded { value in
+          guard expansion > 0.74, !coverPaging else { return }
+
+          let horizontal = value.translation.width
+          let vertical = value.translation.height
+          guard abs(horizontal) > abs(vertical) * 1.08 else {
+            resetCoverPaging()
+            return
+          }
+
+          let projected = value.predictedEndTranslation.width
+          let threshold = max(46, size * 0.17)
+          let shouldPage =
+            abs(horizontal) >= threshold
+            || abs(projected) >= threshold * 1.35
+
+          guard shouldPage, let destination = coverSwipeTrack else {
+            resetCoverPaging()
+            return
+          }
+
+          coverPaging = true
+          let target: CGFloat = coverSwipeDirection < 0 ? -pageDistance : pageDistance
+
+          withAnimation(
+            .spring(response: 0.30, dampingFraction: 0.90, blendDuration: 0.10)
+          ) {
+            coverDragX = target
+          }
+
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            player.play(destination)
+
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+              coverDragX = 0
+              coverSwipeTrack = nil
+              coverSwipeDirection = 0
+            }
+
+            coverPaging = false
+          }
+        }
+    )
+  }
+
+  private func artworkPage(
+    track pageTrack: Track,
+    size: CGFloat,
+    cornerRadius: CGFloat,
+    showSubtitle: Bool,
+    progress: CGFloat
+  ) -> some View {
     ArtworkView(
-      url: track.artworkURL,
+      url: pageTrack.artworkURL,
       cornerRadius: cornerRadius,
       placeholderSystemImage: "music.note"
     )
     .frame(width: size, height: size)
     .overlay(alignment: .trailing) {
-      if subtitlesVisible && progress > 0.74 {
+      if showSubtitle, subtitlesVisible, progress > 0.74 {
         PlayerSubtitleOverlay(
-          track: track,
+          track: pageTrack,
           currentTime: player.currentTime,
           language: subtitleLanguage
         )
@@ -289,50 +411,60 @@ struct MorphingPlayerView: View {
         .transition(.opacity)
       }
     }
-    .shadow(
-      color: .black.opacity(Double(0.34 * smoothStep(progress))),
-      radius: 28 * smoothStep(progress),
-      y: 16 * smoothStep(progress)
-    )
-    .offset(
-      x: progress > 0.74
-        ? restrainedCoverOffset(coverDragX, artworkSize: size)
-        : 0
-    )
-    .contentShape(Rectangle())
-    .allowsHitTesting(progress > 0.74)
-    .simultaneousGesture(
-      DragGesture(minimumDistance: 12)
-        .updating($coverDragX) { value, state, _ in
-          guard expansion > 0.74 else { return }
-          if abs(value.translation.width) > abs(value.translation.height) {
-            state = value.translation.width
-          }
-        }
-        .onEnded { value in
-          guard expansion > 0.74 else { return }
-          guard
-            abs(value.translation.width) > 54,
-            abs(value.translation.width) > abs(value.translation.height)
-          else { return }
-
-          if value.translation.width < 0 {
-            player.next()
-          } else {
-            player.previous()
-          }
-        }
-    )
-    .animation(.spring(response: 0.34, dampingFraction: 0.84), value: track.id)
   }
 
-  private func restrainedCoverOffset(
+  private func swipeNeighbor(direction: Int) -> Track? {
+    let queue = library.queueTracks.isEmpty ? Track.catalog : library.queueTracks
+    guard !queue.isEmpty else { return nil }
+
+    guard let currentIndex = queue.firstIndex(where: { $0.id == track.id }) else {
+      return nil
+    }
+
+    if direction < 0 {
+      if player.shuffleOn {
+        return queue
+          .filter { $0.id != track.id }
+          .randomElement()
+      }
+
+      let nextIndex = currentIndex + 1
+      if nextIndex < queue.count {
+        return queue[nextIndex]
+      }
+
+      return player.repeatOn ? queue.first : nil
+    }
+
+    if currentIndex > 0 {
+      return queue[currentIndex - 1]
+    }
+
+    return player.repeatOn ? queue.last : nil
+  }
+
+  private func rubberBand(
     _ translation: CGFloat,
-    artworkSize: CGFloat
+    limit: CGFloat
   ) -> CGFloat {
-    let resisted = translation * 0.42
-    let limit = max(24, artworkSize * 0.18)
-    return min(limit, max(-limit, resisted))
+    let sign: CGFloat = translation < 0 ? -1 : 1
+    let magnitude = abs(translation)
+    let resisted = limit * (1 - (1 / ((magnitude / max(1, limit)) + 1)))
+    return sign * resisted
+  }
+
+  private func resetCoverPaging() {
+    withAnimation(
+      .spring(response: 0.28, dampingFraction: 0.88, blendDuration: 0.08)
+    ) {
+      coverDragX = 0
+    }
+
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
+      guard abs(coverDragX) < 1 else { return }
+      coverSwipeTrack = nil
+      coverSwipeDirection = 0
+    }
   }
 
   private func sharedMetadata(
