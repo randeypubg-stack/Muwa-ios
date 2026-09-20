@@ -14,11 +14,7 @@ struct LibraryView: View {
     GeometryReader { proxy in
       let layout = AdaptiveLayout(size: proxy.size, safeArea: proxy.safeAreaInsets)
 
-      ZStack {
-        AppBackground()
-          .ignoresSafeArea()
-
-        NavigationStack(path: $path) {
+      NavigationStack(path: $path) {
           VStack(spacing: 0) {
             ScreenHeader(
               title: "Библиотека",
@@ -155,9 +151,8 @@ struct LibraryView: View {
               startPublication: startPublication
             )
           }
-        }
-        .background(Color.clear)
       }
+      .background(Color.clear)
       .sheet(isPresented: $publicationPresented) {
         PublicationFlowView()
       }
