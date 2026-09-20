@@ -11,6 +11,8 @@ struct MorphingPlayerView: View {
   let chromeDrop: CGFloat
   let safeTopInset: CGFloat
   let safeBottomInset: CGFloat
+  let safeLeadingInset: CGFloat
+  let safeTrailingInset: CGFloat
 
   @State private var premiumPresented = false
   @State private var queuePresented = false
@@ -33,7 +35,12 @@ struct MorphingPlayerView: View {
       let p = clamp(expansion)
 
       let horizontalPadding = layout.horizontalPadding
-      let usableWidth = max(0, viewportWidth - horizontalPadding * 2)
+      let safeSideInset = max(
+        horizontalPadding,
+        safeLeadingInset,
+        safeTrailingInset
+      )
+      let usableWidth = max(0, viewportWidth - safeSideInset * 2)
       let miniWidthLimit = layout.bottomChromeMaxWidth.isFinite
         ? layout.bottomChromeMaxWidth
         : usableWidth
