@@ -83,5 +83,15 @@ struct MiniPlayerView: View {
     )
     .shadow(color: .black.opacity(0.15), radius: 24, y: 10)
     .contentShape(RoundedRectangle(cornerRadius: 27, style: .continuous))
+    .simultaneousGesture(
+      DragGesture(minimumDistance: 12)
+        .onEnded { value in
+          if value.translation.height < -24,
+             abs(value.translation.height) > abs(value.translation.width) * 1.2 {
+            openPlayer()
+          }
+        }
+    )
   }
 }
+
