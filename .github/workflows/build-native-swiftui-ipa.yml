@@ -86,10 +86,13 @@ jobs:
           grep -Fq 'collapsingHeader' "$ROOT/Sources/Views/Home/HomeView.swift"
           grep -Fq 'player.dismissResumeCandidate()' "$ROOT/Sources/Views/Home/HomeView.swift"
           ! grep -Fq 'ScreenHeader(title: "Главная"' "$ROOT/Sources/Views/Home/HomeView.swift"
-          grep -Fq 'scrollOrigin' "$ROOT/Sources/Views/Home/HomeView.swift"
-          grep -Fq 'value - (scrollOrigin ?? value)' "$ROOT/Sources/Views/Home/HomeView.swift"
-          grep -Fq 'restrainedCoverOffset' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
-          grep -Fq 'translation * 0.42' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq '.frame(height: 1)' "$ROOT/Sources/Views/Home/HomeView.swift"
+          grep -Fq 'scrollOffset = min(0, value)' "$ROOT/Sources/Views/Home/HomeView.swift"
+          grep -Fq 'lerp(42, 25, collapse)' "$ROOT/Sources/Views/Home/HomeView.swift"
+          grep -Fq 'coverSwipeTrack' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq 'swipeNeighbor(direction:' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq 'rubberBand(' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq 'pageDistance + drag' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
           grep -Fq 'NavigationLink(value: destination)' "$ROOT/Sources/Views/Library/LibraryView.swift"
           grep -Fq 'if abs(delta) > 1' "$ROOT/Sources/Theme/AdaptiveLayout.swift"
           grep -Fq 'return max(0, width - horizontalPadding * 2)' "$ROOT/Sources/Theme/AdaptiveLayout.swift"
@@ -142,7 +145,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
-          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='25'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='26'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
         shell: bash
@@ -159,7 +162,7 @@ jobs:
 
           test "$BUNDLE_ID" = "app.muwa.nasheeds"
           test "$VERSION" = "1.4.0"
-          test "$BUILD_NO" = "25"
+          test "$BUILD_NO" = "26"
           test -x "$APP_PATH/$EXECUTABLE"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist")" = "true"
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIColorName' "$APP_PATH/Info.plist")" = "LaunchBackground"
@@ -175,10 +178,10 @@ jobs:
 
           (
             cd build/package
-            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build25-premium-polish-unsigned.ipa Payload
+            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build26-home-cover-paging-unsigned.ipa Payload
           )
 
-          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build25-premium-polish-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build25-premium-polish-unsigned.ipa.sha256
+          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build26-home-cover-paging-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build26-home-cover-paging-unsigned.ipa.sha256
 
           cat > build/build-info.json <<EOF
           {
@@ -192,7 +195,7 @@ jobs:
             "signed": false,
             "source_commit": "${GITHUB_SHA}",
             "source_archive_sha256": "f07bce80d5b9b39583a8bce19f3e3b71caed205332649f13ccb45a8b28997f84",
-            "audit_fixes": ["named-playlist-actions", "stable-migration", "empty-queue-persistence", "library-scroll-clearance", "mini-player-morph-coordinates", "compact-landscape-player", "independent-startup-loading", "fresh-now-playing-cleanup", "collapsing-transparent-home-header", "next-launch-resume-candidate", "compact-dismissible-resume-card", "restrained-cover-swipe", "relative-scroll-header-collapse", "library-quick-navigation-links", "landscape-full-width-content", "landscape-edge-to-edge-player-safe-controls", "black-system-launch-screen", "branded-artwork-loader", "sleep-timer", "next-track-prefetch"],
+            "audit_fixes": ["named-playlist-actions", "stable-migration", "empty-queue-persistence", "library-scroll-clearance", "mini-player-morph-coordinates", "compact-landscape-player", "independent-startup-loading", "fresh-now-playing-cleanup", "collapsing-transparent-home-header", "next-launch-resume-candidate", "compact-dismissible-resume-card", "restrained-cover-swipe", "relative-scroll-header-collapse", "library-quick-navigation-links", "landscape-full-width-content", "landscape-edge-to-edge-player-safe-controls", "black-system-launch-screen", "branded-artwork-loader", "sleep-timer", "next-track-prefetch", "home-header-real-scroll-collapse", "interactive-cover-paging-carousel"],
             "run_url": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           }
           EOF
@@ -202,8 +205,8 @@ jobs:
         with:
           name: Muwa-Nasheeds-Native-IPA-${{ github.run_number }}
           path: |
-            build/Muwa-Nasheeds-v1.4.0-build25-premium-polish-unsigned.ipa
-            build/Muwa-Nasheeds-v1.4.0-build25-premium-polish-unsigned.ipa.sha256
+            build/Muwa-Nasheeds-v1.4.0-build26-home-cover-paging-unsigned.ipa
+            build/Muwa-Nasheeds-v1.4.0-build26-home-cover-paging-unsigned.ipa.sha256
             build/build-info.json
           if-no-files-found: error
           compression-level: 0
@@ -222,7 +225,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Muwa-build25-review-screenshots
+          name: Muwa-build26-review-screenshots
           path: build/previews
           if-no-files-found: ignore
 
