@@ -14,6 +14,7 @@ struct MorphingPlayerView: View {
 
   @State private var premiumPresented = false
   @State private var queuePresented = false
+  @State private var playlistCreatePresented = false
   @State private var subtitlesVisible = false
   @State private var subtitleLanguage: SubtitleLanguage = .arabic
   @State private var downloadError: String?
@@ -206,6 +207,12 @@ struct MorphingPlayerView: View {
     }
     .sheet(isPresented: $queuePresented) {
       QueueView()
+    }
+    .sheet(isPresented: $playlistCreatePresented) {
+      PlaylistCreateSheet { name in
+        let playlistID = library.createPlaylist(name: name)
+        library.addTrack(track, to: playlistID)
+      }
     }
     .alert(
       "Не удалось скачать",
@@ -422,19 +429,19 @@ struct MorphingPlayerView: View {
     let progressY =
       containerTop
       + metadataY
-      + (isShortPhone ? 56 : 70)
+      + (isShortPhone ? 68 : 84)
 
     let transportY =
       progressY
-      + (isShortPhone ? 72 : 84)
+      + (isShortPhone ? 76 : 88)
 
     let proposedActionsY =
       transportY
-      + (isShortPhone ? 64 : 78)
+      + (isShortPhone ? 62 : 74)
 
     let chromeTop =
       layout.viewportHeight
-      - 68
+      - 64
       + chromeDrop
     let actionsY = min(
       proposedActionsY,
@@ -507,13 +514,35 @@ struct MorphingPlayerView: View {
           )
         }
 
-        Button {
-          library.togglePlaylist(track)
-        } label: {
-          Label(
-            library.isInPlaylist(track) ? "Убрать из плейлиста" : "Добавить в плейлист",
-            systemImage: "music.note.list"
-          )
+        Menu("Добавить в плей-лист") {
+          if library.playlists.isEmpty {
+            Button {
+              playlistCreatePresented = true
+            } label: {
+              Label("Создать первый плей-лист", systemImage: "plus")
+            }
+          } else {
+            ForEach(library.playlists) { playlist in
+              Button {
+                library.toggleTrack(track, in: playlist.id)
+              } label: {
+                Label(
+                  playlist.name,
+                  systemImage: library.contains(track, in: playlist.id)
+                    ? "checkmark.circle.fill"
+                    : "circle"
+                )
+              }
+            }
+
+            Divider()
+
+            Button {
+              playlistCreatePresented = true
+            } label: {
+              Label("Новый плей-лист", systemImage: "plus")
+            }
+          }
         }
 
         Button {

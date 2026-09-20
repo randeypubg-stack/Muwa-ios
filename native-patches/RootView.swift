@@ -70,7 +70,7 @@ struct RootView: View {
           .blur(radius: 1.10 * progress)
           .scaleEffect(1 - (0.003 * progress))
 
-        if player.currentTrack != nil {
+        if player.hasStartedPlaybackThisSession, player.currentTrack != nil {
           MorphingPlayerView(
             selection: $selection,
             expansion: $playerExpansion,
@@ -84,7 +84,7 @@ struct RootView: View {
         }
 
         VStack(spacing: 8) {
-          if player.currentTrack != nil {
+          if player.hasStartedPlaybackThisSession, player.currentTrack != nil {
             MiniPlayerView(openPlayer: expandPlayer)
               .opacity(Double(1 - smoothStep(progress / 0.18)))
               .allowsHitTesting(progress < 0.08)
@@ -102,7 +102,7 @@ struct RootView: View {
             }
           )
           .padding(.horizontal, layout.isPhone ? 4 : 0)
-          .offset(y: layout.isPhone ? -2 : 0)
+          .offset(y: layout.isPhone ? -3 : 0)
         }
         .frame(width: chromeWidth)
         .padding(.bottom, layout.isPhone ? 6 : 0)
@@ -140,6 +140,8 @@ struct RootView: View {
   }
 
   private func expandPlayer() {
+    guard player.hasStartedPlaybackThisSession, player.currentTrack != nil else { return }
+
     withAnimation(
       .spring(response: 0.50, dampingFraction: 0.94, blendDuration: 0.12)
     ) {
@@ -171,20 +173,35 @@ struct RootView: View {
 }
 
 private struct LaunchGateView: View {
+  @State private var reveal = false
+
   var body: some View {
     ZStack {
-      AppBackground().ignoresSafeArea()
+      Color.black.ignoresSafeArea()
 
-      VStack(spacing: 16) {
+      ZStack {
+        Circle()
+          .stroke(.white.opacity(0.10), lineWidth: 1)
+          .frame(width: 132, height: 132)
+          .scaleEffect(reveal ? 1.26 : 0.72)
+          .opacity(reveal ? 0 : 0.62)
+
         Image("AppMark")
           .resizable()
           .scaledToFit()
-          .frame(width: 94, height: 94)
-          .clipShape(RoundedRectangle(cornerRadius: 27, style: .continuous))
-          .shadow(color: .blue.opacity(0.18), radius: 24, y: 12)
-
-        ProgressView()
-          .tint(.white.opacity(0.75))
+          .frame(width: 92, height: 92)
+          .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+          .scaleEffect(reveal ? 1 : 0.84)
+          .opacity(reveal ? 1 : 0.18)
+          .shadow(
+            color: .white.opacity(reveal ? 0.14 : 0),
+            radius: reveal ? 18 : 0
+          )
+      }
+    }
+    .onAppear {
+      withAnimation(.easeOut(duration: 0.58)) {
+        reveal = true
       }
     }
   }

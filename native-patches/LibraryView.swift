@@ -26,14 +26,8 @@ struct LibraryView: View {
             .padding(.bottom, 10)
             .adaptiveFrame(maxWidth: layout.contentMaxWidth)
             .background(
-              LinearGradient(
-                colors: [
-                  Color.black.opacity(0.60),
-                  Color.black.opacity(0.30),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-              )
+              Color(red: 0.003, green: 0.004, blue: 0.006)
+                .opacity(0.98)
             )
             .zIndex(10)
 
@@ -79,9 +73,9 @@ struct LibraryView: View {
                   )
                   libraryCard(
                     .playlist,
-                    "Мой плейлист",
+                    "Мои плей-листы",
                     "music.note.list",
-                    library.playlistIDs.count,
+                    library.playlists.count,
                     .cyan
                   )
                   libraryCard(

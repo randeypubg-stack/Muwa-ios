@@ -7,8 +7,8 @@ struct HomeView: View {
   let openPlayer: () -> Void
   let openSearch: () -> Void
 
-  private var currentTrack: Track {
-    player.currentTrack ?? Track.catalog[0]
+  private var currentTrack: Track? {
+    player.currentTrack
   }
 
   var body: some View {
@@ -22,20 +22,16 @@ struct HomeView: View {
           .padding(.bottom, 10)
           .adaptiveFrame(maxWidth: layout.contentMaxWidth)
           .background(
-            LinearGradient(
-              colors: [
-                Color.black.opacity(0.58),
-                Color.black.opacity(0.28),
-              ],
-              startPoint: .top,
-              endPoint: .bottom
-            )
+            Color(red: 0.003, green: 0.004, blue: 0.006)
+              .opacity(0.98)
           )
           .zIndex(10)
 
         ScrollView(showsIndicators: false) {
           VStack(alignment: .leading, spacing: layout.isWide ? 34 : 28) {
-            continueListening(layout: layout)
+            if player.hasStartedPlaybackThisSession, let currentTrack {
+              continueListening(track: currentTrack, layout: layout)
+            }
 
             if layout.isWide {
               recommendationsGrid(layout: layout)
@@ -54,7 +50,7 @@ struct HomeView: View {
     }
   }
 
-  private func continueListening(layout: AdaptiveLayout) -> some View {
+  private func continueListening(track currentTrack: Track, layout: AdaptiveLayout) -> some View {
     VStack(alignment: .leading, spacing: 14) {
       Text("ПРОДОЛЖИТЬ СЛУШАТЬ")
         .font(.caption2.weight(.bold))
