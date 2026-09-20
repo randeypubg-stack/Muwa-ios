@@ -37,8 +37,7 @@ struct MorphingPlayerView: View {
       let horizontalPadding = layout.horizontalPadding
       let safeSideInset = max(
         horizontalPadding,
-        safeLeadingInset,
-        safeTrailingInset
+        max(safeLeadingInset, safeTrailingInset)
       )
       let usableWidth = max(0, viewportWidth - safeSideInset * 2)
       let miniWidthLimit = layout.bottomChromeMaxWidth.isFinite
