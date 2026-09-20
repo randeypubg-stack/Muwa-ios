@@ -156,7 +156,7 @@ struct RootView: View {
     UIApplication.shared.connectedScenes
       .compactMap { $0 as? UIWindowScene }
       .filter { $0.activationState == .foregroundActive }
-      .flatMap(\.windows)
+      .flatMap { $0.windows }
       .first(where: \ .isKeyWindow)?
       .safeAreaInsets ?? .zero
   }
