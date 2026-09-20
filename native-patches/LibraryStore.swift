@@ -51,8 +51,11 @@ final class LibraryStore: ObservableObject {
         : [UserPlaylist(name: "Мой плей-лист", trackIDs: legacy)]
     }
 
-    let savedQueue = defaults.stringArray(forKey: Key.queue) ?? []
-    queueIDs = savedQueue.isEmpty ? Track.catalog.map(\.id) : savedQueue
+    if let savedQueue = defaults.stringArray(forKey: Key.queue) {
+      queueIDs = savedQueue
+    } else {
+      queueIDs = Track.catalog.map(\.id)
+    }
 
     if
       let data = defaults.data(forKey: Key.publications),
@@ -62,12 +65,21 @@ final class LibraryStore: ObservableObject {
     } else {
       publications = []
     }
+
+    if defaults.data(forKey: Key.playlists) == nil, !playlists.isEmpty,
+      let data = try? JSONEncoder().encode(playlists)
+    {
+      defaults.set(data, forKey: Key.playlists)
+    }
   }
 
   var favoriteTracks: [Track] { tracks(for: Array(likedIDs)) }
   var historyTracks: [Track] { tracks(for: historyIDs) }
   var playlistIDs: [String] {
-    Array(Set(playlists.flatMap(\.trackIDs)))
+    var seen = Set<String>()
+    return playlists
+      .flatMap(\.trackIDs)
+      .filter { seen.insert($0).inserted }
   }
   var playlistTracks: [Track] { tracks(for: playlistIDs) }
   var queueTracks: [Track] { tracks(for: queueIDs) }

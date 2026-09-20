@@ -9,6 +9,12 @@ struct TrackRow: View {
 
   var isInPlaylist = false
   var togglePlaylistAction: (() -> Void)? = nil
+
+  var playlists: [UserPlaylist] = []
+  var isTrackInPlaylist: ((UUID) -> Bool)? = nil
+  var toggleTrackInPlaylistAction: ((UUID) -> Void)? = nil
+  var createPlaylistAction: (() -> Void)? = nil
+
   var playNextAction: (() -> Void)? = nil
   var addToQueueAction: (() -> Void)? = nil
 
@@ -49,12 +55,39 @@ struct TrackRow: View {
 
       if hasContextMenu {
         Menu {
-          if let togglePlaylistAction {
+          if !playlists.isEmpty || createPlaylistAction != nil {
+            Menu("Добавить в плей-лист") {
+              ForEach(playlists) { playlist in
+                Button {
+                  toggleTrackInPlaylistAction?(playlist.id)
+                } label: {
+                  Label(
+                    playlist.name,
+                    systemImage: isTrackInPlaylist?(playlist.id) == true
+                      ? "checkmark.circle.fill"
+                      : "circle"
+                  )
+                }
+              }
+
+              if !playlists.isEmpty, createPlaylistAction != nil {
+                Divider()
+              }
+
+              if let createPlaylistAction {
+                Button {
+                  createPlaylistAction()
+                } label: {
+                  Label("Новый плей-лист", systemImage: "plus")
+                }
+              }
+            }
+          } else if let togglePlaylistAction {
             Button {
               togglePlaylistAction()
             } label: {
               Label(
-                isInPlaylist ? "Убрать из плейлиста" : "Добавить в плейлист",
+                isInPlaylist ? "Убрать из плей-листа" : "Добавить в плей-лист",
                 systemImage: isInPlaylist ? "music.note.list" : "text.badge.plus"
               )
             }
@@ -101,6 +134,10 @@ struct TrackRow: View {
   }
 
   private var hasContextMenu: Bool {
-    togglePlaylistAction != nil || playNextAction != nil || addToQueueAction != nil
+    togglePlaylistAction != nil
+      || !playlists.isEmpty
+      || createPlaylistAction != nil
+      || playNextAction != nil
+      || addToQueueAction != nil
   }
 }
