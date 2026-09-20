@@ -62,7 +62,7 @@ struct RootView: View {
 
       let chromeDrop: CGFloat =
         layout.isPhone
-        ? max(safeBottom - 4, 12)
+        ? max(safeBottom - 5, 11)
         : 0
 
       ZStack(alignment: .bottom) {

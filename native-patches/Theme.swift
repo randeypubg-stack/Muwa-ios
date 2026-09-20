@@ -5,6 +5,8 @@ struct AppBackground: View {
 
   var body: some View {
     GeometryReader { proxy in
+      let span = max(proxy.size.width, proxy.size.height)
+
       ZStack {
         LinearGradient(
           colors: [
@@ -16,50 +18,41 @@ struct AppBackground: View {
           endPoint: .bottom
         )
 
-        RadialGradient(
-          colors: [
-            Color(red: 0.24, green: 0.43, blue: 0.78).opacity(0.24),
-            .clear,
-          ],
-          center: .center,
-          startRadius: 0,
-          endRadius: max(proxy.size.width, proxy.size.height) * 0.48
-        )
-        .frame(
-          width: proxy.size.width * 1.35,
-          height: proxy.size.height * 0.72
-        )
-        .offset(
-          x: animateGlow ? proxy.size.width * 0.12 : -proxy.size.width * 0.10,
-          y: animateGlow ? -proxy.size.height * 0.08 : -proxy.size.height * 0.16
-        )
-        .scaleEffect(animateGlow ? 1.08 : 0.94)
+        Circle()
+          .fill(Color(red: 0.18, green: 0.36, blue: 0.72).opacity(0.18))
+          .frame(width: span * 0.92, height: span * 0.92)
+          .blur(radius: span * 0.18)
+          .offset(
+            x: animateGlow ? proxy.size.width * 0.12 : -proxy.size.width * 0.10,
+            y: animateGlow ? -proxy.size.height * 0.15 : -proxy.size.height * 0.10
+          )
+          .scaleEffect(animateGlow ? 1.04 : 0.96)
 
-        RadialGradient(
+        Circle()
+          .fill(Color.cyan.opacity(0.055))
+          .frame(width: span * 0.74, height: span * 0.74)
+          .blur(radius: span * 0.17)
+          .offset(
+            x: animateGlow ? -proxy.size.width * 0.14 : proxy.size.width * 0.10,
+            y: animateGlow ? proxy.size.height * 0.28 : proxy.size.height * 0.34
+          )
+          .scaleEffect(animateGlow ? 0.97 : 1.03)
+
+        LinearGradient(
           colors: [
-            Color.cyan.opacity(0.075),
             .clear,
+            Color.black.opacity(0.18),
           ],
-          center: .center,
-          startRadius: 0,
-          endRadius: max(proxy.size.width, proxy.size.height) * 0.42
+          startPoint: .top,
+          endPoint: .bottom
         )
-        .frame(
-          width: proxy.size.width * 1.10,
-          height: proxy.size.height * 0.66
-        )
-        .offset(
-          x: animateGlow ? -proxy.size.width * 0.16 : proxy.size.width * 0.08,
-          y: animateGlow ? proxy.size.height * 0.31 : proxy.size.height * 0.22
-        )
-        .scaleEffect(animateGlow ? 0.94 : 1.06)
       }
       .frame(width: proxy.size.width, height: proxy.size.height)
-      .clipped()
+      .drawingGroup(opaque: false, colorMode: .linear)
       .onAppear {
         guard !animateGlow else { return }
         withAnimation(
-          .easeInOut(duration: 14)
+          .easeInOut(duration: 18)
             .repeatForever(autoreverses: true)
         ) {
           animateGlow = true
