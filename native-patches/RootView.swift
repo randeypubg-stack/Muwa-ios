@@ -54,8 +54,7 @@ struct RootView: View {
       let safeTrailing = max(proxy.safeAreaInsets.trailing, windowInsets.right)
       let chromeSideInset = max(
         layout.horizontalPadding,
-        safeLeading,
-        safeTrailing
+        max(safeLeading, safeTrailing)
       )
 
       let chromeLimit = layout.bottomChromeMaxWidth.isFinite
