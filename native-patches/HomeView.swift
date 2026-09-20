@@ -7,8 +7,6 @@ struct HomeView: View {
   let openPlayer: () -> Void
   let openSearch: () -> Void
 
-  @State private var playlistTrackForCreation: Track?
-
   private var currentTrack: Track? {
     player.currentTrack
   }
@@ -48,12 +46,6 @@ struct HomeView: View {
           .padding(.bottom, layout.isCompactLandscapePhone ? 132 : 170)
           .adaptiveFrame(maxWidth: layout.contentMaxWidth)
         }
-      }
-    }
-    .sheet(item: $playlistTrackForCreation) { track in
-      PlaylistCreateSheet { name in
-        let playlistID = library.createPlaylist(name: name)
-        library.addTrack(track, to: playlistID)
       }
     }
   }
@@ -236,15 +228,9 @@ struct HomeView: View {
       action: {
         player.play(track)
       },
-      playlists: library.playlists,
-      isTrackInPlaylist: { playlistID in
-        library.contains(track, in: playlistID)
-      },
-      toggleTrackInPlaylistAction: { playlistID in
-        library.toggleTrack(track, in: playlistID)
-      },
-      createPlaylistAction: {
-        playlistTrackForCreation = track
+      isInPlaylist: library.isInPlaylist(track),
+      togglePlaylistAction: {
+        library.togglePlaylist(track)
       },
       playNextAction: {
         library.addNext(track, after: player.currentTrack)
