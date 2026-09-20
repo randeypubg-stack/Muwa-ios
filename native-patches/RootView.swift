@@ -101,6 +101,8 @@ struct RootView: View {
               }
             }
           )
+          .padding(.horizontal, layout.isPhone ? 4 : 0)
+          .offset(y: layout.isPhone ? -2 : 0)
         }
         .frame(width: chromeWidth)
         .padding(.bottom, layout.isPhone ? 6 : 0)
