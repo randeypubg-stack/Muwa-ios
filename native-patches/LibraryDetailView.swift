@@ -24,7 +24,7 @@ struct LibraryDetailView: View {
         }
         .padding(.horizontal, layout.horizontalPadding)
         .padding(.top, 10)
-        .padding(.bottom, 44)
+        .padding(.bottom, player.hasStartedPlaybackThisSession ? 170 : 90)
         .adaptiveFrame(maxWidth: min(layout.contentMaxWidth, 980))
       }
       .background(Color.clear)
@@ -461,7 +461,7 @@ struct PlaylistDetailView: View {
         }
         .padding(.horizontal, layout.horizontalPadding)
         .padding(.top, 10)
-        .padding(.bottom, 44)
+        .padding(.bottom, player.hasStartedPlaybackThisSession ? 170 : 90)
         .adaptiveFrame(maxWidth: min(layout.contentMaxWidth, 920))
       }
     }
@@ -646,3 +646,4 @@ struct PlaylistCreateSheet: View {
     .presentationDragIndicator(.hidden)
   }
 }
+

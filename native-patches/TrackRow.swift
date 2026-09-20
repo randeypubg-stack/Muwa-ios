@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct TrackRow: View {
+  @EnvironmentObject private var library: LibraryStore
+  @State private var createPlaylistPresented = false
   let track: Track
   var isPlaying = false
   var trailingSystemImage: String? = nil
@@ -49,14 +51,17 @@ struct TrackRow: View {
 
       if hasContextMenu {
         Menu {
-          if let togglePlaylistAction {
-            Button {
-              togglePlaylistAction()
-            } label: {
-              Label(
-                isInPlaylist ? "Убрать из плейлиста" : "Добавить в плейлист",
-                systemImage: isInPlaylist ? "music.note.list" : "text.badge.plus"
-              )
+          Menu("Плей-листы") {
+            ForEach(library.playlists) { playlist in
+              Button {
+                library.toggleTrack(track, in: playlist.id)
+              } label: {
+                Label(playlist.name, systemImage: library.contains(track, in: playlist.id)
+                  ? "checkmark.circle.fill" : "circle")
+              }
+            }
+            Button("Новый плей-лист", systemImage: "plus") {
+              createPlaylistPresented = true
             }
           }
 
@@ -79,7 +84,7 @@ struct TrackRow: View {
           Image(systemName: "ellipsis")
             .font(.system(size: 17, weight: .semibold))
             .rotationEffect(.degrees(90))
-            .frame(width: 36, height: 44)
+            .frame(width: 44, height: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -96,6 +101,12 @@ struct TrackRow: View {
       }
     }
     .frame(maxWidth: .infinity)
+    .sheet(isPresented: $createPlaylistPresented) {
+      PlaylistCreateSheet { name in
+        let id = library.createPlaylist(name: name)
+        library.addTrack(track, to: id)
+      }
+    }
     .padding(.vertical, 5)
     .contentShape(Rectangle())
   }
@@ -104,3 +115,4 @@ struct TrackRow: View {
     togglePlaylistAction != nil || playNextAction != nil || addToQueueAction != nil
   }
 }
+

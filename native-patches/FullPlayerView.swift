@@ -47,6 +47,7 @@ struct MorphingPlayerView: View {
         - bottomBarHeight
         - playerBarGap
         - (miniHeight / 2)
+        - (layout.isPhone ? 6 : 0)
         + chromeDrop
 
       let fullSurfaceHeight =
@@ -64,20 +65,19 @@ struct MorphingPlayerView: View {
 
       let isShortPhone = layout.isPhone && viewportHeight < 740
       let artworkLimit = isShortPhone ? min(layout.playerArtworkSize, 210) : layout.playerArtworkSize
-      let fullArtworkSize = min(
-        artworkLimit,
-        max(190, min(viewportWidth * 0.72, viewportHeight * 0.39))
+      let geometry = PlayerGeometry(
+        width: viewportWidth, height: viewportHeight,
+        safeTop: safeTopInset, chromeDrop: chromeDrop, phone: layout.isPhone,
+        contentWidth: min(layout.contentMaxWidth, usableWidth), artworkLimit: artworkLimit
       )
-
-      let fullArtworkTop =
-        safeTopInset + (isShortPhone ? 44 : 58)
-      let fullArtworkY = fullArtworkTop + (fullArtworkSize / 2)
+      let fullArtworkSize = geometry.artworkSize
+      let fullArtworkY = geometry.artworkY
 
       let miniArtworkSize: CGFloat = 42
       let miniArtworkX: CGFloat = 7 + (miniArtworkSize / 2)
       let miniArtworkY: CGFloat = miniHeight / 2
       let artworkSize = lerp(miniArtworkSize, fullArtworkSize, p)
-      let artworkX = lerp(miniArtworkX, playerWidth / 2, p)
+      let artworkX = lerp(miniArtworkX, geometry.artworkX, p)
       let artworkY = lerp(miniArtworkY, fullArtworkY, p)
 
       let miniReservedTrailing: CGFloat = 7 + 34 + 10 + 34 + 10
@@ -87,19 +87,13 @@ struct MorphingPlayerView: View {
         miniWidth - miniMetaLeft - miniReservedTrailing
       )
 
-      let fullContentWidth = min(
-        layout.contentMaxWidth,
-        max(0, viewportWidth - horizontalPadding * 2)
-      )
+      let fullContentWidth = geometry.controlsWidth
       let fullMetaWidth = max(120, fullContentWidth - 52)
-      let fullMetaLeft = (viewportWidth - fullContentWidth) / 2
+      let fullMetaLeft = geometry.controlsX - fullContentWidth / 2
 
       let metadataWidth = lerp(miniMetaWidth, fullMetaWidth, p)
       let metadataLeft = lerp(miniMetaLeft, fullMetaLeft, p)
-      let fullMetadataY =
-        fullArtworkY
-        + (fullArtworkSize / 2)
-        + (isShortPhone ? 34 : 44)
+      let fullMetadataY = geometry.metadataY
       let metadataY = lerp(miniHeight / 2, fullMetadataY, p)
 
       let fullOpacity = smoothStep((p - 0.18) / 0.52)
@@ -195,7 +189,8 @@ struct MorphingPlayerView: View {
           opacity: fullOpacity,
           isShortPhone: isShortPhone,
           chromeDrop: chromeDrop,
-          safeTopInset: safeTopInset
+          safeTopInset: safeTopInset,
+          geometry: geometry
         )
       }
       .frame(width: viewportWidth, height: viewportHeight)
@@ -421,37 +416,19 @@ struct MorphingPlayerView: View {
     opacity: CGFloat,
     isShortPhone: Bool,
     chromeDrop: CGFloat,
-    safeTopInset: CGFloat
+    safeTopInset: CGFloat,
+    geometry: PlayerGeometry
   ) -> some View {
     let containerTop = centerY - (playerHeight / 2)
-    let localCenterX = layout.viewportWidth / 2
-
-    let progressY =
-      containerTop
-      + metadataY
-      + (isShortPhone ? 68 : 84)
-
-    let transportY =
-      progressY
-      + (isShortPhone ? 76 : 88)
-
-    let proposedActionsY =
-      transportY
-      + (isShortPhone ? 62 : 74)
-
-    let chromeTop =
-      layout.viewportHeight
-      - 64
-      + chromeDrop
-    let actionsY = min(
-      proposedActionsY,
-      chromeTop - 42
-    )
+    let localCenterX = geometry.controlsX
+    let progressY = containerTop + geometry.progressY
+    let transportY = containerTop + geometry.transportY
+    let actionsY = containerTop + geometry.actionsY
 
     return ZStack {
-      fullTopBar(width: contentWidth)
+      fullTopBar(width: min(layout.contentMaxWidth, layout.viewportWidth - layout.horizontalPadding * 2))
         .position(
-          x: localCenterX,
+          x: layout.viewportWidth / 2,
           y: containerTop + safeTopInset + 28
         )
 
@@ -733,14 +710,14 @@ struct MorphingPlayerView: View {
     miniHeight: CGFloat,
     viewportWidth: CGFloat
   ) -> some Gesture {
-    DragGesture(minimumDistance: 3, coordinateSpace: .local)
+    DragGesture(minimumDistance: 3, coordinateSpace: .named("playerContainer"))
       .onChanged { value in
         let vertical = value.translation.height
         let horizontal = abs(value.translation.width)
 
         guard abs(vertical) > horizontal * 1.08 else { return }
 
-        if expansion < 0.20 {
+        if dragStartExpansion == nil && expansion < 0.20 {
           let miniMinX = (viewportWidth - miniWidth) / 2
           let miniMaxX = miniMinX + miniWidth
           let miniMinY = miniCenterY - (miniHeight / 2) - 8
@@ -765,9 +742,7 @@ struct MorphingPlayerView: View {
       .onEnded { value in
         defer { dragStartExpansion = nil }
 
-        let vertical = value.translation.height
-        let horizontal = abs(value.translation.width)
-        guard abs(vertical) > horizontal * 1.08 else { return }
+        guard dragStartExpansion != nil else { return }
 
         let projectedDelta =
           (value.predictedEndTranslation.height - value.translation.height)
@@ -828,5 +803,54 @@ struct MorphingPlayerView: View {
   private func smoothStep(_ value: CGFloat) -> CGFloat {
     let x = clamp(value)
     return x * x * (3 - (2 * x))
+  }
+}
+
+
+// Pure geometry shared with regression checks; coordinates are local to the full surface.
+struct PlayerGeometry {
+  let artworkSize: CGFloat
+  let artworkX: CGFloat
+  let artworkY: CGFloat
+  let controlsWidth: CGFloat
+  let controlsX: CGFloat
+  let metadataY: CGFloat
+  let progressY: CGFloat
+  let transportY: CGFloat
+  let actionsY: CGFloat
+  let chromeTop: CGFloat
+
+  init(width: CGFloat, height: CGFloat, safeTop: CGFloat, chromeDrop: CGFloat,
+       phone: Bool, contentWidth: CGFloat, artworkLimit: CGFloat) {
+    chromeTop = height + safeTop - 62 - (phone ? 9 : 0) + chromeDrop
+    let landscape = width > height * 1.2 && height < 520
+    let short = phone && height < 740
+    if landscape {
+      controlsWidth = min(420, contentWidth * 0.56)
+      controlsX = (width + contentWidth) / 2 - controlsWidth / 2
+      artworkSize = min(artworkLimit, contentWidth - controlsWidth - 24, chromeTop - safeTop - 76)
+      artworkX = (width - contentWidth) / 2 + (contentWidth - controlsWidth - 16) / 2
+      artworkY = safeTop + 56 + artworkSize / 2
+      actionsY = chromeTop - 34
+      transportY = actionsY - 58
+      progressY = transportY - 66
+      metadataY = progressY - 58
+    } else {
+      controlsWidth = contentWidth
+      controlsX = width / 2
+      artworkX = width / 2
+      let top = safeTop + (short ? 44 : 58)
+      let metaGap: CGFloat = short ? 34 : 44
+      let progressGap: CGFloat = short ? 68 : 84
+      let transportGap: CGFloat = short ? 76 : 88
+      let actionGap: CGFloat = short ? 62 : 74
+      let available = chromeTop - 34 - actionGap - transportGap - progressGap - metaGap - top
+      artworkSize = min(artworkLimit, max(60, available))
+      artworkY = top + artworkSize / 2
+      metadataY = top + artworkSize + metaGap
+      progressY = metadataY + progressGap
+      transportY = progressY + transportGap
+      actionsY = transportY + actionGap
+    }
   }
 }
