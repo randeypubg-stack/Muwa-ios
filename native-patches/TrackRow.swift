@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct TrackRow: View {
+  @EnvironmentObject private var library: LibraryStore
+  @State private var createPlaylistPresented = false
   let track: Track
   var isPlaying = false
   var trailingSystemImage: String? = nil
@@ -9,12 +11,6 @@ struct TrackRow: View {
 
   var isInPlaylist = false
   var togglePlaylistAction: (() -> Void)? = nil
-
-  var playlists: [UserPlaylist] = []
-  var isTrackInPlaylist: ((UUID) -> Bool)? = nil
-  var toggleTrackInPlaylistAction: ((UUID) -> Void)? = nil
-  var createPlaylistAction: (() -> Void)? = nil
-
   var playNextAction: (() -> Void)? = nil
   var addToQueueAction: (() -> Void)? = nil
 
@@ -55,41 +51,17 @@ struct TrackRow: View {
 
       if hasContextMenu {
         Menu {
-          if !playlists.isEmpty || createPlaylistAction != nil {
-            Menu("Добавить в плей-лист") {
-              ForEach(playlists) { playlist in
-                Button {
-                  toggleTrackInPlaylistAction?(playlist.id)
-                } label: {
-                  Label(
-                    playlist.name,
-                    systemImage: isTrackInPlaylist?(playlist.id) == true
-                      ? "checkmark.circle.fill"
-                      : "circle"
-                  )
-                }
-              }
-
-              if !playlists.isEmpty, createPlaylistAction != nil {
-                Divider()
-              }
-
-              if let createPlaylistAction {
-                Button {
-                  createPlaylistAction()
-                } label: {
-                  Label("Новый плей-лист", systemImage: "plus")
-                }
+          Menu("Плей-листы") {
+            ForEach(library.playlists) { playlist in
+              Button {
+                library.toggleTrack(track, in: playlist.id)
+              } label: {
+                Label(playlist.name, systemImage: library.contains(track, in: playlist.id)
+                  ? "checkmark.circle.fill" : "circle")
               }
             }
-          } else if let togglePlaylistAction {
-            Button {
-              togglePlaylistAction()
-            } label: {
-              Label(
-                isInPlaylist ? "Убрать из плей-листа" : "Добавить в плей-лист",
-                systemImage: isInPlaylist ? "music.note.list" : "text.badge.plus"
-              )
+            Button("Новый плей-лист", systemImage: "plus") {
+              createPlaylistPresented = true
             }
           }
 
@@ -112,7 +84,7 @@ struct TrackRow: View {
           Image(systemName: "ellipsis")
             .font(.system(size: 17, weight: .semibold))
             .rotationEffect(.degrees(90))
-            .frame(width: 36, height: 44)
+            .frame(width: 44, height: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -129,15 +101,18 @@ struct TrackRow: View {
       }
     }
     .frame(maxWidth: .infinity)
+    .sheet(isPresented: $createPlaylistPresented) {
+      PlaylistCreateSheet { name in
+        let id = library.createPlaylist(name: name)
+        library.addTrack(track, to: id)
+      }
+    }
     .padding(.vertical, 5)
     .contentShape(Rectangle())
   }
 
   private var hasContextMenu: Bool {
-    togglePlaylistAction != nil
-      || !playlists.isEmpty
-      || createPlaylistAction != nil
-      || playNextAction != nil
-      || addToQueueAction != nil
+    togglePlaylistAction != nil || playNextAction != nil || addToQueueAction != nil
   }
 }
+
