@@ -91,7 +91,7 @@ jobs:
           grep -Fq 'Color(red: 0.010, green: 0.020, blue: 0.034)' "$ROOT/Sources/Theme/Theme.swift"
           grep -Fq 'Circle()' "$ROOT/Sources/Theme/Theme.swift"
           grep -Fq '.drawingGroup(opaque: false, colorMode: .linear)' "$ROOT/Sources/Theme/Theme.swift"
-          test "$(grep -Fc 'AppBackground()' "$ROOT/Sources/Views/Library/LibraryView.swift")" = "0"
+          ! grep -Fq 'AppBackground()' "$ROOT/Sources/Views/Library/LibraryView.swift"
           grep -Fq 'title: "Библиотека"' "$ROOT/Sources/Views/Library/LibraryView.swift"
           grep -Fq 'Color.black.opacity(0.60)' "$ROOT/Sources/Views/Library/LibraryView.swift"
           grep -Fq 'MiniPlayerView(openPlayer: expandPlayer)' "$ROOT/Sources/App/RootView.swift"
