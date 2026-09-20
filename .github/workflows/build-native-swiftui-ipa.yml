@@ -87,9 +87,13 @@ jobs:
           grep -Fq '@State private var playerExpansion' "$ROOT/Sources/App/RootView.swift"
           grep -Fq 'MorphingPlayerView(' "$ROOT/Sources/App/RootView.swift"
           grep -Fq 'rotationEffect(.degrees(90))' "$ROOT/Sources/Views/Components/TrackRow.swift"
+          grep -Fq 'Menu("Добавить в плей-лист")' "$ROOT/Sources/Views/Components/TrackRow.swift"
+          grep -Fq 'toggleTrackInPlaylistAction' "$ROOT/Sources/Views/Components/TrackRow.swift"
           grep -Fq 'togglePlaylistAction' "$ROOT/Sources/Views/Home/HomeView.swift"
           grep -Fq 'ScreenHeader(title: "Главная", searchAction: openSearch)' "$ROOT/Sources/Views/Home/HomeView.swift"
           grep -Fq 'player.hasStartedPlaybackThisSession' "$ROOT/Sources/Views/Home/HomeView.swift"
+          grep -Fq 'playlistTrackForCreation' "$ROOT/Sources/Views/Home/HomeView.swift"
+          grep -Fq 'toggleTrackInPlaylistAction' "$ROOT/Sources/Views/Home/HomeView.swift"
           grep -Fq 'Color(red: 0.003, green: 0.004, blue: 0.006)' "$ROOT/Sources/Views/Home/HomeView.swift"
           grep -Fq 'presentationDragIndicator(.hidden)' "$ROOT/Sources/Views/Player/QueueView.swift"
           grep -Fq 'library.removeFromQueue(track)' "$ROOT/Sources/Views/Player/QueueView.swift"
@@ -122,7 +126,11 @@ jobs:
           grep -Fq 'Menu("Добавить в плей-лист")' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
           grep -Fq 'struct UserPlaylist' "$ROOT/Sources/Services/LibraryStore.swift"
           grep -Fq 'muwa.native.playlists.v2' "$ROOT/Sources/Services/LibraryStore.swift"
+          grep -Fq 'if let savedQueue = defaults.stringArray' "$ROOT/Sources/Services/LibraryStore.swift"
+          grep -Fq 'seen.insert($0).inserted' "$ROOT/Sources/Services/LibraryStore.swift"
+          grep -Fq 'defaults.data(forKey: Key.playlists) == nil' "$ROOT/Sources/Services/LibraryStore.swift"
           grep -Fq 'hasStartedPlaybackThisSession = false' "$ROOT/Sources/Services/PlayerManager.swift"
+          grep -Fq 'MPNowPlayingInfoCenter.default().nowPlayingInfo = nil' "$ROOT/Sources/Services/PlayerManager.swift"
           ! grep -Fq 'currentTrack = Track.catalog.first' "$ROOT/Sources/Services/PlayerManager.swift"
           grep -Fq 'struct PlaylistDetailView' "$ROOT/Sources/Views/Library/LibraryDetailView.swift"
           grep -Fq 'Удалить из плей-листа' "$ROOT/Sources/Views/Library/LibraryDetailView.swift"
@@ -157,7 +165,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
-          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='20'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='21'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
         shell: bash
@@ -174,7 +182,7 @@ jobs:
 
           test "$BUNDLE_ID" = "app.muwa.nasheeds"
           test "$VERSION" = "1.4.0"
-          test "$BUILD_NO" = "20"
+          test "$BUILD_NO" = "21"
           test -x "$APP_PATH/$EXECUTABLE"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist")" = "true"
 
@@ -189,10 +197,10 @@ jobs:
 
           (
             cd build/package
-            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build20-session-playlists-launch-unsigned.ipa Payload
+            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build21-postaudit-unsigned.ipa Payload
           )
 
-          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build20-session-playlists-launch-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build20-session-playlists-launch-unsigned.ipa.sha256
+          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build21-postaudit-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build21-postaudit-unsigned.ipa.sha256
 
           cat > build/build-info.json <<EOF
           {
@@ -241,6 +249,11 @@ jobs:
             "player_vertical_tuning": "progress-and-transport-lowered",
             "bottom_bar_adjustment_v2": "raised-an-additional-1pt",
             "header_seam_fix": "solid-near-black-sticky-header-background",
+            "post_build20_audit": "completed",
+            "trackrow_playlist_fix": "choose-specific-playlist-not-first-only",
+            "queue_persistence_fix": "empty-queue-remains-empty-after-relaunch",
+            "playlist_migration_fix": "legacy-playlist-persists-to-v2",
+            "fresh_now_playing_fix": "clear-system-now-playing-on-process-start",
             "touch_interception_fix": "morph-player-disabled-at-mini-state",
             "mini_player_render_fix": "standalone-mini-player-synced-with-bottom-chrome",
             "player_alignment_fix": "shared-safe-area-and-chrome-coordinate-system",
@@ -253,8 +266,8 @@ jobs:
         with:
           name: Muwa-Nasheeds-Native-IPA-${{ github.run_number }}
           path: |
-            build/Muwa-Nasheeds-v1.4.0-build20-session-playlists-launch-unsigned.ipa
-            build/Muwa-Nasheeds-v1.4.0-build20-session-playlists-launch-unsigned.ipa.sha256
+            build/Muwa-Nasheeds-v1.4.0-build21-postaudit-unsigned.ipa
+            build/Muwa-Nasheeds-v1.4.0-build21-postaudit-unsigned.ipa.sha256
             build/build-info.json
           if-no-files-found: error
           compression-level: 0
