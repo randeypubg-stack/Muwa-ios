@@ -62,20 +62,28 @@ jobs:
           cp "$PWD/native-patches/TrackRow.swift" "$ROOT/Sources/Views/Components/TrackRow.swift"
           cp "$PWD/native-patches/QueueView.swift" "$ROOT/Sources/Views/Player/QueueView.swift"
           grep -Fq '.frame(height: 58)' "$ROOT/Sources/Views/Components/MiniPlayerView.swift"
-          grep -Fq 'let availableWidth' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq 'struct MorphingPlayerView' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
           grep -Fq 'PremiumView(compact: true)' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
           grep -Fq 'var compact = false' "$ROOT/Sources/Views/Premium/PremiumView.swift"
           grep -Fq 'DragGesture(minimumDistance: 6' "$ROOT/Sources/Views/Components/BottomBar.swift"
           grep -Fq 'var viewportWidth' "$ROOT/Sources/Theme/AdaptiveLayout.swift"
           grep -Fq 'UIDevice.current.userInterfaceIdiom' "$ROOT/Sources/Theme/AdaptiveLayout.swift"
           grep -Fq 'predictedEndTranslation.height' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
-          grep -Fq '@Namespace private var playerTransition' "$ROOT/Sources/App/RootView.swift"
-          grep -Fq 'transitionNamespace: playerTransition' "$ROOT/Sources/App/RootView.swift"
+          grep -Fq 'expansionDragGesture(travel:' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq 'let playerWidth = lerp' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq '@State private var playerExpansion' "$ROOT/Sources/App/RootView.swift"
+          grep -Fq 'MorphingPlayerView(' "$ROOT/Sources/App/RootView.swift"
           grep -Fq 'rotationEffect(.degrees(90))' "$ROOT/Sources/Views/Components/TrackRow.swift"
           grep -Fq 'togglePlaylistAction' "$ROOT/Sources/Views/Home/HomeView.swift"
           grep -Fq 'presentationDragIndicator(.hidden)' "$ROOT/Sources/Views/Player/QueueView.swift"
           grep -Fq 'library.removeFromQueue(track)' "$ROOT/Sources/Views/Player/QueueView.swift"
           grep -Fq '.draggable(track.id)' "$ROOT/Sources/Views/Player/QueueView.swift"
+
+          # Allow ProMotion-capable iPhones to render above 60 Hz. iOS still
+          # controls the actual adaptive refresh rate based on hardware/system state.
+          /usr/libexec/PlistBuddy -c "Delete :CADisableMinimumFrameDurationOnPhone" "$ROOT/Info.plist" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CADisableMinimumFrameDurationOnPhone bool true" "$ROOT/Info.plist"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$ROOT/Info.plist")" = "true"
 
           ICON_PATH="$ROOT/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"
           MARK_PATH="$ROOT/Resources/Assets.xcassets/AppMark.imageset/AppMark.png"
@@ -100,7 +108,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
-          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='12'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='13'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
         shell: bash
@@ -117,8 +125,9 @@ jobs:
 
           test "$BUNDLE_ID" = "app.muwa.nasheeds"
           test "$VERSION" = "1.4.0"
-          test "$BUILD_NO" = "12"
+          test "$BUILD_NO" = "13"
           test -x "$APP_PATH/$EXECUTABLE"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist")" = "true"
 
           lipo -info "$APP_PATH/$EXECUTABLE" | tee build/architecture.txt
           lipo -info "$APP_PATH/$EXECUTABLE" | grep -q arm64
@@ -131,10 +140,10 @@ jobs:
 
           (
             cd build/package
-            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build12-agreed-ui-unsigned.ipa Payload
+            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build13-fluid-player-unsigned.ipa Payload
           )
 
-          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build12-agreed-ui-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build12-agreed-ui-unsigned.ipa.sha256
+          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build13-fluid-player-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build13-fluid-player-unsigned.ipa.sha256
 
           cat > build/build-info.json <<EOF
           {
@@ -156,7 +165,9 @@ jobs:
             "mini_player_fix": "strict-fixed-height-no-geometry-reader",
             "track_rows_fix": "full-row-tap-vertical-menu-playlist-queue",
             "queue_ui_fix": "muwa-header-delete-short-drag-handle-full-row-tap",
-            "player_transition_fix": "interactive-mini-full-morph-background-reveal",
+            "player_transition_fix": "single-persistent-interactive-player-container",
+            "player_animation_target": "adaptive-promotion-up-to-120hz",
+            "player_gesture_fix": "direct-progress-finger-tracking-no-dismiss-snap",
             "run_url": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           }
           EOF
@@ -166,8 +177,8 @@ jobs:
         with:
           name: Muwa-Nasheeds-Native-IPA-${{ github.run_number }}
           path: |
-            build/Muwa-Nasheeds-v1.4.0-build12-agreed-ui-unsigned.ipa
-            build/Muwa-Nasheeds-v1.4.0-build12-agreed-ui-unsigned.ipa.sha256
+            build/Muwa-Nasheeds-v1.4.0-build13-fluid-player-unsigned.ipa
+            build/Muwa-Nasheeds-v1.4.0-build13-fluid-player-unsigned.ipa.sha256
             build/build-info.json
           if-no-files-found: error
           compression-level: 0

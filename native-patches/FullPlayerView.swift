@@ -1,23 +1,21 @@
 import SwiftUI
 
-struct FullPlayerView: View {
+struct MorphingPlayerView: View {
   @EnvironmentObject private var player: PlayerManager
   @EnvironmentObject private var library: LibraryStore
   @EnvironmentObject private var premium: PremiumManager
   @EnvironmentObject private var downloads: DownloadManager
 
   @Binding var selection: AppTab
-  let transitionNamespace: Namespace.ID
-  @Binding var collapseProgress: CGFloat
-  let onCollapse: () -> Void
+  @Binding var expansion: CGFloat
 
   @State private var premiumPresented = false
   @State private var queuePresented = false
   @State private var subtitlesVisible = false
   @State private var subtitleLanguage: SubtitleLanguage = .arabic
   @State private var downloadError: String?
+  @State private var dragStartExpansion: CGFloat?
   @GestureState private var coverDragX: CGFloat = 0
-  @GestureState private var dismissDragY: CGFloat = 0
 
   private var track: Track {
     player.currentTrack ?? Track.catalog[0]
@@ -28,109 +26,147 @@ struct FullPlayerView: View {
       let layout = AdaptiveLayout(size: proxy.size, safeArea: proxy.safeAreaInsets)
       let viewportWidth = layout.viewportWidth
       let viewportHeight = layout.viewportHeight
-      let availableWidth = max(0, viewportWidth - layout.horizontalPadding * 2)
-      let contentWidth = min(layout.contentMaxWidth, availableWidth)
-      let chromeLimit = layout.bottomChromeMaxWidth.isFinite
-        ? layout.bottomChromeMaxWidth : availableWidth
-      let chromeWidth = min(chromeLimit, availableWidth)
-      let dragY = max(0, dismissDragY)
-      let reveal = min(max(collapseProgress, 0), 1)
+      let p = clamp(expansion)
 
-      ZStack(alignment: .bottom) {
-        RoundedRectangle(cornerRadius: 30 * reveal, style: .continuous)
-          .fill(Color.black.opacity(0.92))
-          .frame(width: viewportWidth, height: viewportHeight)
-          .matchedGeometryEffect(
-            id: "player.surface",
-            in: transitionNamespace,
-            properties: .frame,
-            anchor: .center,
-            isSource: true
-          )
+      let horizontalPadding = layout.horizontalPadding
+      let usableWidth = max(0, viewportWidth - horizontalPadding * 2)
+      let miniWidthLimit = layout.bottomChromeMaxWidth.isFinite
+        ? layout.bottomChromeMaxWidth
+        : usableWidth
+      let miniWidth = min(miniWidthLimit, usableWidth)
+      let miniHeight: CGFloat = 58
 
-        ArtworkBackdrop(url: track.artworkURL)
-          .frame(width: viewportWidth, height: viewportHeight)
-          .clipped()
-          .opacity(Double(1 - (0.20 * reveal)))
-          .ignoresSafeArea()
-
-        ScrollView(.vertical, showsIndicators: false) {
-          VStack(spacing: 14) {
-            Capsule()
-              .fill(.white.opacity(0.34))
-              .frame(width: 38, height: 4)
-              .padding(.top, layout.isCompactLandscapePhone ? 2 : 8)
-
-            topBar
-
-            if layout.playerUsesSplitLayout {
-              splitPlayer(layout: layout)
-            } else {
-              portraitPlayer(layout: layout)
-            }
-
-            Spacer(minLength: layout.isCompactLandscapePhone ? 88 : 128)
-          }
-          .frame(width: contentWidth)
-        }
-        .frame(width: viewportWidth, height: viewportHeight, alignment: .top)
-        .clipped()
-
-        BottomBar(
-          selection: $selection,
-          playerActive: true,
-          openPlayer: {},
-          selectTab: { tab in
-            selection = tab
-            onCollapse()
-          }
-        )
-        .frame(width: chromeWidth)
-        .padding(.bottom, max(proxy.safeAreaInsets.bottom, layout.isCompactLandscapePhone ? 4 : 10))
-      }
-      .frame(width: viewportWidth, height: viewportHeight, alignment: .topLeading)
-      .clipShape(RoundedRectangle(cornerRadius: 30 * reveal, style: .continuous))
-      .contentShape(Rectangle())
-      .offset(y: dragY)
-      .scaleEffect(1 - (0.045 * reveal), anchor: .top)
-      .shadow(color: .black.opacity(Double(0.30 * reveal)), radius: 28 * reveal, y: 12)
-      .simultaneousGesture(
-        DragGesture(minimumDistance: 12, coordinateSpace: .global)
-          .updating($dismissDragY) { value, state, _ in
-            let vertical = value.translation.height
-            let horizontal = abs(value.translation.width)
-            if vertical > 0 && vertical > horizontal * 1.12 {
-              state = min(vertical, viewportHeight * 0.72)
-            }
-          }
-          .onChanged { value in
-            let vertical = value.translation.height
-            let horizontal = abs(value.translation.width)
-            guard vertical > 0, vertical > horizontal * 1.12 else { return }
-            collapseProgress = min(1, max(0, vertical / max(320, viewportHeight * 0.52)))
-          }
-          .onEnded { value in
-            let vertical = value.translation.height
-            let horizontal = abs(value.translation.width)
-            guard vertical > 0, vertical > horizontal * 1.12 else {
-              withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.88)) {
-                collapseProgress = 0
-              }
-              return
-            }
-
-            if vertical > 105 || value.predictedEndTranslation.height > 190 {
-              onCollapse()
-            } else {
-              withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.88)) {
-                collapseProgress = 0
-              }
-            }
-          }
+      let bottomInset = max(
+        proxy.safeAreaInsets.bottom,
+        layout.isCompactLandscapePhone ? 4 : 10
       )
-    }
-    .onAppear {
-      collapseProgress = 0
+      let bottomBarHeight: CGFloat = 68
+      let playerBarGap: CGFloat = 10
+      let miniCenterY =
+        viewportHeight
+        - bottomInset
+        - bottomBarHeight
+        - playerBarGap
+        - (miniHeight / 2)
+
+      let fullCenterY = viewportHeight / 2
+      let travel = max(1, miniCenterY - fullCenterY)
+
+      let playerWidth = lerp(miniWidth, viewportWidth, p)
+      let playerHeight = lerp(miniHeight, viewportHeight, p)
+      let playerCenterY = lerp(miniCenterY, fullCenterY, p)
+      let cornerRadius = lerp(27, 0, p)
+
+      let isShortPhone = layout.isPhone && viewportHeight < 740
+      let artworkLimit = isShortPhone ? min(layout.playerArtworkSize, 210) : layout.playerArtworkSize
+      let fullArtworkSize = min(
+        artworkLimit,
+        max(190, min(viewportWidth * 0.72, viewportHeight * 0.39))
+      )
+
+      let fullArtworkTop =
+        proxy.safeAreaInsets.top + (isShortPhone ? 50 : 72)
+      let fullArtworkY = fullArtworkTop + (fullArtworkSize / 2)
+
+      let miniArtworkSize: CGFloat = 42
+      let miniArtworkX: CGFloat = 7 + (miniArtworkSize / 2)
+      let miniArtworkY: CGFloat = miniHeight / 2
+      let artworkSize = lerp(miniArtworkSize, fullArtworkSize, p)
+      let artworkX = lerp(miniArtworkX, playerWidth / 2, p)
+      let artworkY = lerp(miniArtworkY, fullArtworkY, p)
+
+      let miniReservedTrailing: CGFloat = 7 + 34 + 10 + 34 + 10
+      let miniMetaLeft: CGFloat = 7 + miniArtworkSize + 10
+      let miniMetaWidth = max(
+        84,
+        miniWidth - miniMetaLeft - miniReservedTrailing
+      )
+
+      let fullContentWidth = min(
+        layout.contentMaxWidth,
+        max(0, viewportWidth - horizontalPadding * 2)
+      )
+      let fullMetaWidth = max(120, fullContentWidth - 52)
+      let fullMetaLeft = (viewportWidth - fullContentWidth) / 2
+
+      let metadataWidth = lerp(miniMetaWidth, fullMetaWidth, p)
+      let metadataLeft = lerp(miniMetaLeft, fullMetaLeft, p)
+      let fullMetadataY =
+        fullArtworkY
+        + (fullArtworkSize / 2)
+        + (isShortPhone ? 34 : 44)
+      let metadataY = lerp(miniHeight / 2, fullMetadataY, p)
+
+      let fullOpacity = smoothStep((p - 0.18) / 0.52)
+      let miniOpacity = 1 - smoothStep(p / 0.30)
+
+      ZStack {
+        playerSurface(
+          width: playerWidth,
+          height: playerHeight,
+          cornerRadius: cornerRadius,
+          progress: p
+        )
+        .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .onTapGesture {
+          if expansion < 0.18 {
+            settle(to: 1)
+          }
+        }
+        .simultaneousGesture(expansionDragGesture(travel: travel))
+        .position(x: viewportWidth / 2, y: playerCenterY)
+
+        sharedArtwork(
+          size: artworkSize,
+          cornerRadius: lerp(13, 36, p),
+          progress: p
+        )
+        .simultaneousGesture(expansionDragGesture(travel: travel))
+        .position(
+          x: ((viewportWidth - playerWidth) / 2) + artworkX,
+          y: playerCenterY - (playerHeight / 2) + artworkY
+        )
+
+        sharedMetadata(
+          width: metadataWidth,
+          progress: p
+        )
+        .simultaneousGesture(expansionDragGesture(travel: travel))
+        .position(
+          x: ((viewportWidth - playerWidth) / 2) + metadataLeft + (metadataWidth / 2),
+          y: playerCenterY - (playerHeight / 2) + metadataY
+        )
+
+        miniControls(
+          playerWidth: playerWidth,
+          playerHeight: playerHeight,
+          centerY: playerCenterY,
+          opacity: miniOpacity,
+          viewportWidth: viewportWidth
+        )
+
+        miniProgressLine(
+          playerWidth: playerWidth,
+          playerHeight: playerHeight,
+          centerY: playerCenterY,
+          opacity: miniOpacity,
+          viewportWidth: viewportWidth
+        )
+
+        fullControls(
+          layout: layout,
+          playerWidth: playerWidth,
+          playerHeight: playerHeight,
+          centerY: playerCenterY,
+          contentWidth: fullContentWidth,
+          artworkY: fullArtworkY,
+          artworkSize: fullArtworkSize,
+          metadataY: fullMetadataY,
+          opacity: fullOpacity,
+          isShortPhone: isShortPhone
+        )
+      }
+      .frame(width: viewportWidth, height: viewportHeight)
     }
     .sheet(isPresented: $premiumPresented) {
       PremiumView(compact: true)
@@ -153,55 +189,256 @@ struct FullPlayerView: View {
     }
   }
 
-  private func portraitPlayer(layout: AdaptiveLayout) -> some View {
-    VStack(spacing: 17) {
-      artwork(size: layout.playerArtworkSize)
-      titleBlock
+  private func playerSurface(
+    width: CGFloat,
+    height: CGFloat,
+    cornerRadius: CGFloat,
+    progress: CGFloat
+  ) -> some View {
+    ZStack {
+      RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        .fill(.ultraThinMaterial)
 
-      if subtitlesVisible {
-        SubtitlePanel(track: track, currentTime: player.currentTime, language: $subtitleLanguage)
-          .transition(.opacity.combined(with: .move(edge: .top)))
+      ArtworkBackdrop(url: track.artworkURL)
+        .frame(width: width, height: height)
+        .clipped()
+        .opacity(Double(smoothStep((progress - 0.08) / 0.72)))
+
+      RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        .fill(
+          Color.black.opacity(
+            Double(lerp(0.12, 0.42, progress))
+          )
+        )
+
+      RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        .stroke(
+          Color.white.opacity(
+            Double(lerp(0.14, 0.02, progress))
+          ),
+          lineWidth: 1
+        )
+    }
+    .frame(width: width, height: height)
+    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    .shadow(
+      color: .black.opacity(Double(lerp(0.16, 0.08, progress))),
+      radius: lerp(24, 8, progress),
+      y: lerp(10, 2, progress)
+    )
+  }
+
+  private func sharedArtwork(
+    size: CGFloat,
+    cornerRadius: CGFloat,
+    progress: CGFloat
+  ) -> some View {
+    ArtworkView(
+      url: track.artworkURL,
+      cornerRadius: cornerRadius,
+      placeholderSystemImage: "music.note"
+    )
+    .frame(width: size, height: size)
+    .overlay(alignment: .trailing) {
+      if subtitlesVisible && progress > 0.74 {
+        PlayerSubtitleOverlay(
+          track: track,
+          currentTime: player.currentTime,
+          language: subtitleLanguage
+        )
+        .offset(x: min(46, size * 0.14))
+        .transition(.opacity)
       }
+    }
+    .shadow(
+      color: .black.opacity(Double(0.34 * smoothStep(progress))),
+      radius: 28 * smoothStep(progress),
+      y: 16 * smoothStep(progress)
+    )
+    .offset(x: progress > 0.74 ? coverDragX : 0)
+    .contentShape(Rectangle())
+    .allowsHitTesting(progress > 0.74)
+    .simultaneousGesture(
+      DragGesture(minimumDistance: 12)
+        .updating($coverDragX) { value, state, _ in
+          guard expansion > 0.74 else { return }
+          if abs(value.translation.width) > abs(value.translation.height) {
+            state = value.translation.width
+          }
+        }
+        .onEnded { value in
+          guard expansion > 0.74 else { return }
+          guard
+            abs(value.translation.width) > 54,
+            abs(value.translation.width) > abs(value.translation.height)
+          else { return }
 
-      progress
+          if value.translation.width < 0 {
+            player.next()
+          } else {
+            player.previous()
+          }
+        }
+    )
+    .animation(.spring(response: 0.34, dampingFraction: 0.84), value: track.id)
+  }
+
+  private func sharedMetadata(
+    width: CGFloat,
+    progress: CGFloat
+  ) -> some View {
+    let titleSize = lerp(13, 27, smoothStep(progress))
+    let artistSize = lerp(10, 13, smoothStep(progress))
+
+    return VStack(alignment: .leading, spacing: lerp(2, 4, progress)) {
+      Text(track.title)
+        .font(
+          .system(
+            size: titleSize,
+            weight: progress > 0.48 ? .bold : .semibold,
+            design: progress > 0.48 ? .rounded : .default
+          )
+        )
+        .lineLimit(progress > 0.64 ? 2 : 1)
+        .minimumScaleFactor(0.78)
+
+      Text(track.artist)
+        .font(.system(size: artistSize))
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+    }
+    .frame(width: width, alignment: .leading)
+  }
+
+  private func miniControls(
+    playerWidth: CGFloat,
+    playerHeight: CGFloat,
+    centerY: CGFloat,
+    opacity: CGFloat,
+    viewportWidth: CGFloat
+  ) -> some View {
+    let left = (viewportWidth - playerWidth) / 2
+    let nextX = left + playerWidth - 7 - 17
+    let playX = nextX - 34 - 10
+
+    return ZStack {
+      Button(action: player.toggle) {
+        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+          .font(.system(size: 15, weight: .bold))
+          .frame(width: 34, height: 34)
+          .background(.white.opacity(0.055), in: Circle())
+      }
+      .buttonStyle(.plain)
+      .position(x: playX, y: centerY)
+
+      Button(action: player.next) {
+        Image(systemName: "forward.fill")
+          .font(.system(size: 14, weight: .semibold))
+          .frame(width: 34, height: 34)
+          .background(.white.opacity(0.085), in: Circle())
+      }
+      .buttonStyle(.plain)
+      .position(x: nextX, y: centerY)
+    }
+    .opacity(Double(opacity))
+    .allowsHitTesting(opacity > 0.58)
+  }
+
+  private func miniProgressLine(
+    playerWidth: CGFloat,
+    playerHeight: CGFloat,
+    centerY: CGFloat,
+    opacity: CGFloat,
+    viewportWidth: CGFloat
+  ) -> some View {
+    let lineWidth = max(10, playerWidth - 32)
+    let y = centerY + (playerHeight / 2) - 2
+
+    return Capsule()
+      .fill(.white.opacity(0.12))
+      .frame(width: lineWidth, height: 2)
+      .overlay(alignment: .leading) {
+        Capsule()
+          .fill(.white.opacity(0.72))
+          .scaleEffect(
+            x: max(0, min(1, player.progress)),
+            y: 1,
+            anchor: .leading
+          )
+      }
+      .position(x: viewportWidth / 2, y: y)
+      .opacity(Double(opacity))
+      .allowsHitTesting(false)
+  }
+
+  private func fullControls(
+    layout: AdaptiveLayout,
+    playerWidth: CGFloat,
+    playerHeight: CGFloat,
+    centerY: CGFloat,
+    contentWidth: CGFloat,
+    artworkY: CGFloat,
+    artworkSize: CGFloat,
+    metadataY: CGFloat,
+    opacity: CGFloat,
+    isShortPhone: Bool
+  ) -> some View {
+    let containerTop = centerY - (playerHeight / 2)
+    let localCenterX = layout.viewportWidth / 2
+
+    let progressY =
+      containerTop
+      + metadataY
+      + (isShortPhone ? 56 : 70)
+
+    let transportY =
+      progressY
+      + (isShortPhone ? 72 : 84)
+
+    let actionsY =
+      transportY
+      + (isShortPhone ? 64 : 78)
+
+    return ZStack {
+      fullTopBar(width: contentWidth)
+        .position(
+          x: localCenterX,
+          y: containerTop + max(34, layout.safeArea.top + 28)
+        )
+
+      Button {
+        library.toggleLike(track)
+      } label: {
+        Image(systemName: library.isLiked(track) ? "heart.fill" : "heart")
+          .foregroundStyle(library.isLiked(track) ? .pink : .white)
+          .frame(width: 42, height: 42)
+          .background(.white.opacity(0.055), in: Circle())
+      }
+      .buttonStyle(.plain)
+      .position(
+        x: localCenterX + (contentWidth / 2) - 21,
+        y: containerTop + metadataY
+      )
+
+      fullProgress(width: contentWidth)
+        .position(x: localCenterX, y: progressY)
+
       transport(compact: layout.isPhone || layout.viewportWidth < 390)
+        .frame(width: contentWidth)
+        .position(x: localCenterX, y: transportY)
+
       smallActions
+        .position(x: localCenterX, y: actionsY)
     }
-    .frame(maxWidth: .infinity)
+    .opacity(Double(opacity))
+    .allowsHitTesting(opacity > 0.72)
   }
 
-  private func splitPlayer(layout: AdaptiveLayout) -> some View {
-    HStack(alignment: .top, spacing: layout.isPad ? 38 : 28) {
-      VStack(spacing: 16) {
-        artwork(size: layout.playerArtworkSize)
-        if subtitlesVisible && layout.isPad {
-          SubtitlePanel(track: track, currentTime: player.currentTime, language: $subtitleLanguage)
-            .transition(.opacity)
-        }
-      }
-      .frame(maxWidth: layout.isPad ? 460 : 330)
-
-      VStack(spacing: layout.isCompactLandscapePhone ? 11 : 16) {
-        titleBlock
-
-        if subtitlesVisible && !layout.isPad {
-          SubtitlePanel(track: track, currentTime: player.currentTime, language: $subtitleLanguage)
-            .transition(.opacity)
-        }
-
-        progress
-        transport(compact: layout.isCompactLandscapePhone)
-        smallActions
-      }
-      .frame(maxWidth: 560)
-      .padding(.top, layout.isCompactLandscapePhone ? 2 : 14)
-    }
-    .frame(maxWidth: .infinity, alignment: .center)
-  }
-
-  private var topBar: some View {
+  private func fullTopBar(width: CGFloat) -> some View {
     HStack {
-      Button(action: onCollapse) {
+      Button {
+        settle(to: 0)
+      } label: {
         Image(systemName: "chevron.down")
           .font(.system(size: 18, weight: .semibold))
           .frame(width: 42, height: 42)
@@ -210,9 +447,11 @@ struct FullPlayerView: View {
       .buttonStyle(.plain)
 
       Spacer()
+
       Text("Сейчас играет")
         .font(.caption)
         .foregroundStyle(.secondary)
+
       Spacer()
 
       Menu {
@@ -224,6 +463,7 @@ struct FullPlayerView: View {
             systemImage: library.isLiked(track) ? "heart.slash" : "heart"
           )
         }
+
         Button {
           library.togglePlaylist(track)
         } label: {
@@ -232,18 +472,29 @@ struct FullPlayerView: View {
             systemImage: "music.note.list"
           )
         }
-        Menu("Добавить следующим") {
-          ForEach(Track.catalog.filter { $0.id != track.id }) { candidate in
-            Button(candidate.title) { library.addNext(candidate, after: track) }
-          }
+
+        Button {
+          library.addNext(track, after: player.currentTrack)
+        } label: {
+          Label("Воспроизвести следующим", systemImage: "text.insert")
         }
+
+        Button {
+          library.ensureQueueContains(track)
+        } label: {
+          Label("Добавить в очередь", systemImage: "text.badge.plus")
+        }
+
         Divider()
+
         Button {
           handleDownload()
         } label: {
           Label(
             downloads.isDownloaded(track) ? "Сохранено офлайн" : "Скачать MP3",
-            systemImage: downloads.isDownloaded(track) ? "checkmark.circle" : "arrow.down.circle"
+            systemImage: downloads.isDownloaded(track)
+              ? "checkmark.circle"
+              : "arrow.down.circle"
           )
         }
       } label: {
@@ -254,80 +505,10 @@ struct FullPlayerView: View {
       }
       .buttonStyle(.plain)
     }
+    .frame(width: width)
   }
 
-  private func artwork(size: CGFloat) -> some View {
-    ArtworkView(url: track.artworkURL, cornerRadius: 36)
-      .frame(width: size, height: size)
-      .matchedGeometryEffect(
-        id: "player.artwork",
-        in: transitionNamespace,
-        properties: .frame,
-        anchor: .center,
-        isSource: true
-      )
-      .overlay(alignment: .trailing) {
-        if subtitlesVisible {
-          PlayerSubtitleOverlay(
-            track: track, currentTime: player.currentTime, language: subtitleLanguage
-          )
-          .offset(x: min(46, size * 0.14))
-        }
-      }
-      .shadow(color: .black.opacity(0.40), radius: 35, y: 20)
-      .offset(x: coverDragX)
-      .contentShape(Rectangle())
-      .gesture(
-        DragGesture(minimumDistance: 12)
-          .updating($coverDragX) { value, state, _ in
-            if abs(value.translation.width) > abs(value.translation.height) {
-              state = value.translation.width
-            }
-          }
-          .onEnded { value in
-            guard abs(value.translation.width) > 54,
-              abs(value.translation.width) > abs(value.translation.height)
-            else { return }
-            if value.translation.width < 0 { player.next() } else { player.previous() }
-          }
-      )
-      .animation(.spring(response: 0.34, dampingFraction: 0.82), value: track.id)
-  }
-
-  private var titleBlock: some View {
-    HStack(alignment: .center, spacing: 12) {
-      VStack(alignment: .leading, spacing: 4) {
-        Text(track.title)
-          .font(.system(size: 27, weight: .bold, design: .rounded))
-          .lineLimit(2)
-          .minimumScaleFactor(0.84)
-        Text(track.artist)
-          .font(.system(size: 13))
-          .foregroundStyle(.secondary)
-      }
-      .matchedGeometryEffect(
-        id: "player.metadata",
-        in: transitionNamespace,
-        properties: .position,
-        anchor: .leading,
-        isSource: true
-      )
-
-      Spacer()
-      Button {
-        library.toggleLike(track)
-      } label: {
-        Image(systemName: library.isLiked(track) ? "heart.fill" : "heart")
-          .foregroundStyle(library.isLiked(track) ? .pink : .white)
-          .frame(width: 42, height: 42)
-          .background(.white.opacity(0.055), in: Circle())
-      }
-      .buttonStyle(.plain)
-    }
-    .frame(maxWidth: .infinity)
-  }
-
-  private var progress: some View {
+  private func fullProgress(width: CGFloat) -> some View {
     VStack(spacing: 8) {
       Slider(
         value: Binding(
@@ -337,6 +518,7 @@ struct FullPlayerView: View {
         in: 0...1
       )
       .tint(.white)
+
       HStack {
         Text(time(player.currentTime))
         Spacer()
@@ -345,6 +527,7 @@ struct FullPlayerView: View {
       .font(.caption)
       .foregroundStyle(.secondary)
     }
+    .frame(width: width)
   }
 
   private func transport(compact: Bool) -> some View {
@@ -360,11 +543,13 @@ struct FullPlayerView: View {
           .foregroundStyle(player.shuffleOn ? .white : .white.opacity(0.55))
           .frame(width: 38, height: 38)
       }
+
       Button(action: player.previous) {
         Image(systemName: "backward.fill")
           .font(.title2)
           .frame(width: sideSize, height: sideSize)
       }
+
       Button(action: player.toggle) {
         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
           .font(.system(size: compact ? 24 : 28, weight: .bold))
@@ -372,11 +557,13 @@ struct FullPlayerView: View {
           .frame(width: mainSize, height: mainSize)
           .background(.white, in: Circle())
       }
+
       Button(action: player.next) {
         Image(systemName: "forward.fill")
           .font(.title2)
           .frame(width: sideSize, height: sideSize)
       }
+
       Button {
         player.repeatOn.toggle()
       } label: {
@@ -396,14 +583,23 @@ struct FullPlayerView: View {
           premiumPresented = true
           return
         }
-        withAnimation(.easeInOut(duration: 0.2)) { subtitlesVisible.toggle() }
+
+        withAnimation(.easeInOut(duration: 0.18)) {
+          subtitlesVisible.toggle()
+        }
       } label: {
         ZStack(alignment: .topTrailing) {
-          Image(systemName: subtitlesVisible ? "captions.bubble.fill" : "captions.bubble")
-            .frame(width: 44, height: 44)
-            .background(
-              .white.opacity(subtitlesVisible ? 0.14 : 0.055),
-              in: RoundedRectangle(cornerRadius: 16))
+          Image(
+            systemName: subtitlesVisible
+              ? "captions.bubble.fill"
+              : "captions.bubble"
+          )
+          .frame(width: 44, height: 44)
+          .background(
+            .white.opacity(subtitlesVisible ? 0.14 : 0.055),
+            in: RoundedRectangle(cornerRadius: 16)
+          )
+
           if !premium.isPremium {
             Image(systemName: "lock.fill")
               .font(.system(size: 8))
@@ -420,14 +616,20 @@ struct FullPlayerView: View {
       } label: {
         Image(systemName: "list.bullet")
           .frame(width: 44, height: 44)
-          .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 16))
+          .background(
+            .white.opacity(0.055),
+            in: RoundedRectangle(cornerRadius: 16)
+          )
       }
       .buttonStyle(.plain)
 
       if premium.isPremium {
         AirPlayButton()
           .frame(width: 44, height: 44)
-          .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 16))
+          .background(
+            .white.opacity(0.055),
+            in: RoundedRectangle(cornerRadius: 16)
+          )
       } else {
         Button {
           premiumPresented = true
@@ -435,7 +637,11 @@ struct FullPlayerView: View {
           ZStack(alignment: .topTrailing) {
             Image(systemName: "airplayaudio")
               .frame(width: 44, height: 44)
-              .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 16))
+              .background(
+                .white.opacity(0.055),
+                in: RoundedRectangle(cornerRadius: 16)
+              )
+
             Image(systemName: "lock.fill")
               .font(.system(size: 8))
               .padding(5)
@@ -448,14 +654,63 @@ struct FullPlayerView: View {
     }
   }
 
+  private func expansionDragGesture(travel: CGFloat) -> some Gesture {
+    DragGesture(minimumDistance: 4, coordinateSpace: .global)
+      .onChanged { value in
+        let vertical = value.translation.height
+        let horizontal = abs(value.translation.width)
+
+        guard abs(vertical) > horizontal * 1.08 else { return }
+
+        if dragStartExpansion == nil {
+          dragStartExpansion = expansion
+        }
+
+        let start = dragStartExpansion ?? expansion
+        let next = start - (vertical / max(1, travel))
+        expansion = clamp(next)
+      }
+      .onEnded { value in
+        defer { dragStartExpansion = nil }
+
+        let vertical = value.translation.height
+        let horizontal = abs(value.translation.width)
+        guard abs(vertical) > horizontal * 1.08 else { return }
+
+        let projectedDelta =
+          (value.predictedEndTranslation.height - value.translation.height)
+          / max(1, travel)
+        let projected = clamp(expansion - (projectedDelta * 0.42))
+        let target: CGFloat = projected >= 0.54 ? 1 : 0
+
+        withAnimation(
+          .spring(response: 0.48, dampingFraction: 0.94, blendDuration: 0.14)
+        ) {
+          expansion = target
+        }
+      }
+  }
+
+  private func settle(to target: CGFloat) {
+    withAnimation(
+      .spring(response: 0.48, dampingFraction: 0.94, blendDuration: 0.14)
+    ) {
+      expansion = clamp(target)
+    }
+  }
+
   private func handleDownload() {
     guard !downloads.isDownloaded(track) else { return }
+
     guard premium.isPremium else {
       premiumPresented = true
       return
     }
+
     Task {
-      do { try await downloads.download(track) } catch {
+      do {
+        try await downloads.download(track)
+      } catch {
         downloadError = error.localizedDescription
       }
     }
@@ -463,6 +718,23 @@ struct FullPlayerView: View {
 
   private func time(_ seconds: TimeInterval) -> String {
     guard seconds.isFinite, seconds >= 0 else { return "0:00" }
-    return String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60)
+    return String(
+      format: "%d:%02d",
+      Int(seconds) / 60,
+      Int(seconds) % 60
+    )
+  }
+
+  private func clamp(_ value: CGFloat) -> CGFloat {
+    min(1, max(0, value))
+  }
+
+  private func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat {
+    a + ((b - a) * clamp(t))
+  }
+
+  private func smoothStep(_ value: CGFloat) -> CGFloat {
+    let x = clamp(value)
+    return x * x * (3 - (2 * x))
   }
 }
