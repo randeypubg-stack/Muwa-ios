@@ -73,7 +73,7 @@ struct AdaptiveLayout {
   var horizontalPadding: CGFloat {
     let width = viewportWidth
     if isPhone {
-      return isLandscape ? 22 : 18
+      return isLandscape ? 8 : 6
     }
     if width < 600 { return isLandscape ? 22 : 18 }
     if width >= 1000 { return 40 }

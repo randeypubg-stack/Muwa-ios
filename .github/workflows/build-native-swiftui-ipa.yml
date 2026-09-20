@@ -52,6 +52,8 @@ jobs:
           test -f "$PWD/native-patches/HomeView.swift"
           test -f "$PWD/native-patches/TrackRow.swift"
           test -f "$PWD/native-patches/QueueView.swift"
+          test -f "$PWD/native-patches/Theme.swift"
+          test -f "$PWD/native-patches/LibraryView.swift"
           cp "$PWD/native-patches/MiniPlayerView.swift" "$ROOT/Sources/Views/Components/MiniPlayerView.swift"
           cp "$PWD/native-patches/FullPlayerView.swift" "$ROOT/Sources/Views/Player/FullPlayerView.swift"
           cp "$PWD/native-patches/PremiumView.swift" "$ROOT/Sources/Views/Premium/PremiumView.swift"
@@ -61,6 +63,8 @@ jobs:
           cp "$PWD/native-patches/HomeView.swift" "$ROOT/Sources/Views/Home/HomeView.swift"
           cp "$PWD/native-patches/TrackRow.swift" "$ROOT/Sources/Views/Components/TrackRow.swift"
           cp "$PWD/native-patches/QueueView.swift" "$ROOT/Sources/Views/Player/QueueView.swift"
+          cp "$PWD/native-patches/Theme.swift" "$ROOT/Sources/Theme/Theme.swift"
+          cp "$PWD/native-patches/LibraryView.swift" "$ROOT/Sources/Views/Library/LibraryView.swift"
           grep -Fq '.frame(height: 58)' "$ROOT/Sources/Views/Components/MiniPlayerView.swift"
           grep -Fq 'struct MorphingPlayerView' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
           grep -Fq 'PremiumView(compact: true)' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
@@ -78,6 +82,10 @@ jobs:
           grep -Fq 'presentationDragIndicator(.hidden)' "$ROOT/Sources/Views/Player/QueueView.swift"
           grep -Fq 'library.removeFromQueue(track)' "$ROOT/Sources/Views/Player/QueueView.swift"
           grep -Fq '.draggable(track.id)' "$ROOT/Sources/Views/Player/QueueView.swift"
+          grep -Fq 'repeatForever(autoreverses: true)' "$ROOT/Sources/Theme/Theme.swift"
+          grep -Fq 'AppBackground()' "$ROOT/Sources/Views/Library/LibraryView.swift"
+          grep -Fq 'layout.isPhone ? 2' "$ROOT/Sources/App/RootView.swift"
+          grep -Fq 'miniCenterY: miniCenterY' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
 
           # Allow ProMotion-capable iPhones to render above 60 Hz. iOS still
           # controls the actual adaptive refresh rate based on hardware/system state.
@@ -108,7 +116,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
-          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='13'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='14'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
         shell: bash
@@ -125,7 +133,7 @@ jobs:
 
           test "$BUNDLE_ID" = "app.muwa.nasheeds"
           test "$VERSION" = "1.4.0"
-          test "$BUILD_NO" = "13"
+          test "$BUILD_NO" = "14"
           test -x "$APP_PATH/$EXECUTABLE"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist")" = "true"
 
@@ -140,10 +148,10 @@ jobs:
 
           (
             cd build/package
-            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build13-fluid-player-unsigned.ipa Payload
+            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build14-polish-unsigned.ipa Payload
           )
 
-          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build13-fluid-player-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build13-fluid-player-unsigned.ipa.sha256
+          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build14-polish-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build14-polish-unsigned.ipa.sha256
 
           cat > build/build-info.json <<EOF
           {
@@ -167,7 +175,12 @@ jobs:
             "queue_ui_fix": "muwa-header-delete-short-drag-handle-full-row-tap",
             "player_transition_fix": "single-persistent-interactive-player-container",
             "player_animation_target": "adaptive-promotion-up-to-120hz",
-            "player_gesture_fix": "direct-progress-finger-tracking-no-dismiss-snap",
+            "player_gesture_fix": "single-directional-drag-path-no-duplicate-gesture",
+            "player_fullscreen_fix": "edge-to-edge-safe-area-cover",
+            "bottom_bar_position_fix": "lower-phone-chrome",
+            "side_margin_fix": "phone-6pt-edge-margins",
+            "library_background_fix": "shared-animated-app-background",
+            "background_animation": "gpu-transform-moving-gradients",
             "run_url": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           }
           EOF
@@ -177,8 +190,8 @@ jobs:
         with:
           name: Muwa-Nasheeds-Native-IPA-${{ github.run_number }}
           path: |
-            build/Muwa-Nasheeds-v1.4.0-build13-fluid-player-unsigned.ipa
-            build/Muwa-Nasheeds-v1.4.0-build13-fluid-player-unsigned.ipa.sha256
+            build/Muwa-Nasheeds-v1.4.0-build14-polish-unsigned.ipa
+            build/Muwa-Nasheeds-v1.4.0-build14-polish-unsigned.ipa.sha256
             build/build-info.json
           if-no-files-found: error
           compression-level: 0

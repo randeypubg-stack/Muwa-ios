@@ -56,15 +56,15 @@ struct RootView: View {
 
       ZStack(alignment: .bottom) {
         tabContent
-          .blur(radius: 4.2 * progress)
-          .scaleEffect(1 - (0.008 * progress))
-          .animation(.linear(duration: 0.04), value: playerExpansion)
+          .blur(radius: 1.35 * progress)
+          .scaleEffect(1 - (0.004 * progress))
 
         if player.currentTrack != nil {
           MorphingPlayerView(
             selection: $selection,
             expansion: $playerExpansion
           )
+          .ignoresSafeArea()
           .zIndex(20)
         }
 
@@ -81,7 +81,7 @@ struct RootView: View {
         )
         .frame(width: chromeWidth)
         .padding(.horizontal, layout.horizontalPadding)
-        .padding(.bottom, max(proxy.safeAreaInsets.bottom, layout.isCompactLandscapePhone ? 4 : 10))
+        .padding(.bottom, layout.isPhone ? 2 : max(proxy.safeAreaInsets.bottom, 10))
         .zIndex(40)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)

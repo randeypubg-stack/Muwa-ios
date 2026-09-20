@@ -36,10 +36,10 @@ struct MorphingPlayerView: View {
       let miniWidth = min(miniWidthLimit, usableWidth)
       let miniHeight: CGFloat = 58
 
-      let bottomInset = max(
-        proxy.safeAreaInsets.bottom,
-        layout.isCompactLandscapePhone ? 4 : 10
-      )
+      let bottomInset: CGFloat =
+        layout.isPhone
+        ? 2
+        : max(proxy.safeAreaInsets.bottom, 10)
       let bottomBarHeight: CGFloat = 68
       let playerBarGap: CGFloat = 10
       let miniCenterY =
@@ -113,16 +113,14 @@ struct MorphingPlayerView: View {
             settle(to: 1)
           }
         }
-        .simultaneousGesture(expansionDragGesture(travel: travel))
-        .position(x: viewportWidth / 2, y: playerCenterY)
+                .position(x: viewportWidth / 2, y: playerCenterY)
 
         sharedArtwork(
           size: artworkSize,
           cornerRadius: lerp(13, 36, p),
           progress: p
         )
-        .simultaneousGesture(expansionDragGesture(travel: travel))
-        .position(
+                .position(
           x: ((viewportWidth - playerWidth) / 2) + artworkX,
           y: playerCenterY - (playerHeight / 2) + artworkY
         )
@@ -131,8 +129,7 @@ struct MorphingPlayerView: View {
           width: metadataWidth,
           progress: p
         )
-        .simultaneousGesture(expansionDragGesture(travel: travel))
-        .position(
+                .position(
           x: ((viewportWidth - playerWidth) / 2) + metadataLeft + (metadataWidth / 2),
           y: playerCenterY - (playerHeight / 2) + metadataY
         )
@@ -167,6 +164,16 @@ struct MorphingPlayerView: View {
         )
       }
       .frame(width: viewportWidth, height: viewportHeight)
+      .contentShape(Rectangle())
+      .simultaneousGesture(
+        expansionDragGesture(
+          travel: travel,
+          miniCenterY: miniCenterY,
+          miniWidth: miniWidth,
+          miniHeight: miniHeight,
+          viewportWidth: viewportWidth
+        )
+      )
     }
     .sheet(isPresented: $premiumPresented) {
       PremiumView(compact: true)
@@ -395,9 +402,18 @@ struct MorphingPlayerView: View {
       progressY
       + (isShortPhone ? 72 : 84)
 
-    let actionsY =
+    let proposedActionsY =
       transportY
       + (isShortPhone ? 64 : 78)
+
+    let chromeTop =
+      containerTop
+      + playerHeight
+      - 70
+    let actionsY = min(
+      proposedActionsY,
+      chromeTop - 42
+    )
 
     return ZStack {
       fullTopBar(width: contentWidth)
@@ -654,13 +670,33 @@ struct MorphingPlayerView: View {
     }
   }
 
-  private func expansionDragGesture(travel: CGFloat) -> some Gesture {
-    DragGesture(minimumDistance: 4, coordinateSpace: .global)
+  private func expansionDragGesture(
+    travel: CGFloat,
+    miniCenterY: CGFloat,
+    miniWidth: CGFloat,
+    miniHeight: CGFloat,
+    viewportWidth: CGFloat
+  ) -> some Gesture {
+    DragGesture(minimumDistance: 3, coordinateSpace: .local)
       .onChanged { value in
         let vertical = value.translation.height
         let horizontal = abs(value.translation.width)
 
         guard abs(vertical) > horizontal * 1.08 else { return }
+
+        if expansion < 0.20 {
+          let miniMinX = (viewportWidth - miniWidth) / 2
+          let miniMaxX = miniMinX + miniWidth
+          let miniMinY = miniCenterY - (miniHeight / 2) - 8
+          let miniMaxY = miniCenterY + (miniHeight / 2) + 8
+
+          guard
+            value.startLocation.x >= miniMinX,
+            value.startLocation.x <= miniMaxX,
+            value.startLocation.y >= miniMinY,
+            value.startLocation.y <= miniMaxY
+          else { return }
+        }
 
         if dragStartExpansion == nil {
           dragStartExpansion = expansion
@@ -680,11 +716,11 @@ struct MorphingPlayerView: View {
         let projectedDelta =
           (value.predictedEndTranslation.height - value.translation.height)
           / max(1, travel)
-        let projected = clamp(expansion - (projectedDelta * 0.42))
-        let target: CGFloat = projected >= 0.54 ? 1 : 0
+        let projected = clamp(expansion - (projectedDelta * 0.34))
+        let target: CGFloat = projected >= 0.52 ? 1 : 0
 
         withAnimation(
-          .spring(response: 0.48, dampingFraction: 0.94, blendDuration: 0.14)
+          .spring(response: 0.52, dampingFraction: 0.96, blendDuration: 0.16)
         ) {
           expansion = target
         }
