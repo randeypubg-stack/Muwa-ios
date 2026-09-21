@@ -89,12 +89,16 @@ jobs:
           grep -Fq '.navigationTitle("Главная")' "$ROOT/Sources/Views/Home/HomeView.swift"
           grep -Fq '.navigationBarTitleDisplayMode(.large)' "$ROOT/Sources/Views/Home/HomeView.swift"
           grep -Fq '.toolbarBackground(.hidden, for: .navigationBar)' "$ROOT/Sources/Views/Home/HomeView.swift"
-          grep -Fq 'coverSwipeTrack' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
-          grep -Fq 'swipeNeighbor(direction:' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
-          grep -Fq 'rubberBand(' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
-          grep -Fq 'let currentScale = 1 - (0.15 * eased)' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
-          grep -Fq 'let incomingScale = 0.82 + (0.18 * eased)' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
-          grep -Fq '.offset(x: drag * 0.92)' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq 'private enum ArtworkGestureAxis: Equatable' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq 'artworkGestureActive' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq '.highPriorityGesture(' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq 'finishArtworkPaging(' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq 'finishArtworkVerticalDrag(' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq 'leftEdgeTravel' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq 'rightEdgeTravel' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq 'let currentScale = 1 - (0.28 * eased)' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq 'let incomingScale = 0.72 + (0.28 * eased)' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+          grep -Fq 'guard !artworkGestureActive else' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
           grep -Fq 'NavigationLink(value: destination)' "$ROOT/Sources/Views/Library/LibraryView.swift"
           grep -Fq 'if abs(delta) > 1' "$ROOT/Sources/Theme/AdaptiveLayout.swift"
           grep -Fq 'return max(0, width - horizontalPadding * 2)' "$ROOT/Sources/Theme/AdaptiveLayout.swift"
@@ -147,7 +151,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
-          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='27'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='28'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
         shell: bash
@@ -164,7 +168,7 @@ jobs:
 
           test "$BUNDLE_ID" = "app.muwa.nasheeds"
           test "$VERSION" = "1.4.0"
-          test "$BUILD_NO" = "27"
+          test "$BUILD_NO" = "28"
           test -x "$APP_PATH/$EXECUTABLE"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist")" = "true"
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIColorName' "$APP_PATH/Info.plist")" = "LaunchBackground"
@@ -180,10 +184,10 @@ jobs:
 
           (
             cd build/package
-            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build27-native-header-cover-shrink-unsigned.ipa Payload
+            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build28-artwork-axis-lock-unsigned.ipa Payload
           )
 
-          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build27-native-header-cover-shrink-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build27-native-header-cover-shrink-unsigned.ipa.sha256
+          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build28-artwork-axis-lock-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build28-artwork-axis-lock-unsigned.ipa.sha256
 
           cat > build/build-info.json <<EOF
           {
@@ -197,7 +201,7 @@ jobs:
             "signed": false,
             "source_commit": "${GITHUB_SHA}",
             "source_archive_sha256": "f07bce80d5b9b39583a8bce19f3e3b71caed205332649f13ccb45a8b28997f84",
-            "audit_fixes": ["named-playlist-actions", "stable-migration", "empty-queue-persistence", "library-scroll-clearance", "mini-player-morph-coordinates", "compact-landscape-player", "independent-startup-loading", "fresh-now-playing-cleanup", "collapsing-transparent-home-header", "next-launch-resume-candidate", "compact-dismissible-resume-card", "restrained-cover-swipe", "relative-scroll-header-collapse", "library-quick-navigation-links", "landscape-full-width-content", "landscape-edge-to-edge-player-safe-controls", "black-system-launch-screen", "branded-artwork-loader", "sleep-timer", "next-track-prefetch", "home-header-real-scroll-collapse", "interactive-cover-paging-carousel", "native-ios-home-title-collapse", "cover-shrink-slide-replacement"],
+            "audit_fixes": ["named-playlist-actions", "stable-migration", "empty-queue-persistence", "library-scroll-clearance", "mini-player-morph-coordinates", "compact-landscape-player", "independent-startup-loading", "fresh-now-playing-cleanup", "collapsing-transparent-home-header", "next-launch-resume-candidate", "compact-dismissible-resume-card", "restrained-cover-swipe", "relative-scroll-header-collapse", "library-quick-navigation-links", "landscape-full-width-content", "landscape-edge-to-edge-player-safe-controls", "black-system-launch-screen", "branded-artwork-loader", "sleep-timer", "next-track-prefetch", "home-header-real-scroll-collapse", "interactive-cover-paging-carousel", "native-ios-home-title-collapse", "cover-shrink-slide-replacement", "artwork-axis-gesture-lock", "edge-aware-cover-transition"],
             "run_url": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           }
           EOF
@@ -207,8 +211,8 @@ jobs:
         with:
           name: Muwa-Nasheeds-Native-IPA-${{ github.run_number }}
           path: |
-            build/Muwa-Nasheeds-v1.4.0-build27-native-header-cover-shrink-unsigned.ipa
-            build/Muwa-Nasheeds-v1.4.0-build27-native-header-cover-shrink-unsigned.ipa.sha256
+            build/Muwa-Nasheeds-v1.4.0-build28-artwork-axis-lock-unsigned.ipa
+            build/Muwa-Nasheeds-v1.4.0-build28-artwork-axis-lock-unsigned.ipa.sha256
             build/build-info.json
           if-no-files-found: error
           compression-level: 0
@@ -227,7 +231,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Muwa-build27-review-screenshots
+          name: Muwa-build28-review-screenshots
           path: build/previews
           if-no-files-found: ignore
 

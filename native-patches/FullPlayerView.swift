@@ -1,5 +1,11 @@
 import SwiftUI
 
+private enum ArtworkGestureAxis: Equatable {
+  case undetermined
+  case horizontal
+  case vertical
+}
+
 struct MorphingPlayerView: View {
   @EnvironmentObject private var player: PlayerManager
   @EnvironmentObject private var library: LibraryStore
@@ -25,6 +31,9 @@ struct MorphingPlayerView: View {
   @State private var coverSwipeTrack: Track?
   @State private var coverSwipeDirection: Int = 0
   @State private var coverPaging = false
+  @State private var artworkGestureAxis: ArtworkGestureAxis = .undetermined
+  @State private var artworkGestureActive = false
+  @State private var artworkVerticalStartExpansion: CGFloat?
 
   private var track: Track {
     player.currentTrack ?? Track.catalog[0]
@@ -88,6 +97,7 @@ struct MorphingPlayerView: View {
       let artworkSize = lerp(miniArtworkSize, fullArtworkSize, p)
       let artworkX = lerp(miniArtworkX, geometry.artworkX, p)
       let artworkY = lerp(miniArtworkY, fullArtworkY, p)
+      let artworkScreenX = ((viewportWidth - playerWidth) / 2) + artworkX
 
       let miniReservedTrailing: CGFloat = 7 + 34 + 10 + 34 + 10
       let miniMetaLeft: CGFloat = 7 + miniArtworkSize + 10
@@ -135,19 +145,13 @@ struct MorphingPlayerView: View {
         sharedArtwork(
           size: artworkSize,
           cornerRadius: lerp(13, 36, p),
-          progress: p
-        )
-        .simultaneousGesture(
-          expansionDragGesture(
-            travel: travel,
-            miniCenterY: miniCenterY,
-            miniWidth: miniWidth,
-            miniHeight: miniHeight,
-            viewportWidth: viewportWidth
-          )
+          progress: p,
+          viewportWidth: viewportWidth,
+          screenCenterX: artworkScreenX,
+          expansionTravel: travel
         )
         .position(
-          x: ((viewportWidth - playerWidth) / 2) + artworkX,
+          x: artworkScreenX,
           y: playerCenterY - (playerHeight / 2) + artworkY
         )
 
@@ -273,17 +277,31 @@ struct MorphingPlayerView: View {
   private func sharedArtwork(
     size: CGFloat,
     cornerRadius: CGFloat,
-    progress: CGFloat
+    progress: CGFloat,
+    viewportWidth: CGFloat,
+    screenCenterX: CGFloat,
+    expansionTravel: CGFloat
   ) -> some View {
-    let travel = max(120, size * 0.78)
-    let drag = progress > 0.74 ? coverDragX : 0
-    let swipeProgress = min(1, abs(drag) / max(1, travel))
+    let leftEdgeTravel = max(1, screenCenterX + (size * 0.42))
+    let rightEdgeTravel = max(1, (viewportWidth - screenCenterX) + (size * 0.42))
+    let interactionDistance = max(96, min(size * 0.54, viewportWidth * 0.38))
+    let swipeProgress = min(1, abs(coverDragX) / interactionDistance)
     let eased = smoothStep(swipeProgress)
 
-    let currentScale = 1 - (0.15 * eased)
-    let currentOpacity = 1 - (0.30 * eased)
-    let incomingScale = 0.82 + (0.18 * eased)
-    let incomingOpacity = 0.22 + (0.78 * eased)
+    let outgoingX: CGFloat =
+      coverSwipeDirection < 0
+      ? -(leftEdgeTravel * eased)
+      : rightEdgeTravel * eased
+
+    let incomingX: CGFloat =
+      coverSwipeDirection < 0
+      ? rightEdgeTravel * (1 - eased)
+      : -(leftEdgeTravel * (1 - eased))
+
+    let currentScale = 1 - (0.28 * eased)
+    let currentOpacity = 1 - (0.72 * eased)
+    let incomingScale = 0.72 + (0.28 * eased)
+    let incomingOpacity = 0.18 + (0.82 * eased)
 
     return ZStack {
       if let coverSwipeTrack, coverSwipeDirection != 0 {
@@ -294,11 +312,7 @@ struct MorphingPlayerView: View {
           showSubtitle: false,
           progress: progress
         )
-        .offset(
-          x: coverSwipeDirection < 0
-            ? travel + drag
-            : -travel + drag
-        )
+        .offset(x: incomingX)
         .scaleEffect(incomingScale)
         .opacity(Double(incomingOpacity))
       }
@@ -310,12 +324,11 @@ struct MorphingPlayerView: View {
         showSubtitle: true,
         progress: progress
       )
-      .offset(x: drag * 0.92)
-      .scaleEffect(currentScale)
-      .opacity(Double(currentOpacity))
+      .offset(x: coverSwipeDirection == 0 ? 0 : outgoingX)
+      .scaleEffect(coverSwipeDirection == 0 ? 1 : currentScale)
+      .opacity(Double(coverSwipeDirection == 0 ? 1 : currentOpacity))
     }
     .frame(width: size, height: size)
-    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     .shadow(
       color: .black.opacity(Double(0.34 * smoothStep(progress))),
       radius: 28 * smoothStep(progress),
@@ -323,72 +336,175 @@ struct MorphingPlayerView: View {
     )
     .contentShape(Rectangle())
     .allowsHitTesting(progress > 0.74 && !coverPaging)
-    .simultaneousGesture(
-      DragGesture(minimumDistance: 10)
-        .onChanged { value in
-          guard expansion > 0.74, !coverPaging else { return }
+    .highPriorityGesture(
+      artworkDragGesture(
+        size: size,
+        interactionDistance: interactionDistance,
+        expansionTravel: expansionTravel
+      )
+    )
+  }
 
-          let horizontal = value.translation.width
-          let vertical = value.translation.height
-          guard abs(horizontal) > abs(vertical) * 1.08 else { return }
+  private func artworkDragGesture(
+    size: CGFloat,
+    interactionDistance: CGFloat,
+    expansionTravel: CGFloat
+  ) -> some Gesture {
+    DragGesture(minimumDistance: 3, coordinateSpace: .named("playerContainer"))
+      .onChanged { value in
+        guard expansion > 0.74, !coverPaging else { return }
 
-          let direction = horizontal < 0 ? -1 : 1
-          if coverSwipeDirection != direction || coverSwipeTrack == nil {
-            coverSwipeDirection = direction
-            coverSwipeTrack = swipeNeighbor(direction: direction)
+        artworkGestureActive = true
+
+        let horizontal = value.translation.width
+        let vertical = value.translation.height
+
+        if artworkGestureAxis == .undetermined {
+          let dominant = max(abs(horizontal), abs(vertical))
+          guard dominant >= 7 else { return }
+
+          if abs(horizontal) > abs(vertical) * 1.12 {
+            artworkGestureAxis = .horizontal
+            coverSwipeDirection = horizontal < 0 ? -1 : 1
+            coverSwipeTrack = swipeNeighbor(direction: coverSwipeDirection)
+          } else if abs(vertical) > abs(horizontal) * 1.12 {
+            artworkGestureAxis = .vertical
+            artworkVerticalStartExpansion = expansion
+            coverDragX = 0
+            coverSwipeTrack = nil
+            coverSwipeDirection = 0
+          } else {
+            return
           }
+        }
+
+        switch artworkGestureAxis {
+        case .horizontal:
+          let lockedTranslation: CGFloat =
+            coverSwipeDirection < 0
+            ? min(0, horizontal)
+            : max(0, horizontal)
 
           if coverSwipeTrack != nil {
-            coverDragX = min(travel, max(-travel, horizontal))
+            coverDragX = min(
+              interactionDistance,
+              max(-interactionDistance, lockedTranslation)
+            )
           } else {
-            coverDragX = rubberBand(horizontal, limit: size * 0.10)
+            coverDragX = rubberBand(
+              lockedTranslation,
+              limit: size * 0.10
+            )
           }
+
+        case .vertical:
+          let start = artworkVerticalStartExpansion ?? expansion
+          let next = start - (vertical / max(1, expansionTravel))
+          expansion = clamp(next)
+
+        case .undetermined:
+          break
         }
-        .onEnded { value in
-          guard expansion > 0.74, !coverPaging else { return }
-
-          let horizontal = value.translation.width
-          let vertical = value.translation.height
-          guard abs(horizontal) > abs(vertical) * 1.08 else {
-            resetCoverPaging()
-            return
-          }
-
-          let projected = value.predictedEndTranslation.width
-          let threshold = max(48, size * 0.15)
-          let shouldPage =
-            abs(horizontal) >= threshold
-            || abs(projected) >= threshold * 1.40
-
-          guard shouldPage, let destination = coverSwipeTrack else {
-            resetCoverPaging()
-            return
-          }
-
-          coverPaging = true
-          let target: CGFloat = coverSwipeDirection < 0 ? -travel : travel
-
-          withAnimation(
-            .spring(response: 0.34, dampingFraction: 0.92, blendDuration: 0.10)
-          ) {
-            coverDragX = target
-          }
-
-          DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) {
-            player.play(destination)
-
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-              coverDragX = 0
-              coverSwipeTrack = nil
-              coverSwipeDirection = 0
-            }
-
-            coverPaging = false
-          }
+      }
+      .onEnded { value in
+        defer {
+          artworkGestureActive = false
+          artworkGestureAxis = .undetermined
+          artworkVerticalStartExpansion = nil
         }
-    )
+
+        switch artworkGestureAxis {
+        case .horizontal:
+          finishArtworkPaging(
+            value: value,
+            interactionDistance: interactionDistance
+          )
+
+        case .vertical:
+          finishArtworkVerticalDrag(
+            value: value,
+            expansionTravel: expansionTravel
+          )
+
+        case .undetermined:
+          resetCoverPaging()
+        }
+      }
+  }
+
+  private func finishArtworkPaging(
+    value: DragGesture.Value,
+    interactionDistance: CGFloat
+  ) {
+    let horizontal = value.translation.width
+    let projected = value.predictedEndTranslation.width
+    let threshold = interactionDistance * 0.34
+
+    let directionMatches =
+      coverSwipeDirection < 0
+      ? horizontal <= 0
+      : horizontal >= 0
+
+    let projectedMatches =
+      coverSwipeDirection < 0
+      ? projected <= 0
+      : projected >= 0
+
+    let shouldPage =
+      directionMatches
+      && (
+        abs(horizontal) >= threshold
+        || (projectedMatches && abs(projected) >= threshold * 1.45)
+      )
+
+    guard shouldPage, let destination = coverSwipeTrack else {
+      resetCoverPaging()
+      return
+    }
+
+    coverPaging = true
+    let target: CGFloat =
+      coverSwipeDirection < 0
+      ? -interactionDistance
+      : interactionDistance
+
+    withAnimation(
+      .spring(response: 0.36, dampingFraction: 0.93, blendDuration: 0.10)
+    ) {
+      coverDragX = target
+    }
+
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+      player.play(destination)
+
+      var transaction = Transaction()
+      transaction.disablesAnimations = true
+      withTransaction(transaction) {
+        coverDragX = 0
+        coverSwipeTrack = nil
+        coverSwipeDirection = 0
+      }
+
+      coverPaging = false
+    }
+  }
+
+  private func finishArtworkVerticalDrag(
+    value: DragGesture.Value,
+    expansionTravel: CGFloat
+  ) {
+    let projectedDelta =
+      (value.predictedEndTranslation.height - value.translation.height)
+      / max(1, expansionTravel)
+
+    let projected = clamp(expansion - (projectedDelta * 0.34))
+    let target: CGFloat = projected >= 0.52 ? 1 : 0
+
+    withAnimation(
+      .spring(response: 0.52, dampingFraction: 0.96, blendDuration: 0.16)
+    ) {
+      expansion = target
+    }
   }
 
   private func artworkPage(
@@ -914,6 +1030,11 @@ struct MorphingPlayerView: View {
   ) -> some Gesture {
     DragGesture(minimumDistance: 3, coordinateSpace: .named("playerContainer"))
       .onChanged { value in
+        guard !artworkGestureActive else {
+          dragStartExpansion = nil
+          return
+        }
+
         let vertical = value.translation.height
         let horizontal = abs(value.translation.width)
 
@@ -944,6 +1065,7 @@ struct MorphingPlayerView: View {
       .onEnded { value in
         defer { dragStartExpansion = nil }
 
+        guard !artworkGestureActive else { return }
         guard dragStartExpansion != nil else { return }
 
         let projectedDelta =
