@@ -26,6 +26,10 @@ for i,d in enumerate(selected):
         run('xcrun','simctl','launch','--terminate-running-process',udid,'app.muwa.nasheeds',*args)
         time.sleep(5)
         run('xcrun','simctl','io',udid,'screenshot',str(out/f'{i}-{label}.png'))
+        data = Path(run('xcrun','simctl','get_app_container',udid,'app.muwa.nasheeds','data').strip())
+        proof = (data/'Documents/clock-check.txt').read_text()
+        assert proof == '100 ticks; PlayerManager notifications: 0', 'Clock isolation check did not complete'
+        (out/f'{i}-clock-check.txt').write_text(proof)
     run('xcrun','simctl','shutdown',udid)
     (out/f'{i}-device.txt').write_text(d['name'])
 

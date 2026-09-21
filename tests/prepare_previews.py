@@ -23,6 +23,8 @@ s=s.replace(needle, '''    .task {
         player.progress = Double(tick) / 100
       }
       precondition(broadUpdates == 0, "Clock invalidated full player UI")
+      let proof = URL.documentsDirectory.appendingPathComponent("clock-check.txt")
+      try? "100 ticks; PlayerManager notifications: 0".write(to: proof, atomically: true, encoding: .utf8)
       subscription.cancel()
       player.duration = 0
       player.currentTime = 0
