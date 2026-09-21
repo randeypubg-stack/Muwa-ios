@@ -1,4 +1,5 @@
 import json, subprocess, time
+import shutil
 from pathlib import Path
 
 def run(*args):
@@ -30,6 +31,11 @@ for i,d in enumerate(selected):
         proof = (data/'Documents/clock-check.txt').read_text()
         assert proof == '100 ticks; PlayerManager notifications: 0', 'Clock isolation check did not complete'
         (out/f'{i}-clock-check.txt').write_text(proof)
+        if label == 'player':
+            report = (data/'Documents/artwork-check.txt').read_text()
+            assert 'cover=true; backdrop=true' in report, report
+            (out/f'{i}-artwork-check.txt').write_text(report)
+            shutil.copy2(data/'Documents/cached-backdrop.png', out/f'{i}-cached-backdrop.png')
     run('xcrun','simctl','shutdown',udid)
     (out/f'{i}-device.txt').write_text(d['name'])
 

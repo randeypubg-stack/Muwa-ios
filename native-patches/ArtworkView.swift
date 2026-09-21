@@ -163,7 +163,7 @@ actor ArtworkImageStore {
   private let cache = ArtworkMemoryCache.shared
   private var pending: [String: Task<UIImage?, Never>] = [:]
   private var failures: [String: Date] = [:]
-  private let context = CIContext(options: [.cacheIntermediates: false])
+  private let context = CIContext(options: [.cacheIntermediates: false, .useSoftwareRenderer: true])
 
   func image(for url: URL, backdrop: Bool = false) async -> UIImage? {
     let key = url.absoluteString + (backdrop ? "#backdrop" : "#cover")
@@ -176,7 +176,9 @@ actor ArtworkImageStore {
         let scale = 96 / CGFloat(max(cg.width, cg.height))
         let small = CIImage(cgImage: cg).transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         let blurred = small.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 7])
-        guard let result = self.context.createCGImage(blurred, from: small.extent) else { return nil }
+        guard let result = self.context.createCGImage(blurred.cropped(to: small.extent),
+          from: small.extent, format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
+        else { return original }
         return UIImage(cgImage: result)
       }
       do {
@@ -205,4 +207,3 @@ actor ArtworkImageStore {
     return result
   }
 }
-

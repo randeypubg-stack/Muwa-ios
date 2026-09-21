@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: muwa-native-ios-${{ github.ref }}
+  group: muwa-native-ios-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:

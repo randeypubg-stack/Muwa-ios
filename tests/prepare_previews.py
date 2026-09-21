@@ -30,6 +30,15 @@ s=s.replace(needle, '''    .task {
       player.currentTime = 0
       print("PASS: 100 playback ticks produced zero PlayerManager notifications")
       let args = ProcessInfo.processInfo.arguments
+      if let url = Track.catalog[0].artworkURL {
+        let cover = await ArtworkImageStore.shared.image(for: url)
+        let backdrop = await ArtworkImageStore.shared.image(for: url, backdrop: true)
+        let report = "cover=\\(cover != nil); backdrop=\\(backdrop != nil); size=\\(backdrop?.size ?? .zero)"
+        try? report.write(to: URL.documentsDirectory.appendingPathComponent("artwork-check.txt"), atomically: true, encoding: .utf8)
+        if let data = backdrop?.pngData() {
+          try? data.write(to: URL.documentsDirectory.appendingPathComponent("cached-backdrop.png"))
+        }
+      }
       if args.contains("--audit-player") {
         player.play(Track.catalog[0], autoplay: false)
         playerExpansion = 1
