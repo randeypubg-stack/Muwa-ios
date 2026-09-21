@@ -1,6 +1,6 @@
 import SwiftUI
 
-private enum ArtworkGestureAxis {
+private enum ArtworkGestureAxis: Equatable {
   case undetermined
   case horizontal
   case vertical
