@@ -1,4 +1,6 @@
 import SwiftUI
+import ImageIO
+import CoreImage
 
 struct ArtworkView: View {
   let url: URL?
@@ -11,10 +13,7 @@ struct ArtworkView: View {
         .fill(Color.white.opacity(0.045))
 
       if let url {
-        AsyncImage(
-          url: url,
-          transaction: Transaction(animation: .easeOut(duration: 0.22))
-        ) { phase in
+        CachedArtworkImage(url: url) { phase in
           switch phase {
           case .success(let image):
             image
@@ -71,8 +70,7 @@ private struct MuwaArtworkLoader: View {
     .onAppear {
       guard !active else { return }
       withAnimation(
-        .easeInOut(duration: 0.82)
-          .repeatForever(autoreverses: true)
+        .easeOut(duration: 0.22)
       ) {
         active = true
       }
@@ -86,15 +84,14 @@ struct ArtworkBackdrop: View {
 
   var body: some View {
     ZStack {
-      AppBackground()
+      Color(red: 0.003, green: 0.004, blue: 0.006)
 
       if let url {
-        AsyncImage(url: url) { phase in
+        CachedArtworkImage(url: url, backdrop: true) { phase in
           if case .success(let image) = phase {
             image
               .resizable()
               .scaledToFill()
-              .blur(radius: 44)
               .saturation(1.18)
               .opacity(0.54)
               .scaleEffect(1.22)
@@ -111,3 +108,107 @@ struct ArtworkBackdrop: View {
     .clipped()
   }
 }
+
+
+private struct CachedArtworkImage<Content: View>: View {
+  let url: URL
+  var backdrop = false
+  @ViewBuilder let content: (AsyncImagePhase) -> Content
+  @State private var loadedURL: URL?
+  @State private var phase: AsyncImagePhase = .empty
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  var body: some View {
+    let cached = ArtworkMemoryCache.shared.image(for: url, backdrop: backdrop)
+    let visiblePhase = loadedURL == url ? phase
+      : cached.map { AsyncImagePhase.success(Image(uiImage: $0)) } ?? .empty
+    ZStack {
+      // Keep a real task host even when a backdrop's empty phase has no content.
+      Color.clear
+      content(visiblePhase)
+    }
+      .task(id: url) {
+        let image = await ArtworkImageStore.shared.image(for: url, backdrop: backdrop)
+        guard !Task.isCancelled else { return }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
+          loadedURL = url
+          phase = image.map { .success(Image(uiImage: $0)) }
+            ?? .failure(URLError(.cannotDecodeContentData))
+        }
+      }
+  }
+}
+
+// NSCache is thread-safe. A synchronous memory-only lookup avoids a placeholder
+// flash when the incoming swipe page becomes the selected page.
+private final class ArtworkMemoryCache: @unchecked Sendable {
+  static let shared = ArtworkMemoryCache()
+  private let cache = NSCache<NSString, UIImage>()
+  private init() {
+    cache.totalCostLimit = 24 * 1024 * 1024
+    cache.countLimit = 48
+  }
+  func image(for url: URL, backdrop: Bool) -> UIImage? {
+    cache.object(forKey: key(url, backdrop: backdrop))
+  }
+  func insert(_ image: UIImage, for url: URL, backdrop: Bool) {
+    let cost = (image.cgImage?.bytesPerRow ?? 0) * (image.cgImage?.height ?? 0)
+    cache.setObject(image, forKey: key(url, backdrop: backdrop), cost: cost)
+  }
+  private func key(_ url: URL, backdrop: Bool) -> NSString {
+    (url.absoluteString + (backdrop ? "#backdrop" : "#cover")) as NSString
+  }
+}
+
+// Downloads, downsampling and blur preparation execute on this background actor,
+// once per URL, rather than during scrolling or the cover transition.
+actor ArtworkImageStore {
+  static let shared = ArtworkImageStore()
+  private let cache = ArtworkMemoryCache.shared
+  private var pending: [String: Task<UIImage?, Never>] = [:]
+  private var failures: [String: Date] = [:]
+  private let context = CIContext(options: [.cacheIntermediates: false, .useSoftwareRenderer: true])
+
+  func image(for url: URL, backdrop: Bool = false) async -> UIImage? {
+    let key = url.absoluteString + (backdrop ? "#backdrop" : "#cover")
+    if let hit = cache.image(for: url, backdrop: backdrop) { return hit }
+    if let failure = failures[key], Date().timeIntervalSince(failure) < 20 { return nil }
+    if let task = pending[key] { return await task.value }
+    let task = Task<UIImage?, Never> {
+      if backdrop {
+        guard let original = await self.image(for: url), let cg = original.cgImage else { return nil }
+        let scale = 96 / CGFloat(max(cg.width, cg.height))
+        let small = CIImage(cgImage: cg).transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let blurred = small.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 7])
+        guard let result = self.context.createCGImage(blurred.cropped(to: small.extent),
+          from: small.extent, format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
+        else { return original }
+        return UIImage(cgImage: result)
+      }
+      do {
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode),
+          let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+          let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 1024,
+            kCGImageSourceShouldCacheImmediately: true
+          ] as CFDictionary)
+        else { return nil }
+        return UIImage(cgImage: cg)
+      } catch { return nil }
+    }
+    pending[key] = task
+    let result = await task.value
+    pending[key] = nil
+    if let result {
+      cache.insert(result, for: url, backdrop: backdrop)
+      failures[key] = nil
+    } else {
+      failures[key] = Date()
+    }
+    return result
+  }
+}
+

@@ -1,8 +1,10 @@
 import json, subprocess, time
+import shutil
 from pathlib import Path
 
 def run(*args):
-    return subprocess.check_output(list(args), text=True)
+    print("Running:", " ".join(args), flush=True)
+    return subprocess.check_output(list(args), text=True, timeout=240)
 
 devices=json.loads(run('xcrun','simctl','list','devices','available','--json'))['devices']
 available=[d for group in devices.values() for d in group if d.get('isAvailable')]
@@ -25,5 +27,15 @@ for i,d in enumerate(selected):
         run('xcrun','simctl','launch','--terminate-running-process',udid,'app.muwa.nasheeds',*args)
         time.sleep(5)
         run('xcrun','simctl','io',udid,'screenshot',str(out/f'{i}-{label}.png'))
+        data = Path(run('xcrun','simctl','get_app_container',udid,'app.muwa.nasheeds','data').strip())
+        proof = (data/'Documents/clock-check.txt').read_text()
+        assert proof == '100 ticks; PlayerManager notifications: 0', 'Clock isolation check did not complete'
+        (out/f'{i}-clock-check.txt').write_text(proof)
+        if label == 'player':
+            report = (data/'Documents/artwork-check.txt').read_text()
+            assert 'cover=true; backdrop=true' in report, report
+            (out/f'{i}-artwork-check.txt').write_text(report)
+            shutil.copy2(data/'Documents/cached-backdrop.png', out/f'{i}-cached-backdrop.png')
     run('xcrun','simctl','shutdown',udid)
     (out/f'{i}-device.txt').write_text(d['name'])
+

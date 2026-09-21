@@ -2,6 +2,8 @@ import SwiftUI
 
 struct AppBackground: View {
   @State private var animateGlow = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.scenePhase) private var scenePhase
 
   var body: some View {
     GeometryReader { proxy in
@@ -19,9 +21,8 @@ struct AppBackground: View {
         )
 
         Circle()
-          .fill(Color(red: 0.08, green: 0.12, blue: 0.18).opacity(0.045))
+          .fill(RadialGradient(colors: [Color(red: 0.08, green: 0.12, blue: 0.18).opacity(0.045), .clear], center: .center, startRadius: 0, endRadius: span * 0.46))
           .frame(width: span * 0.92, height: span * 0.92)
-          .blur(radius: span * 0.18)
           .offset(
             x: animateGlow ? proxy.size.width * 0.12 : -proxy.size.width * 0.10,
             y: animateGlow ? -proxy.size.height * 0.15 : -proxy.size.height * 0.10
@@ -29,9 +30,8 @@ struct AppBackground: View {
           .scaleEffect(animateGlow ? 1.04 : 0.96)
 
         Circle()
-          .fill(Color.white.opacity(0.012))
+          .fill(RadialGradient(colors: [.white.opacity(0.012), .clear], center: .center, startRadius: 0, endRadius: span * 0.37))
           .frame(width: span * 0.74, height: span * 0.74)
-          .blur(radius: span * 0.17)
           .offset(
             x: animateGlow ? -proxy.size.width * 0.14 : proxy.size.width * 0.10,
             y: animateGlow ? proxy.size.height * 0.28 : proxy.size.height * 0.34
@@ -48,13 +48,12 @@ struct AppBackground: View {
         )
       }
       .frame(width: proxy.size.width, height: proxy.size.height)
-      .drawingGroup(opaque: false, colorMode: .linear)
-      .onAppear {
-        guard !animateGlow else { return }
-        withAnimation(
-          .easeInOut(duration: 24)
-            .repeatForever(autoreverses: true)
-        ) {
+      .task(id: scenePhase == .active && !reduceMotion) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { animateGlow = false }
+        guard scenePhase == .active, !reduceMotion, !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
+        withAnimation(.easeInOut(duration: 24).repeatForever(autoreverses: true)) {
           animateGlow = true
         }
       }
@@ -119,3 +118,4 @@ extension View {
       )
   }
 }
+
