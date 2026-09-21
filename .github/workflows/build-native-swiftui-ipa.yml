@@ -154,7 +154,7 @@ jobs:
           Muwa Nasheeds — Full Source Archive
           Version: 1.4.0
           Build: 28
-          Commit: \${GITHUB_SHA}
+          Commit: ${GITHUB_SHA}
 
           Contents:
           - MuwaNasheedsNative/ — complete assembled Xcode project
@@ -182,7 +182,7 @@ jobs:
       - name: Upload full source archive
         uses: actions/upload-artifact@v4
         with:
-          name: Muwa-Nasheeds-Full-Source-\${{ github.run_number }}
+          name: Muwa-Nasheeds-Full-Source-${{ github.run_number }}
           path: |
             build/Muwa-Nasheeds-v1.4.0-build28-FULL-SOURCE.zip
             build/Muwa-Nasheeds-v1.4.0-build28-FULL-SOURCE.zip.sha256
