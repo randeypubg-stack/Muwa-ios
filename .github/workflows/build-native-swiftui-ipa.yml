@@ -279,7 +279,7 @@ jobs:
           xcodebuild -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj" -scheme MuwaNasheeds -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$PWD/build/PreviewDerivedData" CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build/simulator.log
 
       - name: Capture iPhone and iPad review screenshots
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: python3 tests/capture_previews.py
 
       - name: Upload review screenshots
@@ -301,5 +301,3 @@ jobs:
             build/architecture.txt
           if-no-files-found: ignore
           retention-days: 14
-
-
