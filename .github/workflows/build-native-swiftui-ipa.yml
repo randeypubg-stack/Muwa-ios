@@ -137,6 +137,59 @@ jobs:
 
           echo "SOURCE_ROOT=$ROOT" >> "$GITHUB_ENV"
 
+      - name: Package full source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build/full-source
+          mkdir -p build/full-source/BuildInfrastructure/.github/workflows
+
+          ditto "$SOURCE_ROOT" build/full-source/MuwaNasheedsNative
+          ditto native-patches build/full-source/BuildInfrastructure/native-patches
+          ditto tests build/full-source/BuildInfrastructure/tests
+          cp .github/workflows/build-native-swiftui-ipa.yml \
+            build/full-source/BuildInfrastructure/.github/workflows/build-native-swiftui-ipa.yml
+
+          cat > build/full-source/README-SOURCE.txt <<EOF
+          Muwa Nasheeds — Full Source Archive
+          Version: 1.4.0
+          Build: 28
+          Commit: \${GITHUB_SHA}
+
+          Contents:
+          - MuwaNasheedsNative/ — complete assembled Xcode project
+          - BuildInfrastructure/native-patches/ — current patch sources used by CI
+          - BuildInfrastructure/tests/ — regression and screenshot tooling
+          - BuildInfrastructure/.github/workflows/ — GitHub Actions build workflow
+
+          Open:
+          MuwaNasheedsNative/MuwaNasheeds.xcodeproj
+
+          Notes:
+          - This archive contains source code and project resources, not only the IPA.
+          - The project is the same assembled source tree used for the build-28 IPA.
+          - Audio tracks and remote artwork remain CDN-backed and are not bundled as local media.
+          EOF
+
+          find build/full-source -name '.DS_Store' -delete
+          (
+            cd build/full-source
+            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build28-FULL-SOURCE.zip .
+          )
+          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build28-FULL-SOURCE.zip \
+            | tee build/Muwa-Nasheeds-v1.4.0-build28-FULL-SOURCE.zip.sha256
+
+      - name: Upload full source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: Muwa-Nasheeds-Full-Source-\${{ github.run_number }}
+          path: |
+            build/Muwa-Nasheeds-v1.4.0-build28-FULL-SOURCE.zip
+            build/Muwa-Nasheeds-v1.4.0-build28-FULL-SOURCE.zip.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+
       - name: Xcode environment
         run: |
           set -euo pipefail
