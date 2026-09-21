@@ -116,15 +116,18 @@ private struct CachedArtworkImage<Content: View>: View {
   @ViewBuilder let content: (AsyncImagePhase) -> Content
   @State private var loadedURL: URL?
   @State private var phase: AsyncImagePhase = .empty
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     content(loadedURL == url ? phase : .empty)
       .task(id: url) {
         let image = await ArtworkImageStore.shared.image(for: url, backdrop: backdrop)
         guard !Task.isCancelled else { return }
-        loadedURL = url
-        phase = image.map { .success(Image(uiImage: $0)) }
-          ?? .failure(URLError(.cannotDecodeContentData))
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
+          loadedURL = url
+          phase = image.map { .success(Image(uiImage: $0)) }
+            ?? .failure(URLError(.cannotDecodeContentData))
+        }
       }
   }
 }

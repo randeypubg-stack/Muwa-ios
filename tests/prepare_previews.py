@@ -15,6 +15,18 @@ s=view.read_text().replace('@EnvironmentObject private var auth: AuthManager',
 needle='    .animation(.easeInOut(duration: 0.24), value: auth.state)'
 assert needle in s
 s=s.replace(needle, '''    .task {
+      player.duration = 100
+      var broadUpdates = 0
+      let subscription = player.objectWillChange.sink { broadUpdates += 1 }
+      for tick in 1...100 {
+        player.currentTime = Double(tick)
+        player.progress = Double(tick) / 100
+      }
+      precondition(broadUpdates == 0, "Clock invalidated full player UI")
+      subscription.cancel()
+      player.duration = 0
+      player.currentTime = 0
+      print("PASS: 100 playback ticks produced zero PlayerManager notifications")
       let args = ProcessInfo.processInfo.arguments
       if args.contains("--audit-player") {
         player.play(Track.catalog[0], autoplay: false)

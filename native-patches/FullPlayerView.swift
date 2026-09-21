@@ -208,6 +208,14 @@ struct MorphingPlayerView: View {
       }
       .frame(width: viewportWidth, height: viewportHeight)
     }
+    .onChange(of: expansion) { _, value in
+      if value <= 0 {
+        artworkGestureActive = false
+        artworkGestureAxis = .undetermined
+        artworkVerticalStartExpansion = nil
+        dragStartExpansion = nil
+      }
+    }
     .sheet(isPresented: $premiumPresented) {
       PremiumView(compact: true)
         .presentationDetents([.fraction(0.60), .large])
@@ -335,7 +343,7 @@ struct MorphingPlayerView: View {
       y: 16 * smoothStep(progress)
     )
     .contentShape(Rectangle())
-    .allowsHitTesting(progress > 0.74 && !coverPaging)
+    .allowsHitTesting((progress > 0.74 || artworkGestureActive) && !coverPaging)
     .highPriorityGesture(
       artworkDragGesture(
         size: size,
@@ -352,7 +360,7 @@ struct MorphingPlayerView: View {
   ) -> some Gesture {
     DragGesture(minimumDistance: 3, coordinateSpace: .named("playerContainer"))
       .onChanged { value in
-        guard expansion > 0.74, !coverPaging else { return }
+        guard expansion > 0.74 || artworkGestureActive, !coverPaging else { return }
 
         artworkGestureActive = true
 
@@ -834,10 +842,12 @@ struct MorphingPlayerView: View {
             }
           }
         } label: {
-          Label(
-            player.sleepTimerSummary.map { "Таймер сна · \($0)" } ?? "Таймер сна",
-            systemImage: "moon.zzz"
-          )
+          TimelineView(.periodic(from: .now, by: 60)) { _ in
+            Label(
+              player.sleepTimerSummary.map { "Таймер сна · \($0)" } ?? "Таймер сна",
+              systemImage: "moon.zzz"
+            )
+          }
         }
 
         Divider()
