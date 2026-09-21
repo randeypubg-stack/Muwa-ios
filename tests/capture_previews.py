@@ -2,7 +2,8 @@ import json, subprocess, time
 from pathlib import Path
 
 def run(*args):
-    return subprocess.check_output(list(args), text=True)
+    print("Running:", " ".join(args), flush=True)
+    return subprocess.check_output(list(args), text=True, timeout=240)
 
 devices=json.loads(run('xcrun','simctl','list','devices','available','--json'))['devices']
 available=[d for group in devices.values() for d in group if d.get('isAvailable')]
@@ -27,3 +28,4 @@ for i,d in enumerate(selected):
         run('xcrun','simctl','io',udid,'screenshot',str(out/f'{i}-{label}.png'))
     run('xcrun','simctl','shutdown',udid)
     (out/f'{i}-device.txt').write_text(d['name'])
+

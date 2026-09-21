@@ -73,7 +73,6 @@ struct RootView: View {
 
       ZStack(alignment: .bottom) {
         tabContent
-          .blur(radius: 1.10 * progress)
           .scaleEffect(1 - (0.003 * progress))
 
         if player.hasStartedPlaybackThisSession, player.currentTrack != nil {
@@ -223,4 +222,5 @@ private struct LaunchGateView: View {
 enum AppTab: Hashable {
   case home, library, profile
 }
+
 

@@ -13,8 +13,15 @@ struct PlaybackResumeCandidate: Equatable {
 final class PlayerManager: ObservableObject {
   @Published var currentTrack: Track?
   @Published var isPlaying = false
-  @Published var progress: Double = 0
-  @Published var currentTime: TimeInterval = 0
+  let timeline = PlaybackTimeline()
+  var progress: Double {
+    get { timeline.snapshot.progress }
+    set { timeline.update(time: newValue * duration, duration: duration) }
+  }
+  var currentTime: TimeInterval {
+    get { timeline.snapshot.time }
+    set { timeline.update(time: newValue, duration: duration) }
+  }
   @Published var duration: TimeInterval = 0
   @Published var shuffleOn = false
   @Published var repeatOn = false
@@ -32,6 +39,7 @@ final class PlayerManager: ObservableObject {
   private var routeChangeObserver: NSObjectProtocol?
   private var wasPlayingBeforeInterruption = false
   private var lastResumePersistBucket = -1
+  private var lastNowPlayingUpdate = Date.distantPast
   private var prefetchedTrackID: String?
   private var prefetchedURL: URL?
   private var prefetchedAsset: AVURLAsset?
@@ -401,14 +409,13 @@ final class PlayerManager: ObservableObject {
       queue: .main
     ) { [weak self, weak player] time in
       Task { @MainActor in
-        guard let self, let player else { return }
-        self.currentTime = time.seconds.isFinite ? time.seconds : 0
+        guard let self, let player, self.player === player else { return }
         let actual = player.currentItem?.duration.seconds ?? self.duration
-        if actual.isFinite && actual > 0 { self.duration = actual }
-        self.progress = self.duration > 0 ? min(1, max(0, self.currentTime / self.duration)) : 0
+        if actual.isFinite && actual > 0 && self.duration != actual { self.duration = actual }
+        self.timeline.update(time: time.seconds, duration: self.duration)
         self.persistResumeCandidate()
         self.enforceSleepTimerIfNeeded()
-        self.updateNowPlaying()
+        self.updateNowPlaying(force: false)
       }
     }
   }
@@ -423,9 +430,9 @@ final class PlayerManager: ObservableObject {
       forName: .AVPlayerItemDidPlayToEndTime,
       object: item,
       queue: .main
-    ) { [weak self] _ in
+    ) { [weak self, weak item] _ in
       Task { @MainActor in
-        guard let self else { return }
+        guard let self, let item, self.player?.currentItem === item else { return }
 
         if self.sleepAfterCurrentTrack {
           self.sleepAfterCurrentTrack = false
@@ -461,6 +468,7 @@ final class PlayerManager: ObservableObject {
     persistResumeCandidate(force: true)
     player?.pause()
     isPlaying = false
+    updateNowPlaying()
   }
 
   private func prefetchFollowingTrack(after track: Track) {
@@ -511,18 +519,10 @@ final class PlayerManager: ObservableObject {
   private func loadNowPlayingArtwork(for track: Track) {
     guard let url = track.artworkURL else { return }
     artworkTask = Task { [weak self] in
-      do {
-        let (data, _) = try await URLSession.shared.data(from: url)
-        guard !Task.isCancelled, let image = UIImage(data: data) else { return }
-        let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-        await MainActor.run {
-          guard let self, self.currentTrack?.id == track.id else { return }
-          self.currentArtwork = artwork
-          self.updateNowPlaying()
-        }
-      } catch {
-        // Artwork is optional; playback should never fail because of it.
-      }
+      guard let image = await ArtworkImageStore.shared.image(for: url), !Task.isCancelled,
+        let self, self.currentTrack?.id == track.id else { return }
+      self.currentArtwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+      self.updateNowPlaying()
     }
   }
 
@@ -563,30 +563,29 @@ final class PlayerManager: ObservableObject {
 
     guard position >= 1 else { return }
 
-    let bucket = Int(position / 2)
+    let bucket = Int(position / 5)
     if !force, bucket == lastResumePersistBucket { return }
     lastResumePersistBucket = bucket
 
-    let candidate = PlaybackResumeCandidate(
-      trackID: track.id,
-      position: position,
-      duration: effectiveDuration
-    )
-    resumeCandidate = candidate
+    // This is next-launch persistence, not live UI state. Publishing it here
+    // invalidated every PlayerManager observer during playback.
     defaults.set(track.id, forKey: ResumeKey.trackID)
     defaults.set(position, forKey: ResumeKey.position)
     defaults.set(effectiveDuration, forKey: ResumeKey.duration)
   }
 
   private func clearResumeCandidate() {
-    resumeCandidate = nil
+    if resumeCandidate != nil { resumeCandidate = nil }
     defaults.removeObject(forKey: ResumeKey.trackID)
     defaults.removeObject(forKey: ResumeKey.position)
     defaults.removeObject(forKey: ResumeKey.duration)
   }
 
-  private func updateNowPlaying() {
+  private func updateNowPlaying(force: Bool = true) {
     guard let track = currentTrack else { return }
+    let now = Date()
+    guard force || now.timeIntervalSince(lastNowPlayingUpdate) >= 5 else { return }
+    lastNowPlayingUpdate = now
     var info: [String: Any] = [
       MPMediaItemPropertyTitle: track.title,
       MPMediaItemPropertyArtist: track.artist,
@@ -596,5 +595,23 @@ final class PlayerManager: ObservableObject {
     ]
     if let currentArtwork { info[MPMediaItemPropertyArtwork] = currentArtwork }
     MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+  }
+}
+
+// High-frequency playback updates are observed only by progress/subtitle views.
+@MainActor
+final class PlaybackTimeline: ObservableObject {
+  struct Snapshot: Equatable {
+    let time: TimeInterval
+    let duration: TimeInterval
+    var progress: Double { duration > 0 ? min(1, max(0, time / duration)) : 0 }
+  }
+  @Published private(set) var snapshot = Snapshot(time: 0, duration: 0)
+
+  func update(time: TimeInterval, duration: TimeInterval) {
+    let safeDuration = duration.isFinite ? max(0, duration) : 0
+    let safeTime = time.isFinite ? max(0, time) : 0
+    let next = Snapshot(time: safeTime, duration: safeDuration)
+    if snapshot != next { snapshot = next }
   }
 }

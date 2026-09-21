@@ -56,18 +56,8 @@ struct MiniPlayerView: View {
       .padding(.top, 7)
       .padding(.bottom, 5)
 
-      Capsule()
-        .fill(.white.opacity(0.12))
+      PlaybackProgressLine(timeline: player.timeline)
         .frame(height: 2)
-        .overlay(alignment: .leading) {
-          Capsule()
-            .fill(.white.opacity(0.72))
-            .scaleEffect(
-              x: max(0, min(1, player.progress)),
-              y: 1,
-              anchor: .leading
-            )
-        }
         .padding(.horizontal, 16)
         .padding(.bottom, 1)
         .allowsHitTesting(false)
@@ -95,3 +85,15 @@ struct MiniPlayerView: View {
   }
 }
 
+
+
+struct PlaybackProgressLine: View {
+  @ObservedObject var timeline: PlaybackTimeline
+  var body: some View {
+    Capsule().fill(.white.opacity(0.12))
+      .overlay(alignment: .leading) {
+        Capsule().fill(.white.opacity(0.72))
+          .scaleEffect(x: timeline.snapshot.progress, y: 1, anchor: .leading)
+      }
+  }
+}

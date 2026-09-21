@@ -468,14 +468,16 @@ struct MorphingPlayerView: View {
       ? -interactionDistance
       : interactionDistance
 
+    let startingTrackID = track.id
     withAnimation(
-      .spring(response: 0.36, dampingFraction: 0.93, blendDuration: 0.10)
+      .spring(response: 0.36, dampingFraction: 0.93, blendDuration: 0.10),
+      completionCriteria: .removed
     ) {
       coverDragX = target
-    }
-
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-      player.play(destination)
+    } completion: {
+      if player.currentTrack?.id == startingTrackID, expansion > 0.74 {
+        player.play(destination)
+      }
 
       var transaction = Transaction()
       transaction.disablesAnimations = true
@@ -522,11 +524,7 @@ struct MorphingPlayerView: View {
     .frame(width: size, height: size)
     .overlay(alignment: .trailing) {
       if showSubtitle, subtitlesVisible, progress > 0.74 {
-        PlayerSubtitleOverlay(
-          track: pageTrack,
-          currentTime: player.currentTime,
-          language: subtitleLanguage
-        )
+        ClockedSubtitleOverlay(timeline: player.timeline, track: pageTrack, language: subtitleLanguage)
         .offset(x: min(46, size * 0.14))
         .transition(.opacity)
       }
@@ -574,16 +572,16 @@ struct MorphingPlayerView: View {
   }
 
   private func resetCoverPaging() {
+    coverPaging = true
     withAnimation(
-      .spring(response: 0.28, dampingFraction: 0.88, blendDuration: 0.08)
+      .spring(response: 0.28, dampingFraction: 0.88, blendDuration: 0.08),
+      completionCriteria: .removed
     ) {
       coverDragX = 0
-    }
-
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
-      guard abs(coverDragX) < 1 else { return }
+    } completion: {
       coverSwipeTrack = nil
       coverSwipeDirection = 0
+      coverPaging = false
     }
   }
 
@@ -658,18 +656,8 @@ struct MorphingPlayerView: View {
     let lineWidth = max(10, playerWidth - 32)
     let y = centerY + (playerHeight / 2) - 2
 
-    return Capsule()
-      .fill(.white.opacity(0.12))
+    return PlaybackProgressLine(timeline: player.timeline)
       .frame(width: lineWidth, height: 2)
-      .overlay(alignment: .leading) {
-        Capsule()
-          .fill(.white.opacity(0.72))
-          .scaleEffect(
-            x: max(0, min(1, player.progress)),
-            y: 1,
-            anchor: .leading
-          )
-      }
       .position(x: viewportWidth / 2, y: y)
       .opacity(Double(opacity))
       .allowsHitTesting(false)
@@ -876,25 +864,8 @@ struct MorphingPlayerView: View {
   }
 
   private func fullProgress(width: CGFloat) -> some View {
-    VStack(spacing: 8) {
-      Slider(
-        value: Binding(
-          get: { player.progress },
-          set: { player.seek(to: $0) }
-        ),
-        in: 0...1
-      )
-      .tint(.white)
-
-      HStack {
-        Text(time(player.currentTime))
-        Spacer()
-        Text(time(player.duration > 0 ? player.duration : track.duration))
-      }
-      .font(.caption)
-      .foregroundStyle(.secondary)
-    }
-    .frame(width: width)
+    PlaybackScrubber(timeline: player.timeline, seek: player.seek)
+      .frame(width: width)
   }
 
   private func transport(compact: Bool) -> some View {
@@ -1176,5 +1147,48 @@ struct PlayerGeometry {
       transportY = progressY + transportGap
       actionsY = transportY + actionGap
     }
+  }
+}
+
+
+private struct PlaybackScrubber: View {
+  @ObservedObject var timeline: PlaybackTimeline
+  let seek: (Double) -> Void
+  @State private var scrubbing = false
+  @State private var draft: Double = 0
+
+  var body: some View {
+    VStack(spacing: 8) {
+      Slider(value: Binding(
+        get: { scrubbing ? draft : timeline.snapshot.progress },
+        set: { draft = $0; if !scrubbing { seek($0) } }
+      ), in: 0...1, onEditingChanged: { editing in
+        if editing { draft = timeline.snapshot.progress }
+        scrubbing = editing
+        if !editing { seek(draft) }
+      })
+      .tint(.white)
+      .accessibilityLabel("Позиция воспроизведения")
+      HStack {
+        Text(time(scrubbing ? draft * timeline.snapshot.duration : timeline.snapshot.time))
+        Spacer()
+        Text(time(timeline.snapshot.duration))
+      }
+      .font(.caption.monospacedDigit())
+      .foregroundStyle(.secondary)
+    }
+  }
+  private func time(_ seconds: TimeInterval) -> String {
+    guard seconds.isFinite, seconds >= 0 else { return "0:00" }
+    return String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60)
+  }
+}
+
+private struct ClockedSubtitleOverlay: View {
+  @ObservedObject var timeline: PlaybackTimeline
+  let track: Track
+  let language: SubtitleLanguage
+  var body: some View {
+    PlayerSubtitleOverlay(track: track, currentTime: timeline.snapshot.time, language: language)
   }
 }
