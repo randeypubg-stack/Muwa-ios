@@ -2,7 +2,7 @@ name: Build Native SwiftUI IPA
 
 on:
   push:
-    branches: [main, codex/muwa-build29-performance]
+    branches: [main, codex/muwa-build29-performance, finish/muwa-build30-main]
   workflow_dispatch:
 
 permissions:
@@ -109,7 +109,8 @@ jobs:
           grep -Fq 'startSleepTimer(minutes:' "$ROOT/Sources/Services/PlayerManager.swift"
           grep -Fq 'sleepAfterCurrentTrackEnds()' "$ROOT/Sources/Services/PlayerManager.swift"
           grep -Fq 'prefetchFollowingTrack(after:' "$ROOT/Sources/Services/PlayerManager.swift"
-          grep -Fq 'loadValuesAsynchronously(forKeys: ["playable"])' "$ROOT/Sources/Services/PlayerManager.swift"
+          grep -Fq 'asset.load(.isPlayable)' "$ROOT/Sources/Services/PlayerManager.swift"
+          ! grep -Fq 'loadValuesAsynchronously(forKeys:' "$ROOT/Sources/Services/PlayerManager.swift"
           grep -Fq 'Таймер сна' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
 
           # Keep the system launch phase pure black so it blends into the
@@ -135,7 +136,7 @@ jobs:
           test "$WIDTH" = "1024"
           test "$HEIGHT" = "1024"
 
-          sed -i '' 's/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = 29;/g' "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
+          sed -i '' 's/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = 30;/g' "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
           echo "SOURCE_ROOT=$ROOT" >> "$GITHUB_ENV"
 
       - name: Package full source archive
@@ -154,7 +155,7 @@ jobs:
           cat > build/full-source/README-SOURCE.txt <<EOF
           Muwa Nasheeds — Full Source Archive
           Version: 1.4.0
-          Build: 29
+          Build: 30
           Commit: ${GITHUB_SHA}
 
           Contents:
@@ -168,25 +169,25 @@ jobs:
 
           Notes:
           - This archive contains source code and project resources, not only the IPA.
-          - The project is the same assembled source tree used for the build-29 IPA.
+          - The project is the same assembled source tree used for the build-30 IPA.
           - Audio tracks and remote artwork remain CDN-backed and are not bundled as local media.
           EOF
 
           find build/full-source -name '.DS_Store' -delete
           (
             cd build/full-source
-            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build29-FULL-SOURCE.zip .
+            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build30-FULL-SOURCE.zip .
           )
-          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build29-FULL-SOURCE.zip \
-            | tee build/Muwa-Nasheeds-v1.4.0-build29-FULL-SOURCE.zip.sha256
+          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build30-FULL-SOURCE.zip \
+            | tee build/Muwa-Nasheeds-v1.4.0-build30-FULL-SOURCE.zip.sha256
 
       - name: Upload full source archive
         uses: actions/upload-artifact@v4
         with:
           name: Muwa-Nasheeds-Full-Source-${{ github.run_number }}
           path: |
-            build/Muwa-Nasheeds-v1.4.0-build29-FULL-SOURCE.zip
-            build/Muwa-Nasheeds-v1.4.0-build29-FULL-SOURCE.zip.sha256
+            build/Muwa-Nasheeds-v1.4.0-build30-FULL-SOURCE.zip
+            build/Muwa-Nasheeds-v1.4.0-build30-FULL-SOURCE.zip.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 90
@@ -205,7 +206,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
-          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='29'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='30'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
         shell: bash
@@ -222,7 +223,7 @@ jobs:
 
           test "$BUNDLE_ID" = "app.muwa.nasheeds"
           test "$VERSION" = "1.4.0"
-          test "$BUILD_NO" = "29"
+          test "$BUILD_NO" = "30"
           test -x "$APP_PATH/$EXECUTABLE"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist")" = "true"
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIColorName' "$APP_PATH/Info.plist")" = "LaunchBackground"
@@ -238,10 +239,10 @@ jobs:
 
           (
             cd build/package
-            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build29-performance-unsigned.ipa Payload
+            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build30-performance-finish-unsigned.ipa Payload
           )
 
-          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build29-performance-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build29-performance-unsigned.ipa.sha256
+          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build30-performance-finish-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build30-performance-finish-unsigned.ipa.sha256
 
           cat > build/build-info.json <<EOF
           {
@@ -255,7 +256,7 @@ jobs:
             "signed": false,
             "source_commit": "${GITHUB_SHA}",
             "source_archive_sha256": "f07bce80d5b9b39583a8bce19f3e3b71caed205332649f13ccb45a8b28997f84",
-            "audit_fixes": ["named-playlist-actions", "stable-migration", "empty-queue-persistence", "library-scroll-clearance", "mini-player-morph-coordinates", "compact-landscape-player", "independent-startup-loading", "fresh-now-playing-cleanup", "collapsing-transparent-home-header", "next-launch-resume-candidate", "compact-dismissible-resume-card", "restrained-cover-swipe", "relative-scroll-header-collapse", "library-quick-navigation-links", "landscape-full-width-content", "landscape-edge-to-edge-player-safe-controls", "black-system-launch-screen", "branded-artwork-loader", "sleep-timer", "next-track-prefetch", "home-header-real-scroll-collapse", "interactive-cover-paging-carousel", "native-ios-home-title-collapse", "cover-shrink-slide-replacement", "artwork-axis-gesture-lock", "edge-aware-cover-transition", "isolated-playback-clock", "coalesced-scrubbing", "decoded-artwork-cache", "background-thumbnail-blur", "animation-completion-paging", "lightweight-ambient-background"],
+            "audit_fixes": ["named-playlist-actions", "stable-migration", "empty-queue-persistence", "library-scroll-clearance", "mini-player-morph-coordinates", "compact-landscape-player", "independent-startup-loading", "fresh-now-playing-cleanup", "collapsing-transparent-home-header", "next-launch-resume-candidate", "compact-dismissible-resume-card", "restrained-cover-swipe", "relative-scroll-header-collapse", "library-quick-navigation-links", "landscape-full-width-content", "landscape-edge-to-edge-player-safe-controls", "black-system-launch-screen", "branded-artwork-loader", "sleep-timer", "next-track-prefetch", "home-header-real-scroll-collapse", "interactive-cover-paging-carousel", "native-ios-home-title-collapse", "cover-shrink-slide-replacement", "artwork-axis-gesture-lock", "edge-aware-cover-transition", "isolated-playback-clock", "coalesced-scrubbing", "decoded-artwork-cache", "background-thumbnail-blur", "animation-completion-paging", "lightweight-ambient-background", "modern-avasset-prefetch"],
             "run_url": "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           }
           EOF
@@ -265,8 +266,8 @@ jobs:
         with:
           name: Muwa-Nasheeds-Native-IPA-${{ github.run_number }}
           path: |
-            build/Muwa-Nasheeds-v1.4.0-build29-performance-unsigned.ipa
-            build/Muwa-Nasheeds-v1.4.0-build29-performance-unsigned.ipa.sha256
+            build/Muwa-Nasheeds-v1.4.0-build30-performance-finish-unsigned.ipa
+            build/Muwa-Nasheeds-v1.4.0-build30-performance-finish-unsigned.ipa.sha256
             build/build-info.json
           if-no-files-found: error
           compression-level: 0
@@ -286,7 +287,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Muwa-build29-review-screenshots
+          name: Muwa-build30-review-screenshots
           path: build/previews
           if-no-files-found: ignore
 
