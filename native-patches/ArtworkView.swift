@@ -122,7 +122,11 @@ private struct CachedArtworkImage<Content: View>: View {
     let cached = ArtworkMemoryCache.shared.image(for: url, backdrop: backdrop)
     let visiblePhase = loadedURL == url ? phase
       : cached.map { AsyncImagePhase.success(Image(uiImage: $0)) } ?? .empty
-    content(visiblePhase)
+    ZStack {
+      // Keep a real task host even when a backdrop's empty phase has no content.
+      Color.clear
+      content(visiblePhase)
+    }
       .task(id: url) {
         let image = await ArtworkImageStore.shared.image(for: url, backdrop: backdrop)
         guard !Task.isCancelled else { return }
@@ -207,3 +211,4 @@ actor ArtworkImageStore {
     return result
   }
 }
+
