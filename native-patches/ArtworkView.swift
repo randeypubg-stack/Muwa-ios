@@ -119,7 +119,10 @@ private struct CachedArtworkImage<Content: View>: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
-    content(loadedURL == url ? phase : .empty)
+    let cached = ArtworkMemoryCache.shared.image(for: url, backdrop: backdrop)
+    let visiblePhase = loadedURL == url ? phase
+      : cached.map { AsyncImagePhase.success(Image(uiImage: $0)) } ?? .empty
+    content(visiblePhase)
       .task(id: url) {
         let image = await ArtworkImageStore.shared.image(for: url, backdrop: backdrop)
         guard !Task.isCancelled else { return }
@@ -132,23 +135,39 @@ private struct CachedArtworkImage<Content: View>: View {
   }
 }
 
+// NSCache is thread-safe. A synchronous memory-only lookup avoids a placeholder
+// flash when the incoming swipe page becomes the selected page.
+private final class ArtworkMemoryCache: @unchecked Sendable {
+  static let shared = ArtworkMemoryCache()
+  private let cache = NSCache<NSString, UIImage>()
+  private init() {
+    cache.totalCostLimit = 24 * 1024 * 1024
+    cache.countLimit = 48
+  }
+  func image(for url: URL, backdrop: Bool) -> UIImage? {
+    cache.object(forKey: key(url, backdrop: backdrop))
+  }
+  func insert(_ image: UIImage, for url: URL, backdrop: Bool) {
+    let cost = (image.cgImage?.bytesPerRow ?? 0) * (image.cgImage?.height ?? 0)
+    cache.setObject(image, forKey: key(url, backdrop: backdrop), cost: cost)
+  }
+  private func key(_ url: URL, backdrop: Bool) -> NSString {
+    (url.absoluteString + (backdrop ? "#backdrop" : "#cover")) as NSString
+  }
+}
+
 // Downloads, downsampling and blur preparation execute on this background actor,
 // once per URL, rather than during scrolling or the cover transition.
 actor ArtworkImageStore {
   static let shared = ArtworkImageStore()
-  private let cache = NSCache<NSString, UIImage>()
+  private let cache = ArtworkMemoryCache.shared
   private var pending: [String: Task<UIImage?, Never>] = [:]
   private var failures: [String: Date] = [:]
   private let context = CIContext(options: [.cacheIntermediates: false])
 
-  init() {
-    cache.totalCostLimit = 24 * 1024 * 1024
-    cache.countLimit = 48
-  }
-
   func image(for url: URL, backdrop: Bool = false) async -> UIImage? {
     let key = url.absoluteString + (backdrop ? "#backdrop" : "#cover")
-    if let hit = cache.object(forKey: key as NSString) { return hit }
+    if let hit = cache.image(for: url, backdrop: backdrop) { return hit }
     if let failure = failures[key], Date().timeIntervalSince(failure) < 20 { return nil }
     if let task = pending[key] { return await task.value }
     let task = Task<UIImage?, Never> {
@@ -178,8 +197,7 @@ actor ArtworkImageStore {
     let result = await task.value
     pending[key] = nil
     if let result {
-      let cost = (result.cgImage?.bytesPerRow ?? 0) * (result.cgImage?.height ?? 0)
-      cache.setObject(result, forKey: key as NSString, cost: cost)
+      cache.insert(result, for: url, backdrop: backdrop)
       failures[key] = nil
     } else {
       failures[key] = Date()
@@ -187,3 +205,4 @@ actor ArtworkImageStore {
     return result
   }
 }
+
