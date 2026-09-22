@@ -927,37 +927,23 @@ struct MorphingPlayerView: View {
   private var smallActions: some View {
     HStack(spacing: 14) {
       Button {
-        guard premium.isPremium else {
-          premiumPresented = true
-          return
-        }
-
         withAnimation(.easeInOut(duration: 0.18)) {
           subtitlesVisible.toggle()
         }
       } label: {
-        ZStack(alignment: .topTrailing) {
-          Image(
-            systemName: subtitlesVisible
-              ? "captions.bubble.fill"
-              : "captions.bubble"
-          )
-          .frame(width: 44, height: 44)
-          .background(
-            .white.opacity(subtitlesVisible ? 0.14 : 0.055),
-            in: RoundedRectangle(cornerRadius: 16)
-          )
-
-          if !premium.isPremium {
-            Image(systemName: "lock.fill")
-              .font(.system(size: 8))
-              .padding(5)
-              .background(.black.opacity(0.7), in: Circle())
-              .offset(x: 4, y: -4)
-          }
-        }
+        Image(
+          systemName: subtitlesVisible
+            ? "captions.bubble.fill"
+            : "captions.bubble"
+        )
+        .frame(width: 44, height: 44)
+        .background(
+          .white.opacity(subtitlesVisible ? 0.14 : 0.055),
+          in: RoundedRectangle(cornerRadius: 16)
+        )
       }
       .buttonStyle(.plain)
+      .accessibilityLabel(subtitlesVisible ? "Скрыть субтитры" : "Показать субтитры")
 
       Button {
         queuePresented = true
