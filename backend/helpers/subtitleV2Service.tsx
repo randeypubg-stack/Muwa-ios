@@ -1,4 +1,4 @@
-import { flootAi, FlootAiOutOfCreditsError } from '@floot/ai';
+import { flootAi, FlootAiOutOfCreditsError, FlootAiRateLimitError } from '@floot/ai';
 import { createHash, randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
 import { db } from './db';
@@ -53,6 +53,7 @@ async function execute(request:Request,kind:'original'|'translation',input:any) 
    return json(result);
  } catch(error) {
    if(error instanceof FlootAiOutOfCreditsError)return json({code:'OUT_OF_CREDITS',error:'Распознавание временно недоступно.'},503);
+   if(error instanceof FlootAiRateLimitError)return json({code:'RATE_LIMIT',error:'Слишком много запросов. Попробуйте через минуту.'},429);
    console.error('Subtitle v2 failed',error instanceof Error?error.name:'unknown');
    return json({code:'RECOGNITION_FAILED',error:kind==='original'?'Не удалось уверенно распознать запись. Попробуйте ещё раз.':'Перевод не завершён. Оригинал сохранён, можно повторить.'},422);
  } finally {
