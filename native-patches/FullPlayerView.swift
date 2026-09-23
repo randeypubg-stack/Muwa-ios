@@ -24,6 +24,7 @@ struct MorphingPlayerView: View {
   @State private var queuePresented = false
   @State private var playlistCreatePresented = false
   @State private var subtitlesVisible = false
+  @State private var aiSubtitlesVisible = false
   @State private var subtitleLanguage: SubtitleLanguage = .arabic
   @State private var downloadError: String?
   @State private var dragStartExpansion: CGFloat?
@@ -531,7 +532,11 @@ struct MorphingPlayerView: View {
     )
     .frame(width: size, height: size)
     .overlay(alignment: .trailing) {
-      if showSubtitle, subtitlesVisible, progress > 0.74 {
+      if showSubtitle, aiSubtitlesVisible, progress > 0.74 {
+        AISubtitleExperience(timeline: player.timeline, track: pageTrack, compactWidth: min(196, size * 0.72))
+          .offset(x: min(24, size * 0.08))
+          .transition(.opacity)
+      } else if showSubtitle, subtitlesVisible, progress > 0.74 {
         ClockedSubtitleOverlay(timeline: player.timeline, track: pageTrack, language: subtitleLanguage)
         .offset(x: min(46, size * 0.14))
         .transition(.opacity)
@@ -750,6 +755,13 @@ struct MorphingPlayerView: View {
 
       Menu {
         Button {
+          guard premium.isPremium else { premiumPresented = true; return }
+          withAnimation(.easeInOut(duration: 0.22)) { aiSubtitlesVisible.toggle() }
+        } label: {
+          Label(aiSubtitlesVisible ? "Скрыть AI-субтитры" : "AI-субтитры и переводы", systemImage: "captions.bubble")
+        }
+        Divider()
+        Button {
           library.toggleLike(track)
         } label: {
           Label(
@@ -933,6 +945,7 @@ struct MorphingPlayerView: View {
         }
 
         withAnimation(.easeInOut(duration: 0.18)) {
+          aiSubtitlesVisible = false
           subtitlesVisible.toggle()
         }
       } label: {

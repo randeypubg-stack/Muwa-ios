@@ -61,3 +61,20 @@ s=s.replace(needle, '''    .task {
     }
 '''+needle)
 view.write_text(s)
+
+# AI review fixture, injected only after production IPA/source packaging.
+manager=root/'Sources/Services/SubtitleManager.swift'
+s=manager.read_text()
+needle='  func load(_ track: Track, retry: Bool = false) async {'
+fixture='\n    if ProcessInfo.processInfo.arguments.contains("--audit-ai") {\n      document = AISubtitleDocument(version: 2, id: "fixture", language: "ar", segments: [\n        AISubtitleSegment(id: "s0", start: 0, end: 8, original: "السلام عليكم ورحمة الله", words: [\n          SubtitleWord(text: "السلام", start: 0, end: 2), SubtitleWord(text: "عليكم", start: 2, end: 4),\n          SubtitleWord(text: "ورحمة", start: 4, end: 6), SubtitleWord(text: "الله", start: 6, end: 8)], timing: "estimated"),\n        AISubtitleSegment(id: "s1", start: 9, end: 15, original: "مرحبا بكم", words: [], timing: "phrase")])\n      translations["ru"] = AISubtitleTranslation(documentId: "fixture", language: "ru", segments: ["s0": "Мир вам и милость Аллаха", "s1": "Добро пожаловать"])\n      return\n    }\n'
+assert needle in s
+manager.write_text(s.replace(needle,needle+fixture))
+player=root/'Sources/Views/Player/FullPlayerView.swift'
+s=player.read_text().replace('    .onChange(of: expansion)', '    .task { if ProcessInfo.processInfo.arguments.contains("--audit-ai") { aiSubtitlesVisible = true } }\n    .onChange(of: expansion)',1)
+player.write_text(s)
+overlay=root/'Sources/Views/Player/PlayerSubtitleOverlay.swift'
+s=overlay.read_text().replace('    .task(id: track.audioURL) { await manager.load(track) }', '    .task(id: track.audioURL) { await manager.load(track); language = .ru; if ProcessInfo.processInfo.arguments.contains("--audit-ai-expanded") { expanded = true } }')
+overlay.write_text(s)
+rootview=root/'Sources/App/RootView.swift'
+s=rootview.read_text().replace('        playerExpansion = 1', '        playerExpansion = 1\n        if args.contains("--audit-ai") { player.currentTime = 3 }')
+rootview.write_text(s)

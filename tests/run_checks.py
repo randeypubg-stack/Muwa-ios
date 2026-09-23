@@ -17,3 +17,7 @@ clock = '@MainActor\n' + player[player.index('final class PlaybackTimeline:'):]
 subprocess.run(['swiftc', '-parse-as-library', '-o', str(build/'timeline-checks'),
  str(build/'PlaybackTimeline.swift'), 'tests/TimelineChecks.swift'], check=True)
 subprocess.run([str(build/'timeline-checks')], check=True)
+
+subprocess.run(['swiftc', '-parse-as-library', '-o', str(build/'ai-subtitle-checks'),
+ str(root/'Sources/Models/SubtitleModels.swift'), 'tests/AISubtitleChecks.swift'], check=True)
+subprocess.run([str(build/'ai-subtitle-checks')], check=True)
