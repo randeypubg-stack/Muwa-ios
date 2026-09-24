@@ -24,7 +24,6 @@ struct MorphingPlayerView: View {
   @State private var queuePresented = false
   @State private var playlistCreatePresented = false
   @State private var subtitlesVisible = false
-  @State private var subtitleLanguage: SubtitleLanguage = .arabic
   @State private var downloadError: String?
   @State private var dragStartExpansion: CGFloat?
   @State private var coverDragX: CGFloat = 0
@@ -524,19 +523,47 @@ struct MorphingPlayerView: View {
     showSubtitle: Bool,
     progress: CGFloat
   ) -> some View {
-    ArtworkView(
-      url: pageTrack.artworkURL,
-      cornerRadius: cornerRadius,
-      placeholderSystemImage: "music.note"
-    )
-    .frame(width: size, height: size)
-    .overlay(alignment: .trailing) {
-      if showSubtitle, subtitlesVisible, progress > 0.74 {
-        ClockedSubtitleOverlay(timeline: player.timeline, track: pageTrack, language: subtitleLanguage)
-        .offset(x: min(46, size * 0.14))
+    let subtitleLayoutActive = subtitlesVisible && progress > 0.74
+    let coverScale: CGFloat = subtitleLayoutActive ? 0.82 : 1
+    let coverShift: CGFloat = subtitleLayoutActive ? -(size * 0.13) : 0
+    let railWidth = min(116, max(92, size * 0.42))
+    let railOffset = size * 0.47
+    let showRail =
+      showSubtitle
+      && subtitleLayoutActive
+      && !coverPaging
+      && abs(coverDragX) < 6
+
+    return ZStack {
+      ArtworkView(
+        url: pageTrack.artworkURL,
+        cornerRadius: cornerRadius,
+        placeholderSystemImage: "music.note"
+      )
+      .frame(width: size, height: size)
+      .scaleEffect(coverScale)
+      .offset(x: coverShift)
+
+      if showRail {
+        AISubtitleExperience(
+          timeline: player.timeline,
+          track: pageTrack,
+          compactWidth: railWidth
+        )
+        .frame(
+          width: railWidth,
+          height: min(170, size * 0.72)
+        )
+        .offset(x: railOffset)
         .transition(.opacity)
+        .zIndex(4)
       }
     }
+    .frame(width: size, height: size)
+    .animation(
+      .spring(response: 0.34, dampingFraction: 0.94),
+      value: subtitleLayoutActive
+    )
   }
 
   private func swipeNeighbor(direction: Int) -> Track? {
@@ -927,37 +954,25 @@ struct MorphingPlayerView: View {
   private var smallActions: some View {
     HStack(spacing: 14) {
       Button {
-        guard premium.isPremium else {
-          premiumPresented = true
-          return
-        }
-
         withAnimation(.easeInOut(duration: 0.18)) {
           subtitlesVisible.toggle()
         }
       } label: {
-        ZStack(alignment: .topTrailing) {
-          Image(
-            systemName: subtitlesVisible
-              ? "captions.bubble.fill"
-              : "captions.bubble"
-          )
-          .frame(width: 44, height: 44)
-          .background(
-            .white.opacity(subtitlesVisible ? 0.14 : 0.055),
-            in: RoundedRectangle(cornerRadius: 16)
-          )
-
-          if !premium.isPremium {
-            Image(systemName: "lock.fill")
-              .font(.system(size: 8))
-              .padding(5)
-              .background(.black.opacity(0.7), in: Circle())
-              .offset(x: 4, y: -4)
-          }
-        }
+        Image(
+          systemName: subtitlesVisible
+            ? "captions.bubble.fill"
+            : "captions.bubble"
+        )
+        .frame(width: 44, height: 44)
+        .background(
+          .white.opacity(subtitlesVisible ? 0.14 : 0.055),
+          in: RoundedRectangle(cornerRadius: 16)
+        )
       }
       .buttonStyle(.plain)
+      .accessibilityLabel(
+        subtitlesVisible ? "Скрыть субтитры" : "Показать субтитры"
+      )
 
       Button {
         queuePresented = true

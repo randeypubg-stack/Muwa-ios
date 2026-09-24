@@ -1,4 +1,4 @@
-import json, subprocess, time
+import json, signal, subprocess, time
 import shutil
 from pathlib import Path
 
@@ -23,7 +23,7 @@ for i,d in enumerate(selected):
     run('xcrun','simctl','bootstatus',udid,'-b')
     run('xcrun','simctl','ui',udid,'appearance','dark')
     run('xcrun','simctl','install',udid,str(app))
-    for label,args in [('home',[]),('player',['--audit-player']),('library',['--audit-library']),('landscape',['--audit-player','--audit-landscape'])]:
+    for label,args in [('home',[]),('player',['--audit-player']),('library',['--audit-library']),('landscape',['--audit-player','--audit-landscape']),('subtitles',['--audit-player','--audit-ai']),('subtitle-reader',['--audit-player','--audit-ai','--audit-ai-expanded'])]:
         run('xcrun','simctl','launch','--terminate-running-process',udid,'app.muwa.nasheeds',*args)
         time.sleep(5)
         run('xcrun','simctl','io',udid,'screenshot',str(out/f'{i}-{label}.png'))
@@ -36,6 +36,19 @@ for i,d in enumerate(selected):
             assert 'cover=true; backdrop=true' in report, report
             (out/f'{i}-artwork-check.txt').write_text(report)
             shutil.copy2(data/'Documents/cached-backdrop.png', out/f'{i}-cached-backdrop.png')
+    if i == 0:
+        run('xcrun','simctl','launch','--terminate-running-process',udid,'app.muwa.nasheeds','--audit-player','--audit-ai','--audit-subtitle-motion')
+        time.sleep(4)
+        video=out/'subtitle-rail-motion.mp4'
+        proc=subprocess.Popen(
+            ['xcrun','simctl','io',udid,'recordVideo','--codec=h264',str(video)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        time.sleep(8)
+        proc.send_signal(signal.SIGINT)
+        proc.wait(timeout=30)
+        assert video.exists() and video.stat().st_size > 10000, 'Subtitle motion video was not captured'
     run('xcrun','simctl','shutdown',udid)
     (out/f'{i}-device.txt').write_text(d['name'])
 
