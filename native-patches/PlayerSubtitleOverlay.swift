@@ -71,7 +71,8 @@ struct AISubtitleExperience: View {
           .frame(width: compactWidth)
       }
     }
-    .frame(width: compactWidth, maxHeight: .infinity)
+    .frame(width: compactWidth)
+    .frame(maxHeight: .infinity)
     .task(id: track.id) {
       await manager.load(track)
       if manager.document == nil {
