@@ -513,7 +513,10 @@ final class PlayerManager: ObservableObject {
     prefetchedAsset = asset
 
     // Warm metadata/network resolution without starting playback.
-    asset.loadValuesAsynchronously(forKeys: ["playable"]) {}
+    // The project targets iOS 17+, so use AVFoundation's modern async property API.
+    Task { [asset] in
+      _ = try? await asset.load(.isPlayable)
+    }
   }
 
   private func loadNowPlayingArtwork(for track: Track) {
