@@ -74,10 +74,10 @@ struct AISubtitleExperience: View {
     .frame(width: compactWidth)
     .frame(maxHeight: .infinity)
     .task(id: track.id) {
+      // Standard subtitles should never wait on an AI network request.
+      // Start the legacy/cached source immediately; AI can replace it when ready.
+      legacySubtitles.load(for: track)
       await manager.load(track)
-      if manager.document == nil {
-        legacySubtitles.load(for: track)
-      }
     }
     .sheet(isPresented: $expanded) {
       AISubtitleReader(
