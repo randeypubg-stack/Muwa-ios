@@ -62,19 +62,82 @@ s=s.replace(needle, '''    .task {
 '''+needle)
 view.write_text(s)
 
-# AI review fixture, injected only after production IPA/source packaging.
+# Subtitle review fixture, injected only after production IPA/source packaging.
 manager=root/'Sources/Services/SubtitleManager.swift'
 s=manager.read_text()
 needle='  func load(_ track: Track, retry: Bool = false) async {'
-fixture='\n    if ProcessInfo.processInfo.arguments.contains("--audit-ai") {\n      document = AISubtitleDocument(version: 2, id: "fixture", language: "ar", segments: [\n        AISubtitleSegment(id: "s0", start: 0, end: 8, original: "السلام عليكم ورحمة الله", words: [\n          SubtitleWord(text: "السلام", start: 0, end: 2), SubtitleWord(text: "عليكم", start: 2, end: 4),\n          SubtitleWord(text: "ورحمة", start: 4, end: 6), SubtitleWord(text: "الله", start: 6, end: 8)], timing: "estimated"),\n        AISubtitleSegment(id: "s1", start: 9, end: 15, original: "مرحبا بكم", words: [], timing: "phrase")])\n      translations["ru"] = AISubtitleTranslation(documentId: "fixture", language: "ru", segments: ["s0": "Мир вам и милость Аллаха", "s1": "Добро пожаловать"])\n      return\n    }\n'
+fixture='''\n    if ProcessInfo.processInfo.arguments.contains("--audit-ai") {
+      document = AISubtitleDocument(version: 2, id: "fixture", language: "ar", segments: [
+        AISubtitleSegment(id: "s0", start: 0, end: 5, original: "السلام عليكم", words: [
+          SubtitleWord(text: "السلام", start: 0, end: 2.4),
+          SubtitleWord(text: "عليكم", start: 2.4, end: 5)], timing: "estimated"),
+        AISubtitleSegment(id: "s1", start: 5, end: 10, original: "ورحمة الله وبركاته", words: [
+          SubtitleWord(text: "ورحمة", start: 5, end: 6.5),
+          SubtitleWord(text: "الله", start: 6.5, end: 8),
+          SubtitleWord(text: "وبركاته", start: 8, end: 10)], timing: "estimated"),
+        AISubtitleSegment(id: "s2", start: 10, end: 15, original: "مرحبا بكم جميعا", words: [], timing: "phrase"),
+        AISubtitleSegment(id: "s3", start: 15, end: 20, original: "في هذا المجلس المبارك", words: [], timing: "phrase"),
+        AISubtitleSegment(id: "s4", start: 20, end: 25, original: "نسأل الله القبول", words: [], timing: "phrase")
+      ])
+      translations["ru"] = AISubtitleTranslation(
+        documentId: "fixture",
+        language: "ru",
+        segments: [
+          "s0": "Мир вам",
+          "s1": "И милость Аллаха и Его благословение",
+          "s2": "Добро пожаловать всем",
+          "s3": "На это благословенное собрание",
+          "s4": "Просим Аллаха принять"
+        ]
+      )
+      return
+    }
+'''
 assert needle in s
 manager.write_text(s.replace(needle,needle+fixture))
+
 player=root/'Sources/Views/Player/FullPlayerView.swift'
-s=player.read_text().replace('    .onChange(of: expansion)', '    .task { if ProcessInfo.processInfo.arguments.contains("--audit-ai") { aiSubtitlesVisible = true } }\n    .onChange(of: expansion)',1)
+s=player.read_text()
+needle='    .onChange(of: expansion)'
+assert needle in s
+s=s.replace(
+    needle,
+    '    .task { if ProcessInfo.processInfo.arguments.contains("--audit-ai") { subtitlesVisible = true } }\n'+needle,
+    1
+)
 player.write_text(s)
+
 overlay=root/'Sources/Views/Player/PlayerSubtitleOverlay.swift'
-s=overlay.read_text().replace('    .task(id: track.audioURL) { await manager.load(track) }', '    .task(id: track.audioURL) { await manager.load(track); language = .ru; if ProcessInfo.processInfo.arguments.contains("--audit-ai-expanded") { expanded = true } }')
+s=overlay.read_text()
+needle='    .sheet(isPresented: $expanded) {'
+assert needle in s
+s=s.replace(
+    needle,
+    '    .task { if ProcessInfo.processInfo.arguments.contains("--audit-ai-expanded") { expanded = true } }\n'+needle,
+    1
+)
 overlay.write_text(s)
+
 rootview=root/'Sources/App/RootView.swift'
-s=rootview.read_text().replace('        playerExpansion = 1', '        playerExpansion = 1\n        if args.contains("--audit-ai") { player.currentTime = 3 }')
+s=rootview.read_text()
+needle='        playerExpansion = 1'
+assert needle in s
+s=s.replace(
+    needle,
+    '''        playerExpansion = 1
+        if args.contains("--audit-ai") {
+          player.duration = 25
+          player.currentTime = 2
+        }
+        if args.contains("--audit-subtitle-motion") {
+          Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            for tick in 0...115 {
+              player.currentTime = min(24.8, 1.5 + (Double(tick) * 0.20))
+              try? await Task.sleep(for: .milliseconds(100))
+            }
+          }
+        }''',
+    1
+)
 rootview.write_text(s)
