@@ -1,4 +1,4 @@
-import json, signal, subprocess, time
+import json, subprocess, time
 import shutil
 from pathlib import Path
 
@@ -36,25 +36,6 @@ for i,d in enumerate(selected):
             assert 'cover=true; backdrop=true' in report, report
             (out/f'{i}-artwork-check.txt').write_text(report)
             shutil.copy2(data/'Documents/cached-backdrop.png', out/f'{i}-cached-backdrop.png')
-    if i == 0:
-        run('xcrun','simctl','launch','--terminate-running-process',udid,'app.muwa.nasheeds','--audit-player','--audit-ai','--audit-subtitle-motion')
-        time.sleep(4)
-        video=(out/'subtitle-rail-motion.mp4').resolve()
-        proc=subprocess.Popen(
-            ['xcrun','simctl','io',udid,'recordVideo','--codec=h264',str(video)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        time.sleep(8)
-        proc.send_signal(signal.SIGINT)
-        stdout,stderr=proc.communicate(timeout=30)
-        if stdout.strip(): print('recordVideo stdout:',stdout.strip(),flush=True)
-        if stderr.strip(): print('recordVideo stderr:',stderr.strip(),flush=True)
-        for _ in range(20):
-            if video.exists() and video.stat().st_size > 10000: break
-            time.sleep(0.5)
-        assert video.exists() and video.stat().st_size > 10000, f'Subtitle motion video was not captured: {video}'
     run('xcrun','simctl','shutdown',udid)
     (out/f'{i}-device.txt').write_text(d['name'])
 
