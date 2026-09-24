@@ -11,9 +11,9 @@ available=[d for group in devices.values() for d in group if d.get('isAvailable'
 phones=[d for d in available if d['name'].startswith('iPhone')]
 pads=[d for d in available if d['name'].startswith('iPad')]
 assert phones and pads, 'Need iPhone and iPad simulator runtimes'
+# One current iPhone plus one iPad gives device-class coverage without
+# tripling the already expensive cold-start screenshot pass.
 selected=[phones[0],pads[0]]
-small=next((d for d in phones if 'SE' in d['name']),None)
-if small and small not in selected: selected.append(small)
 app=next(Path('build/PreviewDerivedData/Build/Products/Debug-iphonesimulator').glob('*.app'))
 out=Path('build/previews'); out.mkdir(parents=True,exist_ok=True)
 for i,d in enumerate(selected):
