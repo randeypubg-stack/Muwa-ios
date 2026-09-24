@@ -291,8 +291,12 @@ jobs:
           xcodebuild -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj" -scheme MuwaNasheeds -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$PWD/build/PreviewDerivedData" CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build/simulator.log
 
       - name: Capture iPhone and iPad review screenshots
-        timeout-minutes: 30
+        timeout-minutes: 20
         run: python3 tests/capture_previews.py
+
+      - name: Capture subtitle motion video
+        timeout-minutes: 10
+        run: python3 tests/capture_subtitle_motion.py
 
       - name: Upload review screenshots
         if: always()
