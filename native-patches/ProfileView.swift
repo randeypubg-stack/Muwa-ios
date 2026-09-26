@@ -1,3 +1,4 @@
+import StoreKit
 import SwiftUI
 import UIKit
 
@@ -6,6 +7,7 @@ struct ProfileView: View {
   @EnvironmentObject private var auth: AuthManager
   @State private var premiumPresented = false
   @State private var aboutPresented = false
+  @State private var promoPresented = false
 
   let openSearch: () -> Void
 
@@ -44,6 +46,10 @@ struct ProfileView: View {
         .padding(.bottom, layout.isCompactLandscapePhone ? 132 : 170)
         .adaptiveFrame(maxWidth: min(layout.contentMaxWidth, 920))
       }
+    }
+    .offerCodeRedemption(isPresented: $promoPresented)
+    .onChange(of: promoPresented) { _, presented in
+      if !presented { Task { await premium.refreshEntitlements() } }
     }
     .sheet(isPresented: $premiumPresented) { PremiumView() }
     .sheet(isPresented: $aboutPresented) {
@@ -134,6 +140,10 @@ struct ProfileView: View {
 
   private var settingsBlock: some View {
     VStack(spacing: 0) {
+      profileRow("ПРОМОКОД", "gift") {
+        promoPresented = true
+      }
+      Divider().overlay(.white.opacity(0.05))
       profileRow("Настройки приложения", "gearshape") {
         if let url = URL(string: UIApplication.openSettingsURLString) {
           UIApplication.shared.open(url)
@@ -173,7 +183,9 @@ struct ProfileView: View {
       }
       .foregroundStyle(destructive ? Color.red : Color.primary)
       .padding(.horizontal, 14)
-      .frame(height: 54)
+      .frame(maxWidth: .infinity)
+      .frame(minHeight: 54)
+      .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
   }

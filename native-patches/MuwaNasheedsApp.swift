@@ -38,7 +38,10 @@ struct MuwaNasheedsApp: App {
         .task { await premium.load() }
         .onChange(of: scenePhase) { _, phase in
           player.handleScenePhase(phase)
+          if phase == .active { Task { await premium.refreshEntitlements() } }
         }
     }
   }
 }
+
+
