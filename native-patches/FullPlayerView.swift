@@ -755,7 +755,6 @@ struct MorphingPlayerView: View {
 
       Menu {
         Button {
-          guard premium.isPremium else { premiumPresented = true; return }
           withAnimation(.easeInOut(duration: 0.22)) { aiSubtitlesVisible.toggle() }
         } label: {
           Label(aiSubtitlesVisible ? "Скрыть AI-субтитры" : "AI-субтитры и переводы", systemImage: "captions.bubble")
@@ -939,11 +938,6 @@ struct MorphingPlayerView: View {
   private var smallActions: some View {
     HStack(spacing: 14) {
       Button {
-        guard premium.isPremium else {
-          premiumPresented = true
-          return
-        }
-
         withAnimation(.easeInOut(duration: 0.18)) {
           aiSubtitlesVisible = false
           subtitlesVisible.toggle()
@@ -961,13 +955,7 @@ struct MorphingPlayerView: View {
             in: RoundedRectangle(cornerRadius: 16)
           )
 
-          if !premium.isPremium {
-            Image(systemName: "lock.fill")
-              .font(.system(size: 8))
-              .padding(5)
-              .background(.black.opacity(0.7), in: Circle())
-              .offset(x: 4, y: -4)
-          }
+
         }
       }
       .buttonStyle(.plain)
@@ -1215,3 +1203,4 @@ private struct ClockedSubtitleOverlay: View {
     PlayerSubtitleOverlay(track: track, currentTime: timeline.snapshot.time, language: language)
   }
 }
+

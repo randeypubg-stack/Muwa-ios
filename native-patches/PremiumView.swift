@@ -12,7 +12,6 @@ struct PremiumView: View {
   private let benefits = [
     ("Фоновое\nпрослушивание", "headphones"),
     ("Офлайн-\nдоступ", "arrow.down.circle"),
-    ("Тексты\nи переводы", "captions.bubble"),
     ("AirPlay", "airplayaudio"),
     ("Управление с\nэкрана блокировки", "iphone"),
   ]
@@ -484,3 +483,5 @@ private struct MosqueSilhouette: Shape {
     return p
   }
 }
+
+

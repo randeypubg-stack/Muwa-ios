@@ -43,6 +43,7 @@ s=s.replace(needle, '''    .task {
         player.play(Track.catalog[0], autoplay: false)
         playerExpansion = 1
       }
+      if args.contains("--audit-profile") { selection = .profile }
       if args.contains("--audit-library") {
         selection = .library
         requestedLibraryDestination = .playlist
@@ -78,3 +79,4 @@ overlay.write_text(s)
 rootview=root/'Sources/App/RootView.swift'
 s=rootview.read_text().replace('        playerExpansion = 1', '        playerExpansion = 1\n        if args.contains("--audit-ai") { player.currentTime = 3 }')
 rootview.write_text(s)
+

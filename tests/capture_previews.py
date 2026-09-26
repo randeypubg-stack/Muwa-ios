@@ -23,7 +23,7 @@ for i,d in enumerate(selected):
     run('xcrun','simctl','bootstatus',udid,'-b')
     run('xcrun','simctl','ui',udid,'appearance','dark')
     run('xcrun','simctl','install',udid,str(app))
-    for label,args in [('home',[]),('player',['--audit-player']),('library',['--audit-library']),('landscape',['--audit-player','--audit-landscape']),('ai',['--audit-player','--audit-ai']),('ai-reader',['--audit-player','--audit-ai','--audit-ai-expanded'])]:
+    for label,args in [('home',[]),('profile',['--audit-profile']),('player',['--audit-player']),('library',['--audit-library']),('landscape',['--audit-player','--audit-landscape']),('ai',['--audit-player','--audit-ai']),('ai-reader',['--audit-player','--audit-ai','--audit-ai-expanded'])]:
         run('xcrun','simctl','launch','--terminate-running-process',udid,'app.muwa.nasheeds',*args)
         time.sleep(5)
         run('xcrun','simctl','io',udid,'screenshot',str(out/f'{i}-{label}.png'))
@@ -38,4 +38,5 @@ for i,d in enumerate(selected):
             shutil.copy2(data/'Documents/cached-backdrop.png', out/f'{i}-cached-backdrop.png')
     run('xcrun','simctl','shutdown',udid)
     (out/f'{i}-device.txt').write_text(d['name'])
+
 

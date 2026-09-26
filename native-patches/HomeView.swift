@@ -27,6 +27,8 @@ struct HomeView: View {
               )
             }
 
+            discoverySections
+
             if layout.isWide {
               recommendationsGrid(layout: layout)
               popularGrid(layout: layout)
@@ -66,6 +68,72 @@ struct HomeView: View {
       .toolbarBackground(.hidden, for: .navigationBar)
       .toolbarColorScheme(.dark, for: .navigationBar)
     }
+  }
+
+  private var discoverySections: some View {
+    VStack(alignment: .leading, spacing: 28) {
+      VStack(alignment: .leading, spacing: 14) {
+        Text("Подборки").font(.title2.bold())
+        ScrollView(.horizontal, showsIndicators: false) {
+          HStack(spacing: 14) {
+            collectionLink("На несколько минут", subtitle: "До 3 минут", icon: "clock", tracks: Track.catalog.filter { $0.duration <= 180 })
+            collectionLink("Слушать подольше", subtitle: "От 3 минут", icon: "headphones", tracks: Track.catalog.filter { $0.duration > 180 })
+            collectionLink("Вся коллекция", subtitle: "Все нашиды Muwa", icon: "square.stack", tracks: Track.catalog)
+          }
+        }
+      }
+      VStack(alignment: .leading, spacing: 12) {
+        Text("Исполнители").font(.title2.bold())
+        // Channel handles in the legacy catalog are not verified artist names.
+        discoveryPlaceholder("person.2", title: "Знакомство с голосами", detail: "Страницы исполнителей появятся здесь вместе с их нашидами.")
+      }
+      VStack(alignment: .leading, spacing: 12) {
+        Text("Новые релизы").font(.title2.bold())
+        // Do not label legacy tracks as new without a verified release date.
+        discoveryPlaceholder("sparkles", title: "Здесь будут новые нашиды", detail: "А пока откройте подборки и найдите то, что хочется послушать.")
+      }
+    }
+  }
+
+  private func collectionLink(_ title: String, subtitle: String, icon: String, tracks: [Track]) -> some View {
+    NavigationLink {
+      ScrollView {
+        LazyVStack(spacing: 12) {
+          ForEach(tracks) { track in popularRow(track) }
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 170)
+      }
+      .navigationTitle(title)
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbarBackground(.hidden, for: .navigationBar)
+    } label: {
+      VStack(alignment: .leading, spacing: 12) {
+        Image(systemName: icon)
+          .font(.system(size: 27, weight: .light))
+          .foregroundStyle(Color(red: 0.72, green: 0.82, blue: 0.98))
+        Spacer(minLength: 8)
+        Text(title).font(.headline).lineLimit(2)
+        Text(subtitle).font(.caption).foregroundStyle(.secondary)
+      }
+      .frame(width: 170, height: 136, alignment: .leading)
+      .padding(18)
+      .background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 24))
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+  }
+
+  private func discoveryPlaceholder(_ icon: String, title: String, detail: String) -> some View {
+    HStack(alignment: .top, spacing: 14) {
+      Image(systemName: icon).font(.title2).foregroundStyle(.secondary).frame(width: 30)
+      VStack(alignment: .leading, spacing: 6) {
+        Text(title).font(.subheadline.weight(.semibold))
+        Text(detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+      }
+      Spacer(minLength: 0)
+    }
+    .padding(.vertical, 10)
   }
 
   private func resumeListening(
@@ -305,3 +373,5 @@ struct HomeView: View {
     return String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60)
   }
 }
+
+

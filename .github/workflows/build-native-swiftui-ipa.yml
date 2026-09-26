@@ -66,6 +66,8 @@ jobs:
           cp "$PWD/native-patches/AdaptiveLayout.swift" "$ROOT/Sources/Theme/AdaptiveLayout.swift"
           cp "$PWD/native-patches/RootView.swift" "$ROOT/Sources/App/RootView.swift"
           cp "$PWD/native-patches/HomeView.swift" "$ROOT/Sources/Views/Home/HomeView.swift"
+          cp "$PWD/native-patches/ProfileView.swift" "$ROOT/Sources/Views/Profile/ProfileView.swift"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Muwa" "$ROOT/Info.plist"
           cp "$PWD/native-patches/TrackRow.swift" "$ROOT/Sources/Views/Components/TrackRow.swift"
           cp "$PWD/native-patches/QueueView.swift" "$ROOT/Sources/Views/Player/QueueView.swift"
           cp "$PWD/native-patches/Theme.swift" "$ROOT/Sources/Theme/Theme.swift"
@@ -138,7 +140,7 @@ jobs:
           test "$WIDTH" = "1024"
           test "$HEIGHT" = "1024"
 
-          sed -i '' 's/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = 30;/g' "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
+          sed -i '' 's/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = 31;/g' "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
           echo "SOURCE_ROOT=$ROOT" >> "$GITHUB_ENV"
 
       - name: Package full source archive
@@ -158,7 +160,7 @@ jobs:
           cat > build/full-source/README-SOURCE.txt <<EOF
           Muwa Nasheeds — Full Source Archive
           Version: 1.4.0
-          Build: 30
+          Build: 31
           Commit: ${GITHUB_SHA}
 
           Contents:
@@ -172,25 +174,25 @@ jobs:
 
           Notes:
           - This archive contains source code and project resources, not only the IPA.
-          - The project is the same assembled source tree used for the build-30 IPA.
+          - The project is the same assembled source tree used for the build-31 IPA.
           - Audio tracks and remote artwork remain CDN-backed and are not bundled as local media.
           EOF
 
           find build/full-source -name '.DS_Store' -delete
           (
             cd build/full-source
-            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build30-FULL-SOURCE.zip .
+            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build31-FULL-SOURCE.zip .
           )
-          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build30-FULL-SOURCE.zip \
-            | tee build/Muwa-Nasheeds-v1.4.0-build30-FULL-SOURCE.zip.sha256
+          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build31-FULL-SOURCE.zip \
+            | tee build/Muwa-Nasheeds-v1.4.0-build31-FULL-SOURCE.zip.sha256
 
       - name: Upload full source archive
         uses: actions/upload-artifact@v4
         with:
           name: Muwa-Nasheeds-Full-Source-${{ github.run_number }}
           path: |
-            build/Muwa-Nasheeds-v1.4.0-build30-FULL-SOURCE.zip
-            build/Muwa-Nasheeds-v1.4.0-build30-FULL-SOURCE.zip.sha256
+            build/Muwa-Nasheeds-v1.4.0-build31-FULL-SOURCE.zip
+            build/Muwa-Nasheeds-v1.4.0-build31-FULL-SOURCE.zip.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 90
@@ -209,7 +211,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
-          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='30'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='31'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
         shell: bash
@@ -226,7 +228,7 @@ jobs:
 
           test "$BUNDLE_ID" = "app.muwa.nasheeds"
           test "$VERSION" = "1.4.0"
-          test "$BUILD_NO" = "30"
+          test "$BUILD_NO" = "31"
           test -x "$APP_PATH/$EXECUTABLE"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist")" = "true"
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIColorName' "$APP_PATH/Info.plist")" = "LaunchBackground"
@@ -242,10 +244,10 @@ jobs:
 
           (
             cd build/package
-            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build30-ai-subtitles-unsigned.ipa Payload
+            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build31-ai-subtitles-unsigned.ipa Payload
           )
 
-          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build30-ai-subtitles-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build30-ai-subtitles-unsigned.ipa.sha256
+          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build31-ai-subtitles-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build31-ai-subtitles-unsigned.ipa.sha256
 
           cat > build/build-info.json <<EOF
           {
@@ -269,8 +271,8 @@ jobs:
         with:
           name: Muwa-Nasheeds-Native-IPA-${{ github.run_number }}
           path: |
-            build/Muwa-Nasheeds-v1.4.0-build30-ai-subtitles-unsigned.ipa
-            build/Muwa-Nasheeds-v1.4.0-build30-ai-subtitles-unsigned.ipa.sha256
+            build/Muwa-Nasheeds-v1.4.0-build31-ai-subtitles-unsigned.ipa
+            build/Muwa-Nasheeds-v1.4.0-build31-ai-subtitles-unsigned.ipa.sha256
             build/build-info.json
           if-no-files-found: error
           compression-level: 0
@@ -290,7 +292,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Muwa-build30-review-screenshots
+          name: Muwa-build31-review-screenshots
           path: build/previews
           if-no-files-found: ignore
 
@@ -305,5 +307,6 @@ jobs:
             build/architecture.txt
           if-no-files-found: ignore
           retention-days: 14
+
 
 
