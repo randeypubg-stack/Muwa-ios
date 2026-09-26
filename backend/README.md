@@ -1,13 +1,12 @@
-# Muwa AI subtitles v2
+# Muwa subtitles — OpenAI backend
 
-Additive Floot backend. Legacy `/_api/transcribe` is unchanged.
+The additive v2 endpoints preserve the app contract and legacy transcribe endpoint. No Premium entitlement is required. A signed-in account is required for generation, with the existing daily limit of 20 new operations per user, shared database caching and duplicate-request leases.
 
-New authenticated POST routes: `/_api/subtitles/original` and `/_api/subtitles/translate`, plain JSON. Sources are limited to the application's public CDN audio paths, at most 10 minutes. Original transcription detects language and returns immutable phrase IDs and optional estimated word times. Translations reference the stored original and never rewrite timings or original text. Missing/malformed word times use phrase-level highlighting, never interpolated word offsets.
+Provider: server-side OPENAI_API_KEY (connected in Floot). Original: whisper-1 verbose JSON with word and segment timestamps. Translation: gpt-4.1-mini, six target languages, immutable original IDs/times. Canonical Muwa CDN only, no redirects, at most 24 MiB audio / 10 minutes. No generated timestamps, incomplete word alignments fall back to phrase highlighting. Keys never enter the native app or repository.
 
-AI provider: existing Floot AI Gemini 3.5 Flash. Requires available Floot AI credits. Current live test on 2026-09-23 returned `OUT_OF_CREDITS`; transcription accuracy and successful translation are NOT yet verified on real audio. Do not claim otherwise or ship fixtures as results.
+2026-09-26 real audio test: upstream 429 credit_balance_exhausted, type insufficient_quota. Mapped to OUT_OF_CREDITS/503. Connection is configured but successful real transcription and six translations are NOT yet verified. No production publication. Replenish the connected API balance before repeating integration checks. Test accounts were deleted.
 
-Schema migration is additive. Cached results are shared for public audio. Charged generation requires a signed-in user; a database lease coalesces duplicate requests, and an atomic daily counter caps new operations at 20 per user. Native app keeps existing Premium UI gating. This is not a new server-side payment/entitlement system.
+Unit tests cover language normalization, word preservation, missing word fallback, silence omission, source restrictions, quota errors, and existing document/translation validation. These are not real recognition-quality evidence.
 
-Deployment: write the helper and endpoint files to the existing Floot project, apply migration.sql, run helper validation tests and real authenticated audio/translation checks, then publish the backward-compatible changes. No API secrets are in native code.
+Next: validate real nasheeds and all translations, then publish backward-compatible server changes. Persisted transcript cache remains available independently of future API calls. Provider usage requires ongoing API balance; this is not offline on-device inference.
 
-Provider timing is estimated, not certified forced alignment. Singing, overlapping voices, noise and unfamiliar languages still require accuracy evaluation. A missing/unrecognized phrase remains a gap. The app shows automatic recognition status and preserves the original if a translation fails.
