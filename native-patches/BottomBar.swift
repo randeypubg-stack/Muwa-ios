@@ -19,11 +19,7 @@ struct BottomBar: View {
       }
       .frame(height: 52)
       .padding(5)
-      .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-      .overlay(
-        RoundedRectangle(cornerRadius: 28, style: .continuous)
-          .stroke(.white.opacity(0.14), lineWidth: 1)
-      )
+      .glassPanel(cornerRadius: 28)
       .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
       .contentShape(Rectangle())
       .simultaneousGesture(
@@ -104,7 +100,7 @@ struct BottomBar: View {
         RoundedRectangle(cornerRadius: 21, style: .continuous)
           .fill(
             LinearGradient(
-              colors: [.white.opacity(0.12), .white.opacity(0.045)],
+              colors: [.white.opacity(0.19), .white.opacity(0.055)],
               startPoint: .topLeading,
               endPoint: .bottomTrailing
             )
@@ -120,3 +116,5 @@ struct BottomBar: View {
     .animation(.snappy(duration: 0.32), value: active)
   }
 }
+
+

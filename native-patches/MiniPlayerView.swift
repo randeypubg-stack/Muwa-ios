@@ -63,14 +63,7 @@ struct MiniPlayerView: View {
         .allowsHitTesting(false)
     }
     .frame(height: 58)
-    .background(
-      .ultraThinMaterial,
-      in: RoundedRectangle(cornerRadius: 27, style: .continuous)
-    )
-    .overlay(
-      RoundedRectangle(cornerRadius: 27, style: .continuous)
-        .stroke(.white.opacity(0.14), lineWidth: 1)
-    )
+    .glassPanel(cornerRadius: 27)
     .shadow(color: .black.opacity(0.15), radius: 24, y: 10)
     .contentShape(RoundedRectangle(cornerRadius: 27, style: .continuous))
     .simultaneousGesture(
@@ -97,3 +90,4 @@ struct PlaybackProgressLine: View {
       }
   }
 }
+
