@@ -84,3 +84,19 @@ rootview.write_text(s)
 profile=root/'Sources/Views/Profile/ProfileView.swift'
 s=profile.read_text().replace('    .sheet(isPresented: $promoPresented)', '    .task { let args = ProcessInfo.processInfo.arguments; if args.contains("--audit-premium") { premiumPresented = true }; if args.contains("--audit-promo") { promoPresented = true } }\n    .sheet(isPresented: $promoPresented)',1)
 profile.write_text(s)
+
+# Deterministic review states only; injected after Release/source packaging.
+authfile=root/'Sources/Services/AuthManager.swift'
+s=authfile.read_text().replace('  func continueAsGuest() {', '  func continueAsGuest() {\n    if ProcessInfo.processInfo.arguments.contains("--audit-owner") { state = .authenticated(AuthUser(id: 999, email: "preview@example.com", displayName: "Владелец", avatarUrl: nil, role: "user")); return }')
+authfile.write_text(s)
+premiumfile=root/'Sources/Services/PremiumManager.swift'
+s=premiumfile.read_text().replace('  func load() async {', '  func load() async {\n    if ProcessInfo.processInfo.arguments.contains("--audit-premium") { return }')
+needle='  static func request(_ body: [String: Any]) async throws -> MuwaPremiumResponse {'
+s=s.replace(needle,needle+'\n    if ProcessInfo.processInfo.arguments.contains("--audit-owner") { return MuwaPremiumResponse(userId: 999, isPremium: true, expiresAt: nil, canManageCodes: true, code: nil, codes: [], alreadyRedeemed: nil) }')
+premiumfile.write_text(s)
+player=root/'Sources/Views/Player/FullPlayerView.swift'
+s=player.read_text().replace('if ProcessInfo.processInfo.arguments.contains("--audit-ai") { aiSubtitlesVisible = true }','if ProcessInfo.processInfo.arguments.contains("--audit-ai") || ProcessInfo.processInfo.arguments.contains("--audit-ai-unavailable") { aiSubtitlesVisible = true }')
+player.write_text(s)
+manager=root/'Sources/Services/SubtitleManager.swift'
+s=manager.read_text().replace('  func load(_ track: Track, retry: Bool = false) async {','  func load(_ track: Track, retry: Bool = false) async {\n    if ProcessInfo.processInfo.arguments.contains("--audit-ai-unavailable") { error = "Автоматическое распознавание пока не подключено."; return }',1)
+manager.write_text(s)

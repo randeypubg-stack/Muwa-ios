@@ -93,6 +93,13 @@ struct ProfileView: View {
         Spacer()
       }
 
+      if auth.isAuthenticated, let error = premium.accountError {
+        VStack(alignment: .leading, spacing: 8) {
+          Text(error).font(.caption).foregroundStyle(.secondary)
+          Button("Обновить доступ") { Task { await premium.refreshAccount() } }.font(.caption.weight(.semibold))
+        }
+      }
+
       if auth.isGuest {
         Button {
           auth.showAuthentication()

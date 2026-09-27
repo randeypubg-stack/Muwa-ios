@@ -20,6 +20,9 @@ async function execute(request:Request,kind:'original'|'translation',input:any) 
  const key=kind==='original'?createHash('sha256').update(`v2-openai-1|${input.src}|${input.durationSeconds}`).digest('hex'):createHash('sha256').update(`v2-openai-1|${input.documentId}|${input.language}`).digest('hex');
  const existing=await sql<{payload:unknown}>`select payload from subtitle_vtwo_cache where cache_key=${key} and payload is not null`.execute(db);
  if(existing.rows[0])return json(existing.rows[0].payload);
+ // The owner deferred the AI worker. Keep cached documents available without paid calls.
+ const serviceConfig={recognitionEnabled:false};
+ if(!serviceConfig.recognitionEnabled)return json({code:'SERVICE_PAUSED',error:'Автоматическое распознавание пока не подключено. Готовые субтитры остаются доступны.'},503);
  const token=randomUUID();
  // Atomic lease prevents duplicate charged AI calls across devices and server instances.
  const claim=await sql`insert into subtitle_vtwo_cache(cache_key,kind,lease_token,lease_until) values(${key},${kind},${token},now()+interval '15 minutes') on conflict(cache_key) do update set lease_token=excluded.lease_token,lease_until=excluded.lease_until where subtitle_vtwo_cache.payload is null and subtitle_vtwo_cache.lease_until<now() returning cache_key`.execute(db);

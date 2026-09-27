@@ -100,6 +100,9 @@ struct PremiumView: View {
       await premium.load()
       if !premium.products.contains(where: { $0.id == selectedID }), let first = premium.products.first { selectedID = first.id }
     }
+    .onChange(of: premium.products.map(\.id)) { _, ids in
+      if !ids.contains(selectedID), let first = ids.first { selectedID = first }
+    }
     .sheet(isPresented: $promoPresented) { MuwaPromoView() }
   }
 }
@@ -118,6 +121,7 @@ struct MuwaPromoView: View {
   @State private var validity = 30
   @State private var createdCode: String?
   @State private var codes: [MuwaGiftCode] = []
+  @State private var confirmDiscard = false
   @State private var pendingDisable: MuwaGiftCode?
 
   var body: some View {
@@ -146,7 +150,7 @@ struct MuwaPromoView: View {
               .disabled(busy || label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || createdCode != nil)
             Text("Один аккаунт может использовать код один раз. Срок подарка добавляется к действующему подарочному Premium.").font(.caption).foregroundStyle(.secondary)
           }
-          .disabled(createdCode != nil)
+          .disabled(busy || createdCode != nil)
           if let createdCode {
             Section("Сохраните код перед закрытием") {
               Text(createdCode).font(.system(.body, design: .monospaced)).textSelection(.enabled)
@@ -172,10 +176,15 @@ struct MuwaPromoView: View {
         }
       }
       .navigationTitle("Промокод").navigationBarTitleDisplayMode(.inline)
-      .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Готово") { dismiss() } } }
+      .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Готово") { if createdCode != nil { confirmDiscard = true } else { dismiss() } }.disabled(busy) } }
       .task {
         await premium.refreshAccount()
         if premium.canManageCodes { run(["action": "list"]) }
+      }
+      .interactiveDismissDisabled(busy || createdCode != nil)
+      .confirmationDialog("Закрыть без сохранения кода? Полный код больше не будет показан.", isPresented: $confirmDiscard, titleVisibility: .visible) {
+        Button("Закрыть без сохранения", role: .destructive) { dismiss() }
+        Button("Вернуться к коду", role: .cancel) {}
       }
       .onChange(of: auth.user?.id) { _, _ in codes = []; createdCode = nil; message = nil; code = "" }
       .confirmationDialog("Отключить код? Уже выданный Premium сохранится.", isPresented: Binding(get: { pendingDisable != nil }, set: { if !$0 { pendingDisable = nil } })) {

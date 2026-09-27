@@ -13,6 +13,8 @@ final class PremiumManager: ObservableObject {
   @Published private(set) var accountError: String?
   private var accountID: Int?
   private var accountRevision = UUID()
+  private var accountRequestTail: Task<Void, Never>?
+  private let requestAccount: ([String: Any]) async throws -> MuwaPremiumResponse
   private var storePremium = false
   private var expiryTask: Task<Void, Never>?
 
@@ -21,9 +23,12 @@ final class PremiumManager: ObservableObject {
     "app.muwa.nasheeds.premium.yearly",
   ]
 
+  private var productLoadID: UUID?
+
   private var updatesTask: Task<Void, Never>?
 
-  init() {
+  init(requestAccount: @escaping ([String: Any]) async throws -> MuwaPremiumResponse = MuwaPremiumAPI.request) {
+    self.requestAccount = requestAccount
     updatesTask = Task { [weak self] in
       for await result in Transaction.updates {
         guard case .verified = result else { continue }
@@ -57,8 +62,19 @@ final class PremiumManager: ObservableObject {
   func accountRequest(_ body: [String: Any]) async throws -> MuwaPremiumResponse {
     guard let id = accountID else { throw MuwaPremiumAPI.error("Войдите в аккаунт Muwa.") }
     let revision = accountRevision
+    let previous = accountRequestTail
+    let operation = Task { @MainActor in
+      await previous?.value
+      guard self.accountRevision == revision, self.accountID == id else { throw CancellationError() }
+      return try await self.performAccountRequest(body, id: id, revision: revision)
+    }
+    accountRequestTail = Task { _ = try? await operation.value }
+    return try await operation.value
+  }
+
+  private func performAccountRequest(_ body: [String: Any], id: Int, revision: UUID) async throws -> MuwaPremiumResponse {
     do {
-      let value = try await MuwaPremiumAPI.request(body)
+      let value = try await requestAccount(body)
       guard accountRevision == revision, accountID == id, value.userId == id else {
         throw CancellationError()
       }
@@ -97,17 +113,34 @@ final class PremiumManager: ObservableObject {
   }
 
   func load() async {
+    Task { await refreshEntitlements() }
+    guard !isLoading else { return }
+    let requestID = UUID()
+    productLoadID = requestID
     isLoading = true
-    defer { isLoading = false }
+    let timeout = Task { [weak self] in
+      try? await Task.sleep(for: .seconds(10))
+      guard !Task.isCancelled, let self, self.productLoadID == requestID else { return }
+      self.productLoadID = nil
+      self.isLoading = false
+      self.lastError = "Не удалось загрузить предложения Apple. Подарочный доступ по аккаунту остаётся доступен."
+    }
+    defer {
+      timeout.cancel()
+      if productLoadID == requestID { isLoading = false }
+    }
     do {
-      products = try await Product.products(for: productIDs)
-        .sorted(by: { $0.price < $1.price })
+      let loaded = try await Product.products(for: productIDs).sorted(by: { $0.price < $1.price })
+      guard productLoadID == requestID else { return }
+      products = loaded
       lastError = nil
     } catch {
+      guard productLoadID == requestID else { return }
       products = []
       lastError = error.localizedDescription
     }
-    await refreshEntitlements()
+    isLoading = false
+    timeout.cancel()
   }
 
   func purchase(_ product: Product) async throws {
@@ -173,6 +206,13 @@ struct MuwaPremiumResponse: Decodable {
 }
 
 enum MuwaPremiumAPI {
+  private static let session: URLSession = {
+    let config = URLSessionConfiguration.ephemeral
+    config.httpCookieStorage = nil
+    config.httpShouldSetCookies = false
+    return URLSession(configuration: config)
+  }()
+
   static func date(_ value: String) -> Date? {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -190,10 +230,14 @@ enum MuwaPremiumAPI {
     var request = URLRequest(url: base.appending(path: "_api/premium/access"))
     request.httpMethod = "POST"
     request.timeoutInterval = 25
-    request.httpShouldHandleCookies = true
+    request.httpShouldHandleCookies = false
+    let cookies = HTTPCookieStorage.shared.cookies(for: request.url!) ?? []
+    for (name, value) in HTTPCookie.requestHeaderFields(with: cookies) {
+      request.setValue(value, forHTTPHeaderField: name)
+    }
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.httpBody = try JSONSerialization.data(withJSONObject: body)
-    let (data, response) = try await URLSession.shared.data(for: request)
+    let (data, response) = try await session.data(for: request)
     guard let http = response as? HTTPURLResponse else { throw error("Нет ответа сервера.") }
     guard (200..<300).contains(http.statusCode) else {
       let payload = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]

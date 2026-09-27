@@ -23,7 +23,7 @@ for i,d in enumerate(selected):
     run('xcrun','simctl','bootstatus',udid,'-b')
     run('xcrun','simctl','ui',udid,'appearance','dark')
     run('xcrun','simctl','install',udid,str(app))
-    for label,args in [('home',[]),('profile',['--audit-profile']),('premium',['--audit-profile','--audit-premium']),('promo',['--audit-profile','--audit-promo']),('player',['--audit-player']),('library',['--audit-library']),('landscape',['--audit-player','--audit-landscape']),('ai',['--audit-player','--audit-ai']),('ai-reader',['--audit-player','--audit-ai','--audit-ai-expanded'])]:
+    for label,args in [('home',[]),('profile',['--audit-profile']),('premium',['--audit-profile','--audit-premium']),('promo',['--audit-profile','--audit-promo']),('owner-premium',['--audit-profile','--audit-premium','--audit-owner']),('owner-promo',['--audit-profile','--audit-promo','--audit-owner']),('ai-unavailable',['--audit-player','--audit-ai-unavailable']),('player',['--audit-player']),('library',['--audit-library']),('landscape',['--audit-player','--audit-landscape']),('ai',['--audit-player','--audit-ai']),('ai-reader',['--audit-player','--audit-ai','--audit-ai-expanded'])]:
         run('xcrun','simctl','launch','--terminate-running-process',udid,'app.muwa.nasheeds',*args)
         time.sleep(5)
         run('xcrun','simctl','io',udid,'screenshot',str(out/f'{i}-{label}.png'))
