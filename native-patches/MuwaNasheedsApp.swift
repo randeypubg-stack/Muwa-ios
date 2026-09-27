@@ -35,6 +35,7 @@ struct MuwaNasheedsApp: App {
         .environmentObject(auth)
         .preferredColorScheme(.dark)
         .task { await auth.restore() }
+        .onChange(of: auth.user?.id, initial: true) { _, id in premium.setAccount(id) }
         .task { await premium.load() }
         .onChange(of: scenePhase) { _, phase in
           player.handleScenePhase(phase)
@@ -43,5 +44,4 @@ struct MuwaNasheedsApp: App {
     }
   }
 }
-
 

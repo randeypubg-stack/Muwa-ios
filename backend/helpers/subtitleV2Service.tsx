@@ -49,4 +49,3 @@ async function execute(request:Request,kind:'original'|'translation',input:any) 
  }
 }
 export const subtitleV2Service={execute};
-

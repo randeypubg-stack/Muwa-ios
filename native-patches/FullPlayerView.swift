@@ -1203,4 +1203,3 @@ private struct ClockedSubtitleOverlay: View {
     PlayerSubtitleOverlay(track: track, currentTime: timeline.snapshot.time, language: language)
   }
 }
-

@@ -61,4 +61,3 @@ async function translate(content: string, instruction: string) {
   return JSON.parse(choice.message.content);
 }
 export const subtitleOpenAI={original,translate};
-

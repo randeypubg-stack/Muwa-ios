@@ -117,4 +117,3 @@ struct BottomBar: View {
   }
 }
 
-

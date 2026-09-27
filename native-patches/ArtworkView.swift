@@ -211,4 +211,3 @@ actor ArtworkImageStore {
     return result
   }
 }
-

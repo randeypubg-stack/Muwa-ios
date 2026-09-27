@@ -80,3 +80,7 @@ rootview=root/'Sources/App/RootView.swift'
 s=rootview.read_text().replace('        playerExpansion = 1', '        playerExpansion = 1\n        if args.contains("--audit-ai") { player.currentTime = 3 }')
 rootview.write_text(s)
 
+# Build34 simulator-only Premium/promo views. Never included in distributable archive.
+profile=root/'Sources/Views/Profile/ProfileView.swift'
+s=profile.read_text().replace('    .sheet(isPresented: $promoPresented)', '    .task { let args = ProcessInfo.processInfo.arguments; if args.contains("--audit-premium") { premiumPresented = true }; if args.contains("--audit-promo") { promoPresented = true } }\n    .sheet(isPresented: $promoPresented)',1)
+profile.write_text(s)

@@ -47,10 +47,7 @@ struct ProfileView: View {
         .adaptiveFrame(maxWidth: min(layout.contentMaxWidth, 920))
       }
     }
-    .offerCodeRedemption(isPresented: $promoPresented)
-    .onChange(of: promoPresented) { _, presented in
-      if !presented { Task { await premium.refreshEntitlements() } }
-    }
+    .sheet(isPresented: $promoPresented) { MuwaPromoView() }
     .sheet(isPresented: $premiumPresented) { PremiumView() }
     .sheet(isPresented: $aboutPresented) {
       AboutMuwaView()
@@ -235,4 +232,3 @@ private struct AboutMuwaView: View {
     }
   }
 }
-

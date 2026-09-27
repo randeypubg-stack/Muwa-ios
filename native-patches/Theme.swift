@@ -145,4 +145,3 @@ private struct MuwaGlassSurface: ViewModifier {
       }
   }
 }
-

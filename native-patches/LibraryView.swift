@@ -289,3 +289,4 @@ struct LibraryView: View {
 enum LibraryDestination: String, Hashable {
   case favorites, history, playlist, publications, drafts, downloads
 }
+
