@@ -6,6 +6,7 @@ struct ProfileView: View {
   @EnvironmentObject private var premium: PremiumManager
   @EnvironmentObject private var auth: AuthManager
   @State private var premiumPresented = false
+  @State private var settingsPresented = false
   @State private var aboutPresented = false
   @State private var promoPresented = false
 
@@ -49,6 +50,7 @@ struct ProfileView: View {
     }
     .sheet(isPresented: $promoPresented) { MuwaPromoView() }
     .sheet(isPresented: $premiumPresented) { PremiumView() }
+    .sheet(isPresented: $settingsPresented) { AppSettingsView() }
     .sheet(isPresented: $aboutPresented) {
       AboutMuwaView()
     }
@@ -125,7 +127,7 @@ struct ProfileView: View {
             .foregroundStyle(Color(red: 0.94, green: 0.78, blue: 0.52))
           VStack(alignment: .leading, spacing: 3) {
             Text("Premium").bold()
-            Text(premium.isPremium ? "Управление подпиской" : "Открыть все возможности")
+            Text(premium.isPremium ? "Управление подпиской" : "Поддержка и управление доступом")
               .font(.caption)
               .foregroundStyle(.secondary)
           }
@@ -149,9 +151,7 @@ struct ProfileView: View {
       }
       Divider().overlay(.white.opacity(0.05))
       profileRow("Настройки приложения", "gearshape") {
-        if let url = URL(string: UIApplication.openSettingsURLString) {
-          UIApplication.shared.open(url)
-        }
+        settingsPresented = true
       }
       Divider().overlay(.white.opacity(0.05))
       profileRow("Восстановить покупки", "arrow.clockwise") {

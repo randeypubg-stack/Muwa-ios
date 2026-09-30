@@ -351,17 +351,17 @@ struct LibraryDetailView: View {
     let items = Track.catalog.filter(downloads.isDownloaded)
 
     if items.isEmpty {
-      if premium.isPremium {
+      if FeatureAccess.allowsPremiumFeature(isPremium: premium.isPremium) {
         EmptyStateView(
           icon: "arrow.down.circle",
           title: "Загрузок пока нет",
-          message: "Сохранённые Premium-нашиды появятся здесь."
+          message: "Скачайте нашид из меню плеера, чтобы слушать без интернета."
         )
       } else {
         EmptyStateView(
           icon: "arrow.down.circle",
           title: "Загрузок пока нет",
-          message: "Сохранённые Premium-нашиды появятся здесь.",
+          message: "Скачайте нашид из меню плеера, чтобы слушать без интернета.",
           actionTitle: "Открыть Premium",
           action: { premiumPresented = true }
         )
@@ -380,7 +380,7 @@ struct LibraryDetailView: View {
             isPlaying: player.currentTrack?.id == track.id && player.isPlaying,
             trailingSystemImage: "trash",
             action: {
-              if premium.isPremium {
+              if FeatureAccess.allowsPremiumFeature(isPremium: premium.isPremium) {
                 player.play(track)
               } else {
                 premiumPresented = true
@@ -546,7 +546,7 @@ struct PlaylistDetailView: View {
           }
         } else {
           Button {
-            guard premium.isPremium else {
+            guard FeatureAccess.allowsPremiumFeature(isPremium: premium.isPremium) else {
               premiumPresented = true
               return
             }

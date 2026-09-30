@@ -725,8 +725,17 @@ struct MorphingPlayerView: View {
         .frame(width: contentWidth)
         .position(x: localCenterX, y: transportY)
 
-      smallActions
-        .position(x: localCenterX, y: actionsY)
+      VStack(spacing: 6) {
+        smallActions
+        if player.isBuffering { Text("Загружаем аудио…").font(.caption2).foregroundStyle(.secondary) }
+        if player.playbackError != nil {
+          Button("Не удалось воспроизвести · Повторить") { player.retryPlayback() }
+            .font(.caption2).foregroundStyle(.orange)
+        }
+        if let progress = downloads.progress[track.id] {
+          ProgressView(value: progress).frame(width: 170)
+        }
+      }.position(x: localCenterX, y: actionsY)
     }
     .opacity(Double(opacity))
     .allowsHitTesting(opacity > 0.60)
@@ -867,14 +876,27 @@ struct MorphingPlayerView: View {
           handleDownload()
         } label: {
           Label(
-            downloads.isDownloaded(track) ? "Сохранено офлайн" : "Скачать MP3",
+            downloads.isDownloaded(track) ? "Сохранено офлайн" : (downloads.downloadingIDs.contains(track.id) ? "Скачиваем…" : "Скачать MP3"),
             systemImage: downloads.isDownloaded(track)
               ? "checkmark.circle"
               : "arrow.down.circle"
           )
         }
+        if downloads.downloadingIDs.contains(track.id) {
+          Button("Отменить скачивание", role: .destructive) { downloads.cancel(track) }
+        }
+        if downloads.isDownloaded(track) {
+          Button("Удалить загрузку", role: .destructive) {
+            do { try downloads.remove(track) } catch { downloadError = error.localizedDescription }
+          }
+        }
+        if player.playbackError != nil {
+          Button("Повторить воспроизведение") { player.retryPlayback() }
+        }
+        ShareLink(item: track.audioURL) { Label("Поделиться нашидом", systemImage: "square.and.arrow.up") }
       } label: {
         Image(systemName: "ellipsis")
+          .rotationEffect(.degrees(90))
           .font(.system(size: 19, weight: .semibold))
           .frame(width: 42, height: 42)
           .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
@@ -924,9 +946,9 @@ struct MorphingPlayerView: View {
       }
 
       Button {
-        player.repeatOn.toggle()
+        player.cycleRepeatMode()
       } label: {
-        Image(systemName: "repeat")
+        Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
           .foregroundStyle(player.repeatOn ? .white : .white.opacity(0.55))
           .frame(width: 38, height: 38)
       }
@@ -972,7 +994,7 @@ struct MorphingPlayerView: View {
       }
       .buttonStyle(.plain)
 
-      if premium.isPremium {
+      if FeatureAccess.allowsPremiumFeature(isPremium: premium.isPremium) {
         AirPlayButton()
           .frame(width: 44, height: 44)
           .background(
@@ -1073,9 +1095,9 @@ struct MorphingPlayerView: View {
   }
 
   private func handleDownload() {
-    guard !downloads.isDownloaded(track) else { return }
+    guard !downloads.isDownloaded(track), !downloads.downloadingIDs.contains(track.id) else { return }
 
-    guard premium.isPremium else {
+    guard FeatureAccess.allowsPremiumFeature(isPremium: premium.isPremium) else {
       premiumPresented = true
       return
     }

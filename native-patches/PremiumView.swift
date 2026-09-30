@@ -6,6 +6,7 @@ struct PremiumView: View {
   @EnvironmentObject private var premium: PremiumManager
   @State private var selectedID = "app.muwa.nasheeds.premium.yearly"
   @State private var busy = false
+  @State private var subscriptionsPresented = false
   @State private var promoPresented = false
   var compact = false
   private let tint = Color(red: 0.85, green: 0.91, blue: 1)
@@ -24,6 +25,12 @@ struct PremiumView: View {
               .fixedSize(horizontal: false, vertical: true)
             Text(premium.isPremium ? "Все возможности уже доступны." : "Любимые нашиды — в вашем ритме.")
               .font(.subheadline).foregroundStyle(.secondary)
+          }
+          if !FeatureAccess.premiumRestrictionsEnabled {
+            Label("Все функции доступны для проверки", systemImage: "checkmark.circle")
+              .font(.subheadline.weight(.semibold)).foregroundStyle(tint)
+            Text("Офлайн, AirPlay, фоновое воспроизведение и управление с экрана блокировки сейчас работают без покупки. Premium-статус аккаунта сохраняется отдельно.")
+              .font(.caption).foregroundStyle(.secondary)
           }
           LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 20) {
             ForEach(benefits, id: \.0) { benefit in
@@ -44,7 +51,7 @@ struct PremiumView: View {
           } else if premium.products.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
               Text("Подписка появится позже").font(.headline)
-              Text("Сейчас можно активировать подарочный промокод Muwa.").font(.subheadline).foregroundStyle(.secondary)
+              Text("Предложения Apple пока недоступны. Промокоды Muwa продолжают работать.").font(.subheadline).foregroundStyle(.secondary)
             }
           } else {
             VStack(spacing: 10) {
@@ -70,7 +77,15 @@ struct PremiumView: View {
           Text("Ваша поддержка помогает развивать Muwa. Субтитры доступны бесплатно.")
             .font(.caption).foregroundStyle(.secondary)
           if let error = premium.lastError { Text(error).font(.caption).foregroundStyle(.red) }
-          Button("Восстановить покупки Apple") { Task { await premium.restore() } }.font(.caption)
+          if let status = premium.statusMessage { Text(status).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("premium.status") }
+          Button("Обновить статус доступа") { Task { await premium.refreshEntitlements() } }
+          Button("Восстановить покупки Apple") { Task { await premium.restore() } }.disabled(premium.isWorking)
+          if premium.storePremium {
+            Button("Управлять подпиской Apple") { subscriptionsPresented = true }
+          }
+          if !premium.isLoading && premium.products.isEmpty {
+            Button("Повторить загрузку предложений") { Task { await premium.load() } }
+          }
         }.padding(24).frame(maxWidth: 620).frame(maxWidth: .infinity)
       }
       .background(Color(red: 0.012, green: 0.018, blue: 0.028))
@@ -84,7 +99,7 @@ struct PremiumView: View {
             } label: {
               HStack { if busy { ProgressView().tint(.black) }; Text("Оформить Premium").bold() }
                 .frame(maxWidth: .infinity, minHeight: 52).foregroundStyle(.black).background(tint, in: Capsule())
-            }.disabled(busy)
+            }.disabled(busy || premium.isWorking)
             Text("Подписка продлевается автоматически. Управление — в настройках Apple.").font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
           }.padding(.horizontal, 24).padding(.vertical, 12).background(.ultraThinMaterial)
         }
@@ -103,6 +118,7 @@ struct PremiumView: View {
     .onChange(of: premium.products.map(\.id)) { _, ids in
       if !ids.contains(selectedID), let first = ids.first { selectedID = first }
     }
+    .manageSubscriptionsSheet(isPresented: $subscriptionsPresented)
     .sheet(isPresented: $promoPresented) { MuwaPromoView() }
   }
 }
@@ -204,7 +220,7 @@ struct MuwaPromoView: View {
         if let value = result.code { createdCode = value }
         success = true
         if body["action"] as? String == "redeem" {
-          message = result.alreadyRedeemed == true ? "Этот код уже активирован на вашем аккаунте." : "Готово! Premium активирован."
+          message = result.alreadyRedeemed == true ? "Этот код уже активирован на вашем аккаунте." : result.expiresAt.flatMap(MuwaPremiumAPI.date).map { "Premium активирован до \($0.formatted(date: .long, time: .omitted))." } ?? "Готово! Premium активирован."
           code = ""
         }
       } catch is CancellationError {} catch { success = false; message = error.localizedDescription }

@@ -43,7 +43,7 @@ s=s.replace(needle, '''    .task {
         player.play(Track.catalog[0], autoplay: false)
         playerExpansion = 1
       }
-      if args.contains("--audit-profile") { selection = .profile }
+      if args.contains("--audit-profile") { selection = .profile }; if args.contains("--audit-search") { searchPresented = true }
       if args.contains("--audit-library") {
         selection = .library
         requestedLibraryDestination = .playlist
@@ -82,7 +82,7 @@ rootview.write_text(s)
 
 # Build34 simulator-only Premium/promo views. Never included in distributable archive.
 profile=root/'Sources/Views/Profile/ProfileView.swift'
-s=profile.read_text().replace('    .sheet(isPresented: $promoPresented)', '    .task { let args = ProcessInfo.processInfo.arguments; if args.contains("--audit-premium") { premiumPresented = true }; if args.contains("--audit-promo") { promoPresented = true } }\n    .sheet(isPresented: $promoPresented)',1)
+s=profile.read_text().replace('    .sheet(isPresented: $promoPresented)', '    .task { let args = ProcessInfo.processInfo.arguments; if args.contains("--audit-settings") { settingsPresented = true }; if args.contains("--audit-premium") { premiumPresented = true }; if args.contains("--audit-promo") { promoPresented = true } }\n    .sheet(isPresented: $promoPresented)',1)
 profile.write_text(s)
 
 # Deterministic review states only; injected after Release/source packaging.
@@ -100,3 +100,8 @@ player.write_text(s)
 manager=root/'Sources/Services/SubtitleManager.swift'
 s=manager.read_text().replace('  func load(_ track: Track, retry: Bool = false) async {','  func load(_ track: Track, retry: Bool = false) async {\n    if ProcessInfo.processInfo.arguments.contains("--audit-ai-unavailable") { error = "Автоматическое распознавание пока не подключено."; return }',1)
 manager.write_text(s)
+
+# Exercise the real player actions in Simulator without entitlement bypass fixtures.
+p=root/'Sources/Views/Player/FullPlayerView.swift'
+s=p.read_text().replace('    .onChange(of: expansion)', '    .task { if ProcessInfo.processInfo.arguments.contains("--audit-queue") { queuePresented = true } }\n    .onChange(of: expansion)',1)
+p.write_text(s)

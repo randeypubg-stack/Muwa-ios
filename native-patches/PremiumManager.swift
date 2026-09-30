@@ -6,6 +6,8 @@ final class PremiumManager: ObservableObject {
   @Published private(set) var products: [Product] = []
   @Published private(set) var isPremium = false
   @Published private(set) var isLoading = false
+  @Published private(set) var isWorking = false
+  @Published private(set) var statusMessage: String?
   @Published var lastError: String?
   @Published private(set) var canManageCodes = false
   @Published private(set) var accountExpiresAt: Date?
@@ -15,7 +17,8 @@ final class PremiumManager: ObservableObject {
   private var accountRevision = UUID()
   private var accountRequestTail: Task<Void, Never>?
   private let requestAccount: ([String: Any]) async throws -> MuwaPremiumResponse
-  private var storePremium = false
+  private(set) var storePremium = false
+  private let reportError: (Error) -> Void
   private var expiryTask: Task<Void, Never>?
 
   let productIDs = [
@@ -27,11 +30,13 @@ final class PremiumManager: ObservableObject {
 
   private var updatesTask: Task<Void, Never>?
 
-  init(requestAccount: @escaping ([String: Any]) async throws -> MuwaPremiumResponse = MuwaPremiumAPI.request) {
+  init(requestAccount: @escaping ([String: Any]) async throws -> MuwaPremiumResponse = MuwaPremiumAPI.request, reportError: @escaping (Error) -> Void = { _ in }) {
     self.requestAccount = requestAccount
+    self.reportError = reportError
     updatesTask = Task { [weak self] in
       for await result in Transaction.updates {
-        guard case .verified = result else { continue }
+        guard case .verified(let transaction) = result, self?.productIDs.contains(transaction.productID) == true else { continue }
+        await transaction.finish()
         await self?.refreshEntitlements()
       }
     }
@@ -103,6 +108,7 @@ final class PremiumManager: ObservableObject {
         }
         updateAccess()
       }
+      reportError(error)
       throw error
     }
   }
@@ -144,25 +150,36 @@ final class PremiumManager: ObservableObject {
   }
 
   func purchase(_ product: Product) async throws {
+    guard !isWorking else { return }
+    isWorking = true; statusMessage = nil; lastError = nil
+    defer { isWorking = false }
     let result = try await product.purchase()
     switch result {
     case .success(let verification):
       let transaction = try verification.payloadValue
       await transaction.finish()
       await refreshEntitlements()
-    case .pending, .userCancelled:
-      break
+      statusMessage = isPremium ? "Premium активирован." : "Покупка завершена. Обновляем доступ."
+    case .pending:
+      statusMessage = "Покупка ожидает подтверждения Apple."
+    case .userCancelled:
+      statusMessage = "Покупка отменена. Деньги не списаны."
     @unknown default:
       break
     }
   }
 
   func restore() async {
+    guard !isWorking else { return }
+    isWorking = true; statusMessage = nil
+    defer { isWorking = false }
     do {
       try await AppStore.sync()
       await refreshEntitlements()
       lastError = nil
+      statusMessage = storePremium ? "Покупки Apple восстановлены." : "Активных покупок Apple не найдено."
     } catch {
+      reportError(error)
       lastError = error.localizedDescription
     }
   }

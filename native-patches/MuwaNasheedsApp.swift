@@ -12,14 +12,16 @@ struct MuwaNasheedsApp: App {
   @StateObject private var auth: AuthManager
 
   init() {
+    _ = Diagnostics.shared
     let library = LibraryStore()
     let downloads = DownloadManager()
-    let premium = PremiumManager()
+    let premium = PremiumManager(reportError: { Diagnostics.shared.record("premium", error: $0) })
     _library = StateObject(wrappedValue: library)
     _downloads = StateObject(wrappedValue: downloads)
     _premium = StateObject(wrappedValue: premium)
-    _player = StateObject(
-      wrappedValue: PlayerManager(library: library, downloads: downloads, premium: premium))
+    let player = PlayerManager(library: library, downloads: downloads, premium: premium)
+    _player = StateObject(wrappedValue: player)
+    CarPlayCoordinator.shared.configure(player: player, library: library)
     _subtitles = StateObject(wrappedValue: SubtitleManager())
     _auth = StateObject(wrappedValue: AuthManager())
   }

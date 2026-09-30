@@ -2,7 +2,7 @@ name: Build Native SwiftUI IPA
 
 on:
   push:
-    branches: [main, codex/muwa-build30-ai-subtitles]
+    branches: [main, codex/muwa-build30-ai-subtitles, feat/muwa-native-build35]
   workflow_dispatch:
 
 permissions:
@@ -115,8 +115,10 @@ jobs:
           grep -Fq 'startSleepTimer(minutes:' "$ROOT/Sources/Services/PlayerManager.swift"
           grep -Fq 'sleepAfterCurrentTrackEnds()' "$ROOT/Sources/Services/PlayerManager.swift"
           grep -Fq 'prefetchFollowingTrack(after:' "$ROOT/Sources/Services/PlayerManager.swift"
-          grep -Fq 'loadValuesAsynchronously(forKeys: ["playable"])' "$ROOT/Sources/Services/PlayerManager.swift"
+          grep -Fq 'await asset.load(.isPlayable)' "$ROOT/Sources/Services/PlayerManager.swift"
           grep -Fq 'Таймер сна' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
+
+          python3 scripts/prepare_native_extras.py "$ROOT"
 
           # Keep the system launch phase pure black so it blends into the
           # existing SwiftUI AppMark reveal instead of flashing a default background.
@@ -141,7 +143,7 @@ jobs:
           test "$WIDTH" = "1024"
           test "$HEIGHT" = "1024"
 
-          sed -i '' 's/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = 34;/g' "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
+          sed -i '' 's/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = 35;/g' "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
           echo "SOURCE_ROOT=$ROOT" >> "$GITHUB_ENV"
 
       - name: Package full source archive
@@ -154,6 +156,8 @@ jobs:
           ditto "$SOURCE_ROOT" build/full-source/MuwaNasheedsNative
           ditto native-patches build/full-source/BuildInfrastructure/native-patches
           ditto tests build/full-source/BuildInfrastructure/tests
+          ditto scripts build/full-source/BuildInfrastructure/scripts
+          ditto docs build/full-source/Docs
           ditto backend build/full-source/BackendSubtitlesV2
           cp .github/workflows/build-native-swiftui-ipa.yml \
             build/full-source/BuildInfrastructure/.github/workflows/build-native-swiftui-ipa.yml
@@ -161,7 +165,7 @@ jobs:
           cat > build/full-source/README-SOURCE.txt <<EOF
           Muwa Nasheeds — Full Source Archive
           Version: 1.4.0
-          Build: 34
+          Build: 35
           Commit: ${GITHUB_SHA}
 
           Contents:
@@ -175,25 +179,25 @@ jobs:
 
           Notes:
           - This archive contains source code and project resources, not only the IPA.
-          - The project is the same assembled source tree used for the build-34 IPA.
+          - The project is the same assembled source tree used for the build-35 IPA.
           - Audio tracks and remote artwork remain CDN-backed and are not bundled as local media.
           EOF
 
           find build/full-source -name '.DS_Store' -delete
           (
             cd build/full-source
-            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build34-FULL-SOURCE.zip .
+            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build35-FULL-SOURCE.zip .
           )
-          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build34-FULL-SOURCE.zip \
-            | tee build/Muwa-Nasheeds-v1.4.0-build34-FULL-SOURCE.zip.sha256
+          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build35-FULL-SOURCE.zip \
+            | tee build/Muwa-Nasheeds-v1.4.0-build35-FULL-SOURCE.zip.sha256
 
       - name: Upload full source archive
         uses: actions/upload-artifact@v4
         with:
           name: Muwa-Nasheeds-Full-Source-${{ github.run_number }}
           path: |
-            build/Muwa-Nasheeds-v1.4.0-build34-FULL-SOURCE.zip
-            build/Muwa-Nasheeds-v1.4.0-build34-FULL-SOURCE.zip.sha256
+            build/Muwa-Nasheeds-v1.4.0-build35-FULL-SOURCE.zip
+            build/Muwa-Nasheeds-v1.4.0-build35-FULL-SOURCE.zip.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 90
@@ -212,7 +216,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
-          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='34'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='35'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
         shell: bash
@@ -229,7 +233,7 @@ jobs:
 
           test "$BUNDLE_ID" = "app.muwa.nasheeds"
           test "$VERSION" = "1.4.0"
-          test "$BUILD_NO" = "34"
+          test "$BUILD_NO" = "35"
           test -x "$APP_PATH/$EXECUTABLE"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist")" = "true"
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIColorName' "$APP_PATH/Info.plist")" = "LaunchBackground"
@@ -245,10 +249,10 @@ jobs:
 
           (
             cd build/package
-            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build34-ai-subtitles-unsigned.ipa Payload
+            /usr/bin/zip -qry -y ../Muwa-Nasheeds-v1.4.0-build35-ai-subtitles-unsigned.ipa Payload
           )
 
-          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build34-ai-subtitles-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build34-ai-subtitles-unsigned.ipa.sha256
+          shasum -a 256 build/Muwa-Nasheeds-v1.4.0-build35-ai-subtitles-unsigned.ipa | tee build/Muwa-Nasheeds-v1.4.0-build35-ai-subtitles-unsigned.ipa.sha256
 
           cat > build/build-info.json <<EOF
           {
@@ -272,8 +276,8 @@ jobs:
         with:
           name: Muwa-Nasheeds-Native-IPA-${{ github.run_number }}
           path: |
-            build/Muwa-Nasheeds-v1.4.0-build34-ai-subtitles-unsigned.ipa
-            build/Muwa-Nasheeds-v1.4.0-build34-ai-subtitles-unsigned.ipa.sha256
+            build/Muwa-Nasheeds-v1.4.0-build35-ai-subtitles-unsigned.ipa
+            build/Muwa-Nasheeds-v1.4.0-build35-ai-subtitles-unsigned.ipa.sha256
             build/build-info.json
           if-no-files-found: error
           compression-level: 0
@@ -293,7 +297,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Muwa-build34-review-screenshots
+          name: Muwa-build35-review-screenshots
           path: build/previews
           if-no-files-found: ignore
 
