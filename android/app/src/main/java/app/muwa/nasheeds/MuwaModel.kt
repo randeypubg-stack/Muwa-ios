@@ -65,7 +65,7 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
     fun play(track: Track, autoplay: Boolean = true) {
         val p = controller ?: run { error = "Плеер ещё подключается. Попробуйте через секунду."; return }
         val queue = if (track.id in library.queue) library.queue else library.queue + track.id
-        library.setQueue(queue)
+        library.replaceQueue(queue)
         p.setMediaItems(library.tracks(queue).map(AppGraph::mediaItem), queue.indexOf(track.id), 0)
         p.prepare(); p.playWhenReady = autoplay
         if (autoplay) library.played(track)
@@ -82,17 +82,17 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
     fun dismissResume() { resumeCandidate = null; library.resume = null }
     fun addQueue(track: Track, next: Boolean = false) {
         val p = controller
-        if (p == null || p.mediaItemCount == 0) { library.setQueue(library.queue + track.id); return }
+        if (p == null || p.mediaItemCount == 0) { library.replaceQueue(library.queue + track.id); return }
         val existing = (0 until p.mediaItemCount).firstOrNull { p.getMediaItemAt(it).mediaId == track.id }
         val target = if (next) (p.currentMediaItemIndex + 1).coerceAtMost(p.mediaItemCount) else p.mediaItemCount
         if (existing == null) p.addMediaItem(target, AppGraph.mediaItem(track))
         else if (next && existing != p.currentMediaItemIndex) p.moveMediaItem(existing, (if(existing < target) target - 1 else target).coerceAtMost(p.mediaItemCount - 1))
     }
-    fun removeQueue(id: String) { controller?.let { p -> val index = (0 until p.mediaItemCount).firstOrNull { p.getMediaItemAt(it).mediaId == id }; if (index != null) p.removeMediaItem(index) }; library.setQueue(library.queue - id) }
+    fun removeQueue(id: String) { controller?.let { p -> val index = (0 until p.mediaItemCount).firstOrNull { p.getMediaItemAt(it).mediaId == id }; if (index != null) p.removeMediaItem(index) }; library.replaceQueue(library.queue - id) }
     fun moveQueue(id: String, delta: Int) {
         val ids = library.queue.toMutableList(); val from = ids.indexOf(id); val to = from + delta
         if (from < 0 || to !in ids.indices) return
-        ids.add(to, ids.removeAt(from)); library.setQueue(ids)
+        ids.add(to, ids.removeAt(from)); library.replaceQueue(ids)
         controller?.let { if (it.mediaItemCount == ids.size) it.moveMediaItem(from, to) }
     }
     private fun report(area: String, e: Throwable) { if (e is CancellationException) return; Diagnostics.record(area,e); error = e.message ?: "Не удалось выполнить действие." }

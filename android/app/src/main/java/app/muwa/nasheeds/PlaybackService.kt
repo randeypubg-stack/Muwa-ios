@@ -55,7 +55,7 @@ class PlaybackService : MediaSessionService() {
             override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_ENDED) { AppGraph.library.resume = null; SleepTimer.finished() } }
             override fun onPlayerError(error: PlaybackException) { Diagnostics.record("playback", error) }
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
-                AppGraph.library.setQueue((0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId })
+                AppGraph.library.replaceQueue((0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId })
             }
         })
         val intent = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)

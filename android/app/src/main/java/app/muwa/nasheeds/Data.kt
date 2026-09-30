@@ -32,7 +32,7 @@ class Library(private val context: Context) {
     private fun savePlaylists() { prefs.edit().putString("playlists", JSONArray(playlists.map { JSONObject().put("id", it.id).put("name", it.name).put("ids", JSONArray(it.ids)) }).toString()).apply() }
     fun like(track: Track) { favorites = if (track.id in favorites) favorites - track.id else favorites + track.id; saveIDs("favorites", favorites) }
     fun played(track: Track) { history = (listOf(track.id) + history.filterNot { it == track.id }).take(100); saveIDs("history", history) }
-    fun setQueue(ids: List<String>) { queue = ids.distinct().filter { id -> catalog.any { it.id == id } }; saveIDs("queue", queue) }
+    fun replaceQueue(ids: List<String>) { queue = ids.distinct().filter { id -> catalog.any { it.id == id } }; saveIDs("queue", queue) }
     fun createPlaylist(name: String): String { val id = UUID.randomUUID().toString(); playlists = playlists + Playlist(id, name.trim().ifEmpty { "Новый плейлист" }, emptyList()); savePlaylists(); return id }
     fun deletePlaylist(id: String) { playlists = playlists.filterNot { it.id == id }; savePlaylists() }
     fun renamePlaylist(id: String, name: String) { if (name.isBlank()) return; playlists = playlists.map { if (it.id == id) it.copy(name = name.trim()) else it }; savePlaylists() }

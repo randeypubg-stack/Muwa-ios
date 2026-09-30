@@ -33,9 +33,9 @@ class NativeScreensTest {
         val track=library.catalog.first()
         library.togglePlaylist(id,track)
         assertEquals(listOf(track.id),Library(context).playlists.first {it.id==id}.ids)
-        library.setQueue(emptyList())
+        library.replaceQueue(emptyList())
         assertTrue(Library(context).queue.isEmpty())
-        library.setQueue(library.catalog.map {it.id})
+        library.replaceQueue(library.catalog.map {it.id})
         library.deletePlaylist(id)
         assertFalse(Library(context).playlists.any {it.id==id})
     }
