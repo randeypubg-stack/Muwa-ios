@@ -146,6 +146,7 @@ class MainActivity : ComponentActivity() {
                 else -> if(route.startsWith("playlist:")) {
                     val id=route.substringAfter(':'); val list=model.library.playlists.firstOrNull {it.id==id}
                     LazyColumn(Modifier.padding(16.dp)) { if(list?.ids.isNullOrEmpty()) item {Text("Добавьте нашиды через меню ⋮")}; items(model.library.tracks(list?.ids.orEmpty()),key={it.id}) { t -> TrackRow(model,t,play,{addingTrack=it}); TextButton(onClick={model.library.togglePlaylist(id,t)}) {Text("Убрать из плейлиста")} } }
+                }
             }
         }
     }
