@@ -30,7 +30,7 @@ final class PremiumManager: ObservableObject {
 
   private var updatesTask: Task<Void, Never>?
 
-  init(requestAccount: @escaping ([String: Any]) async throws -> MuwaPremiumResponse = MuwaPremiumAPI.request, reportError: @escaping (Error) -> Void = { _ in }) {
+  init(reportError: @escaping (Error) -> Void = { _ in }, requestAccount: @escaping ([String: Any]) async throws -> MuwaPremiumResponse = MuwaPremiumAPI.request) {
     self.requestAccount = requestAccount
     self.reportError = reportError
     updatesTask = Task { [weak self] in
