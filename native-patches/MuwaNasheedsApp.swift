@@ -15,7 +15,8 @@ struct MuwaNasheedsApp: App {
     _ = Diagnostics.shared
     let library = LibraryStore()
     let downloads = DownloadManager()
-    let premium = PremiumManager(reportError: { Diagnostics.shared.record("premium", error: $0) })
+    let premium = PremiumManager()
+    premium.reportError = { Diagnostics.shared.record("premium", error: $0) }
     _library = StateObject(wrappedValue: library)
     _downloads = StateObject(wrappedValue: downloads)
     _premium = StateObject(wrappedValue: premium)

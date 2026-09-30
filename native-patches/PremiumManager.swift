@@ -18,7 +18,7 @@ final class PremiumManager: ObservableObject {
   private var accountRequestTail: Task<Void, Never>?
   private let requestAccount: ([String: Any]) async throws -> MuwaPremiumResponse
   private(set) var storePremium = false
-  private let reportError: (Error) -> Void
+  var reportError: (Error) -> Void = { _ in }
   private var expiryTask: Task<Void, Never>?
 
   let productIDs = [
@@ -30,9 +30,8 @@ final class PremiumManager: ObservableObject {
 
   private var updatesTask: Task<Void, Never>?
 
-  init(reportError: @escaping (Error) -> Void = { _ in }, requestAccount: @escaping ([String: Any]) async throws -> MuwaPremiumResponse = MuwaPremiumAPI.request) {
+  init(requestAccount: @escaping ([String: Any]) async throws -> MuwaPremiumResponse = MuwaPremiumAPI.request) {
     self.requestAccount = requestAccount
-    self.reportError = reportError
     updatesTask = Task { [weak self] in
       for await result in Transaction.updates {
         guard case .verified(let transaction) = result, self?.productIDs.contains(transaction.productID) == true else { continue }
