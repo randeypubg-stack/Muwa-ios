@@ -27,6 +27,7 @@ jobs:
           gradle-version: '8.10.2'
       - run: gradle :app:assembleDebug :app:assembleRelease :app:testDebugUnitTest :app:lintDebug --stacktrace
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: Muwa-Android-build35
           path: |
@@ -56,6 +57,14 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - name: Install emulator with download retries
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if sdkmanager --install emulator; then exit 0; fi
+            if [ "$attempt" -lt 3 ]; then sleep 5; fi
+          done
+          exit 1
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
