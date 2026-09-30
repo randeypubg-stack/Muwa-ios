@@ -193,6 +193,12 @@ final class LibraryStore: ObservableObject {
     }
   }
 
+  func replaceQueue(with tracks: [Track]) {
+    var seen = Set<String>()
+    queueIDs = tracks.map(\.id).filter { seen.insert($0).inserted }
+    persistQueue()
+  }
+
   func addPublication(_ draft: PublicationDraft) {
     publications.insert(draft, at: 0)
     persistPublications()
@@ -236,5 +242,4 @@ final class LibraryStore: ObservableObject {
     }
   }
 }
-
 

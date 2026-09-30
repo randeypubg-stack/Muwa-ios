@@ -20,9 +20,11 @@ small=next((d for d in phones if 'SE' in d['name']),None)
 if small and small not in selected: selected.append(small)
 app=next(Path('build/PreviewDerivedData/Build/Products/Debug-iphonesimulator').glob('*.app'))
 out=Path('build/previews'); out.mkdir(parents=True,exist_ok=True)
+(out/'manifest.json').write_text(json.dumps([{'device': d['name'], 'index': i} for i,d in enumerate(selected)], ensure_ascii=False, indent=2))
 for i,d in enumerate(selected):
     udid=d['udid']
     print('Capture device:', d['name'], flush=True)
+    (out/f'{i}-device.txt').write_text(d['name'])
     if d['state']!='Booted': run('xcrun','simctl','boot',udid)
     run('xcrun','simctl','bootstatus',udid,'-b')
     run('xcrun','simctl','ui',udid,'appearance','dark')
@@ -43,4 +45,3 @@ for i,d in enumerate(selected):
     run('xcrun','simctl','shutdown',udid)
     (out/f'{i}-device.txt').write_text(d['name'])
 (out/'manifest.json').write_text(json.dumps([{'device': d['name'], 'index': i} for i,d in enumerate(selected)], ensure_ascii=False, indent=2))
-

@@ -1,0 +1,29 @@
+"""Check CarPlay registration without altering phone scenes or duplicating Xcode entries."""
+from pathlib import Path
+import plistlib
+import shutil
+import subprocess
+import sys
+import tempfile
+
+with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory) / 'native'
+    shutil.copytree(Path(sys.argv[1]), root)
+    info = root / 'Info.plist'
+    data = plistlib.loads(info.read_bytes())
+    phone = [{'UISceneConfigurationName': 'Existing phone scene', 'UISceneDelegateClassName': 'PhoneDelegate'}]
+    data['UIApplicationSceneManifest'] = {'UISceneConfigurations': {'UIWindowSceneSessionRoleApplication': phone}}
+    info.write_bytes(plistlib.dumps(data))
+    script = Path(__file__).resolve().parents[1] / 'scripts/prepare_native_extras.py'
+    subprocess.run([sys.executable, str(script), str(root)], check=True)
+    first = (root / 'MuwaNasheeds.xcodeproj/project.pbxproj').read_bytes()
+    subprocess.run([sys.executable, str(script), str(root)], check=True)
+    assert first == (root / 'MuwaNasheeds.xcodeproj/project.pbxproj').read_bytes(), 'Registration is not idempotent'
+    scenes = plistlib.loads(info.read_bytes())['UIApplicationSceneManifest']['UISceneConfigurations']
+    assert scenes['UIWindowSceneSessionRoleApplication'] == phone, 'Phone scene was replaced'
+    assert len(scenes['CPTemplateApplicationSceneSessionRoleApplication']) == 1
+    assert scenes['CPTemplateApplicationSceneSessionRoleApplication'][0]['UISceneClassName'] == 'CPTemplateApplicationScene'
+    entitlement = plistlib.loads((root / 'MuwaCarPlay.entitlements').read_bytes())
+    assert entitlement['com.apple.developer.carplay-audio'] is True
+    assert first.count(b'CODE_SIGN_ENTITLEMENTS = MuwaCarPlay.entitlements;') == 2, 'Debug/Release signing differs'
+    print('PASS: phone scene preservation, CarPlay registration, Debug/Release entitlement and idempotency')

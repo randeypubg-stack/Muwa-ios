@@ -22,7 +22,7 @@ struct MuwaNasheedsApp: App {
     _premium = StateObject(wrappedValue: premium)
     let player = PlayerManager(library: library, downloads: downloads, premium: premium)
     _player = StateObject(wrappedValue: player)
-    CarPlayCoordinator.shared.configure(player: player, library: library)
+    CarPlayCoordinator.shared.configure(player: player, library: library, downloads: downloads)
     _subtitles = StateObject(wrappedValue: SubtitleManager())
     _auth = StateObject(wrappedValue: AuthManager())
   }
@@ -47,4 +47,3 @@ struct MuwaNasheedsApp: App {
     }
   }
 }
-

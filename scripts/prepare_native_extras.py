@@ -29,17 +29,17 @@ for name, directory in files.items():
     text = text.replace('/* End PBXFileReference section */', f'\t\t{ref} /* {name} */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = {directory}/{name}; sourceTree = "<group>"; }};\n/* End PBXFileReference section */')
     text = text.replace('932704417AB46D25E8F18983 /* Sources */ = {isa = PBXGroup; children = (', f'932704417AB46D25E8F18983 /* Sources */ = {{isa = PBXGroup; children = (\n\t\t\t{ref} /* {name} */,')
     text = text.replace('E4F78730D65EE9F55E2BAC2F /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (', f'E4F78730D65EE9F55E2BAC2F /* Sources */ = {{isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (\n\t\t\t{build} /* {name} in Sources */,')
+(root / 'MuwaCarPlay.entitlements').write_bytes((patches / 'MuwaCarPlay.entitlements').read_bytes())
+if 'CODE_SIGN_ENTITLEMENTS' not in text:
+    text = text.replace('CODE_SIGN_STYLE = Automatic;', 'CODE_SIGN_STYLE = Automatic;\n\t\t\tCODE_SIGN_ENTITLEMENTS = MuwaCarPlay.entitlements;')
 project.write_text(text)
 info = root / 'Info.plist'
 data = plistlib.loads(info.read_bytes())
-data['UIApplicationSceneManifest'] = {
-    'UIApplicationSupportsMultipleScenes': True,
-    'UISceneConfigurations': {
-        'CPTemplateApplicationSceneSessionRoleApplication': [{
+manifest = data.setdefault('UIApplicationSceneManifest', {})
+manifest['UIApplicationSupportsMultipleScenes'] = True
+manifest.setdefault('UISceneConfigurations', {})['CPTemplateApplicationSceneSessionRoleApplication'] = [{
             'UISceneConfigurationName': 'Muwa CarPlay',
             'UISceneClassName': 'CPTemplateApplicationScene',
             'UISceneDelegateClassName': '$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate',
-        }],
-    },
-}
+        }]
 info.write_bytes(plistlib.dumps(data))

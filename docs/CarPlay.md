@@ -1,16 +1,31 @@
 # Muwa CarPlay
 
-The audio CarPlay scene uses CPListTemplate, CPTabBarTemplate and Apple's
-CPNowPlayingTemplate. It shares PlayerManager, LibraryStore, the queue and
-MPRemoteCommandCenter with the phone. Catalog, favorites and recent listening
-are native CarPlay lists. It does not render a web page.
+CarPlay uses Apple's audio templates and the same PlayerManager, LibraryStore,
+DownloadManager, queue and MPRemoteCommandCenter as iPhone. No web content is used.
 
-Physical CarPlay distribution requires Apple Developer approval for the audio
-entitlement `com.apple.developer.carplay-audio`. The unsigned test IPA does not
-claim that approval. Add the approved entitlement to the distribution target
-and sign with a matching provisioning profile before testing a car/head unit.
+Five native tabs show the catalog, favorites, downloaded audio, playlists and recent
+listening. Selecting a track uses that list as the playback queue. Now Playing offers
+favorite, shuffle and repeat actions; its Up Next button opens the shared queue.
+System playback, seek, next and previous buttons use the existing remote commands.
+Playback errors offer Retry. List updates preserve the selected tab and navigation.
+Disconnecting and reconnecting release observers without stopping iPhone playback.
 
-Use the CarPlay external display in Xcode Simulator with a CarPlay-enabled
-development signing configuration to review the real system templates. Phone
-screenshots are not CarPlay screenshots; missing external-display captures
-must be reported, not replaced with a generated mockup.
+`MuwaCarPlay.entitlements` requests `com.apple.developer.carplay-audio`, and the
+source preparation script registers it in both Xcode configurations. It also adds
+the CarPlay scene while preserving any existing phone scene configurations.
+This file requests a capability; it is not evidence of Apple approval.
+
+Physical installation requires Apple's CarPlay Audio approval and a provisioning
+profile for `app.muwa.nasheeds` with that entitlement. The normal device IPA stays
+unsigned. Sign it with the approved profile to test on a car/head unit. An ordinary
+sideloading profile may not include the CarPlay entitlement.
+
+CI `tests/capture_carplay.py` ad-hoc signs only the simulator fixture, tries to open
+Simulator's CarPlay external display, and captures that display only after Muwa's
+CarPlay scene reports a connection. If the runner cannot expose or connect the
+external display, `build/previews/carplay/status.json` records the reason. A missing
+capture is never replaced by a mockup or a phone screenshot.
+
+Before distribution, test track selection from each tab, offline playback with the
+network disabled, queue advancement, favorites updated on either screen, interruption
+and route changes, playback retry, and car disconnection/reconnection on real hardware.

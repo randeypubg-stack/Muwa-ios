@@ -23,6 +23,11 @@ struct AuditChecks {
     precondition(restored.playlist(id: legacyID)?.trackIDs == [b.id])
     for track in store.queueTracks { store.removeFromQueue(track) }
     precondition(LibraryStore(defaults: defaults).queueTracks.isEmpty, "Empty queue repopulated")
+    store.replaceQueue(with: [b, a, b])
+    precondition(store.queueTracks.map(\.id) == [b.id, a.id], "Playback source order or deduplication changed")
+    precondition(LibraryStore(defaults: defaults).queueIDs == [b.id, a.id], "CarPlay queue was not persisted")
+    store.replaceQueue(with: [])
+    precondition(LibraryStore(defaults: defaults).queueTracks.isEmpty, "Empty playback source repopulated")
     store.deletePlaylist(newID)
     store.deletePlaylist(legacyID)
     precondition(LibraryStore(defaults: defaults).playlists.isEmpty, "Deleted legacy playlist resurrected")
