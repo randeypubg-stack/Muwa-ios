@@ -46,6 +46,7 @@ import kotlin.math.abs
 
 class MainActivity : ComponentActivity() {
     companion object { private var launchHasPlayed = false }
+    private var systemLaunchReady by mutableStateOf(Build.VERSION.SDK_INT < 31)
     private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,13 +54,19 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
+        if (Build.VERSION.SDK_INT >= 31) {
+            splashScreen.setOnExitAnimationListener { splash ->
+                splash.remove()
+                systemLaunchReady = true
+            }
+        }
         val reviewRoute = if (BuildConfig.DEBUG) intent.getStringExtra("review.route") else null
         // A cold process can receive a saved Activity bundle from Recents. Process
         // ownership, rather than bundle presence, decides whether launch has played.
         val showIntro = (reviewRoute == null || reviewRoute == "launch") && !launchHasPlayed
         launchHasPlayed = true
         setContent { MaterialTheme(colorScheme = darkColorScheme(background=Color(0xFF010102),surface=Color(0xFF10141B),primary=Color(0xFFD9E8FF))) {
-            MuwaLaunchHost(showIntro = showIntro) {
+            MuwaLaunchHost(showIntro = showIntro, systemLaunchReady = systemLaunchReady) {
                 MuwaApp(initialRoute = reviewRoute?.takeUnless { it == "launch" } ?: "home", requestNotifications = { if (Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS) })
             }
         } }

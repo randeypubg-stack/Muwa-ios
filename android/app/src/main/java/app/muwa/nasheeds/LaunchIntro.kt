@@ -1,6 +1,9 @@
 package app.muwa.nasheeds
 
 import android.animation.ValueAnimator
+import android.os.Build
+import android.view.View
+import android.view.ViewTreeObserver
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -19,6 +22,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -32,6 +36,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
@@ -39,23 +44,26 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import kotlin.math.PI
 import kotlin.math.sin
 
 /** UI-only cold-launch reveal. Home and its model mount immediately beneath it. */
 @Composable
-fun MuwaLaunchHost(showIntro: Boolean, content: @Composable () -> Unit) {
+fun MuwaLaunchHost(showIntro: Boolean, systemLaunchReady: Boolean = true, content: @Composable () -> Unit) {
     // This is deliberately not saveable: rotation/recreation must not replay the launch.
     var introVisible by remember { mutableStateOf(showIntro && ValueAnimator.areAnimatorsEnabled()) }
     Box(Modifier.fillMaxSize()) {
         Box(if (introVisible) Modifier.clearAndSetSemantics { } else Modifier) { content() }
-        if (introVisible) MuwaLaunchIntro { introVisible = false }
+        if (introVisible) MuwaLaunchIntro(systemLaunchReady) { introVisible = false }
     }
 }
 
 @Composable
-private fun MuwaLaunchIntro(onFinished: () -> Unit) {
+private fun MuwaLaunchIntro(systemLaunchReady: Boolean, onFinished: () -> Unit) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val view = LocalView.current
     val finish by rememberUpdatedState(onFinished)
     val progress = remember { Animatable(0f) }
     // Screen readers receive the app name once; taps/back never activate hidden home.
@@ -67,14 +75,26 @@ private fun MuwaLaunchIntro(onFinished: () -> Unit) {
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
-    LaunchedEffect(lifecycle) {
+    LaunchedEffect(lifecycle, view, systemLaunchReady) {
+        if (!systemLaunchReady) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            progress.animateTo(1f, tween(durationMillis = ((1f - progress.value) * 1050).toInt(), easing = LinearEasing))
-            finish()
+            try {
+                // A resumed Activity may still be covered by Android's starting
+                // window. Begin the visual clock only after a focused frame has
+                // reached the GPU, rather than consuming it during cold setup.
+                awaitWindowFocus(view)
+                awaitFrameCommit(view)
+                progress.animateTo(1f, tween(durationMillis = ((1f - progress.value) * 1050).toInt(), easing = LinearEasing))
+            } finally {
+                // Pausing/cancellation reveals usable home and never resumes a
+                // partly hidden launch when the user comes back.
+                finish()
+            }
         }
     }
     val phase = progress.value
-    val appear = smoothStep((phase / 0.24f).coerceIn(0f, 1f))
+    // A faint first frame primes the real logo texture before animation starts.
+    val appear = 0.04f + 0.96f * smoothStep((phase / 0.24f).coerceIn(0f, 1f))
     val settle = smoothStep((phase / 0.64f).coerceIn(0f, 1f))
     val fade = 1f - smoothStep(((phase - 0.81f) / 0.19f).coerceIn(0f, 1f))
     val sheen = ((phase - 0.18f) / 0.60f).coerceIn(0f, 1f)
@@ -111,7 +131,7 @@ private fun MuwaLaunchIntro(onFinished: () -> Unit) {
             Image(markPainter, contentDescription = "Muwa", modifier = Modifier.fillMaxSize())
             Image(markPainter, contentDescription = null, colorFilter = sheenFilter,
                 modifier = Modifier.fillMaxSize()
-                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen; alpha = sheenOpacity }
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen; alpha = 0.005f + sheenOpacity }
                     .drawWithContent {
                         drawContent()
                         val center = (-0.40f + 1.80f * sheen) * size.width
@@ -132,3 +152,40 @@ private fun MuwaLaunchIntro(onFinished: () -> Unit) {
 }
 
 private fun smoothStep(value: Float): Float = value * value * (3f - 2f * value)
+
+private suspend fun awaitWindowFocus(view: View) {
+    if (view.hasWindowFocus()) return
+    suspendCancellableCoroutine<Unit> { continuation ->
+        val listener = object : ViewTreeObserver.OnWindowFocusChangeListener {
+            override fun onWindowFocusChanged(hasFocus: Boolean) {
+                if (hasFocus && continuation.isActive) {
+                    view.viewTreeObserver.takeIf { it.isAlive }?.removeOnWindowFocusChangeListener(this)
+                    continuation.resume(Unit)
+                }
+            }
+        }
+        view.viewTreeObserver.addOnWindowFocusChangeListener(listener)
+        continuation.invokeOnCancellation {
+            view.viewTreeObserver.takeIf { it.isAlive }?.removeOnWindowFocusChangeListener(listener)
+        }
+        // Focus can arrive between the initial check and listener registration.
+        listener.onWindowFocusChanged(view.hasWindowFocus())
+    }
+}
+
+private suspend fun awaitFrameCommit(view: View) {
+    if (Build.VERSION.SDK_INT >= 29 && view.isHardwareAccelerated) {
+        suspendCancellableCoroutine<Unit> { continuation ->
+            val committed = Runnable { if (continuation.isActive) continuation.resume(Unit) }
+            view.viewTreeObserver.registerFrameCommitCallback(committed)
+            continuation.invokeOnCancellation {
+                view.viewTreeObserver.takeIf { it.isAlive }?.unregisterFrameCommitCallback(committed)
+            }
+            view.postInvalidateOnAnimation()
+        }
+    } else {
+        // Older/software renderers expose the frame clock, but no commit API.
+        withFrameNanos { }
+        withFrameNanos { }
+    }
+}
