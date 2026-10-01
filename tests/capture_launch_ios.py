@@ -34,6 +34,36 @@ def validate_png(path):
     return {"width": width, "height": height}
 
 
+def validate_video(path):
+    """Reject unfinished MP4/QuickTime files even when ffmpeg is unavailable."""
+    length = path.stat().st_size
+    atoms = []
+    with path.open("rb") as stream:
+        offset = 0
+        while offset < length:
+            stream.seek(offset)
+            header = stream.read(8)
+            if len(header) != 8:
+                raise AssertionError("Native recording has a truncated atom header")
+            size, kind = struct.unpack(">I4s", header)
+            header_size = 8
+            if size == 1:
+                extended = stream.read(8)
+                if len(extended) != 8:
+                    raise AssertionError("Native recording has a truncated extended atom")
+                size = struct.unpack(">Q", extended)[0]
+                header_size = 16
+            elif size == 0:
+                size = length - offset
+            if size < header_size or offset + size > length:
+                raise AssertionError("Native recording has an incomplete MP4 atom")
+            atoms.append(kind.decode("ascii", errors="replace"))
+            offset += size
+    if not all(kind in atoms for kind in ("ftyp", "mdat", "moov")):
+        raise AssertionError(f"Native recording is not finalized (MP4 atoms: {', '.join(atoms)})")
+    return atoms
+
+
 def main():
     OUTPUT.mkdir(parents=True, exist_ok=True)
     status = {"captured": False, "package": PACKAGE, "commands": []}
@@ -57,16 +87,25 @@ def main():
         nonlocal recorder
         if recorder is None:
             return
-        if recorder.poll() is None:
-            recorder.send_signal(signal.SIGINT)
+        def signal_group(value):
             try:
-                recorder.wait(timeout=15)
+                os.killpg(recorder.pid, value)
+            except ProcessLookupError:
+                # The process can finish between poll() and delivery.
+                pass
+        if recorder.poll() is None:
+            signal_group(signal.SIGINT)
+            try:
+                # Hosted Simulator encoders may need longer than the recording
+                # itself to flush frames and write the MP4's final moov atom.
+                # Terminating early produces an unplayable recording.
+                recorder.wait(timeout=60)
             except subprocess.TimeoutExpired:
-                recorder.terminate()
+                signal_group(signal.SIGTERM)
                 try:
                     recorder.wait(timeout=5)
                 except subprocess.TimeoutExpired:
-                    recorder.kill()
+                    signal_group(signal.SIGKILL)
                     recorder.wait(timeout=5)
                 raise RuntimeError("Simulator recorder did not finish after SIGINT")
         status["recorder_exit_code"] = recorder.returncode
@@ -111,7 +150,10 @@ def main():
         recorder_log = log_path.open("w")
         recording_start = time.monotonic()
         recording_command = ["xcrun", "simctl", "io", udid, "recordVideo", "--codec=h264", str(video)]
-        recorder = subprocess.Popen(recording_command, stdout=recorder_log, stderr=subprocess.STDOUT)
+        # Own the isolated recording process group so xcrun children receive the
+        # same graceful interruption. Never signal unrelated Simulator processes.
+        recorder = subprocess.Popen(recording_command, stdout=recorder_log,
+                                    stderr=subprocess.STDOUT, start_new_session=True)
         status["recording_command"] = recording_command
         # Launch only once simctl confirms that the screen recording is active.
         ready_deadline = time.monotonic() + 10
@@ -142,9 +184,7 @@ def main():
         status["recording_duration_seconds"] = round(time.monotonic() - recording_start, 3)
         if not video.exists() or video.stat().st_size < 10000:
             raise AssertionError("Native launch video is empty or truncated")
-        with video.open("rb") as stream:
-            if b"ftyp" not in stream.read(64):
-                raise AssertionError("Native recording is not a valid MP4 container")
+        status["video_atoms"] = validate_video(video)
         status["video_bytes"] = video.stat().st_size
 
         # Extract real recorded frames only when ffmpeg is present on the runner.
