@@ -2,7 +2,7 @@ name: Build Native Android
 on:
   push:
     branches: [main, feat/muwa-native-build35]
-    paths: ['android/**', '.github/workflows/build-native-android.yml']
+    paths: ['android/**', 'tests/capture_launch_android.py', 'tests/capture_android.py', '.github/workflows/build-native-android.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -29,7 +29,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Muwa-Android-build35
+          name: Muwa-Android-build36
           path: |
             android/app/build/outputs/apk
             android/app/build/reports
@@ -57,6 +57,10 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - name: Set up Android SDK for screen review
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - name: Install emulator with download retries
         shell: bash
         run: |
@@ -74,13 +78,13 @@ jobs:
           script: |
             adb shell wm size ${{ matrix.screen.size }}
             adb shell wm density ${{ matrix.screen.density }}
+            adb shell input keyevent KEYCODE_WAKEUP
+            adb shell wm dismiss-keyguard
             cd android && gradle :app:connectedDebugAndroidTest --stacktrace
-            mkdir -p ../build/android-previews/${{ matrix.screen.name }}
-            adb pull /sdcard/Android/data/app.muwa.nasheeds/files/screenshots ../build/android-previews/${{ matrix.screen.name }}/portrait
-            adb shell settings put system accelerometer_rotation 0
-            adb shell settings put system user_rotation 1
-            gradle :app:connectedDebugAndroidTest --stacktrace
-            adb pull /sdcard/Android/data/app.muwa.nasheeds/files/screenshots ../build/android-previews/${{ matrix.screen.name }}/landscape
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            cd ..
+            MUWA_ANDROID_OUTPUT=build/android-previews/${{ matrix.screen.name }} python3 tests/capture_android.py
+            MUWA_ANDROID_OUTPUT=build/android-previews/${{ matrix.screen.name }} python3 tests/capture_launch_android.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

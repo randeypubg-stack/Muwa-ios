@@ -26,3 +26,9 @@ subprocess.run(['swiftc', '-parse-as-library', '-o', str(build/'premium-account-
  str(root/'Sources/Services/PremiumManager.swift'), str(root/'Sources/Services/BackendConfig.swift'),
  'tests/PremiumAccountChecks.swift'], check=True)
 subprocess.run([str(build/'premium-account-checks')], check=True)
+
+launch = (root/'Sources/App/LaunchExperience.swift').read_text().split('\nstruct MuwaLaunchView:')[0]
+(build/'LaunchPresentation.swift').write_text(launch.replace('import SwiftUI', 'import Foundation\nimport Combine'))
+subprocess.run(['swiftc', '-parse-as-library', '-o', str(build/'launch-checks'),
+ str(build/'LaunchPresentation.swift'), 'tests/LaunchChecks.swift'], check=True)
+subprocess.run([str(build/'launch-checks')], check=True)

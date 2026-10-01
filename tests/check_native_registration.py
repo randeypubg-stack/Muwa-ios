@@ -25,5 +25,9 @@ with tempfile.TemporaryDirectory() as directory:
     assert scenes['CPTemplateApplicationSceneSessionRoleApplication'][0]['UISceneClassName'] == 'CPTemplateApplicationScene'
     entitlement = plistlib.loads((root / 'MuwaCarPlay.entitlements').read_bytes())
     assert entitlement['com.apple.developer.carplay-audio'] is True
-    assert first.count(b'CODE_SIGN_ENTITLEMENTS = MuwaCarPlay.entitlements;') == 2, 'Debug/Release signing differs'
+    assert first.count(b'CODE_SIGN_ENTITLEMENTS = "$(MUWA_CARPLAY_ENTITLEMENTS)";') == 2, 'Debug/Release signing differs'
+    assert b'MUWA_CARPLAY_ENTITLEMENTS = MuwaCarPlay.entitlements;' not in first, 'Normal signing requires an unapproved entitlement'
+    assert plistlib.loads(info.read_bytes())['CFBundleDisplayName'] == 'Muwa'
+    assert b'PRODUCT_NAME = Muwa;' in first
+    assert (root / 'Resources/Assets.xcassets/AppMark.imageset/AppMark.png').read_bytes() == (script.parents[1] / 'branding/AppMark.png').read_bytes()
     print('PASS: phone scene preservation, CarPlay registration, Debug/Release entitlement and idempotency')

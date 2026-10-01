@@ -44,11 +44,17 @@ import org.json.JSONObject
 import kotlin.math.abs
 
 class MainActivity : ComponentActivity() {
+    companion object { private var launchHasPlayed = false }
     private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); enableEdgeToEdge()
+        val reviewRoute = if (BuildConfig.DEBUG) intent.getStringExtra("review.route") else null
+        val showIntro = savedInstanceState == null && (reviewRoute == "launch" || (reviewRoute == null && !launchHasPlayed))
+        if (reviewRoute == null) launchHasPlayed = true
         setContent { MaterialTheme(colorScheme = darkColorScheme(background=Color(0xFF010102),surface=Color(0xFF10141B),primary=Color(0xFFD9E8FF))) {
-            MuwaApp(initialRoute = if (BuildConfig.DEBUG) intent.getStringExtra("review.route") ?: "home" else "home", requestNotifications = { if (Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS) })
+            MuwaLaunchHost(showIntro = showIntro) {
+                MuwaApp(initialRoute = reviewRoute?.takeUnless { it == "launch" } ?: "home", requestNotifications = { if (Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS) })
+            }
         } }
     }
 }

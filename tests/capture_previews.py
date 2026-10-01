@@ -1,5 +1,6 @@
 import json, subprocess, time
 import shutil
+import os
 from pathlib import Path
 
 def run(*args):
@@ -18,6 +19,12 @@ for device in [large, mini]:
     if device and device not in selected: selected.append(device)
 small=next((d for d in phones if 'SE' in d['name']),None)
 if small and small not in selected: selected.append(small)
+kind = os.environ.get('MUWA_REVIEW_DEVICE')
+if kind:
+    requested = {'phone': phones[0], 'large-phone': large, 'tablet': pads[0], 'small-tablet': mini}.get(kind)
+    assert requested is not None, f'Review device unavailable: {kind}'
+    selected = [requested]
+run('xcrun', 'simctl', 'shutdown', 'all')
 app=next(Path('build/PreviewDerivedData/Build/Products/Debug-iphonesimulator').glob('*.app'))
 out=Path('build/previews'); out.mkdir(parents=True,exist_ok=True)
 (out/'manifest.json').write_text(json.dumps([{'device': d['name'], 'index': i} for i,d in enumerate(selected)], ensure_ascii=False, indent=2))

@@ -10,3 +10,5 @@ android/local.properties
 android/**/build/
 
 __pycache__/
+
+android/.kotlin/

@@ -11,13 +11,17 @@ Playback errors offer Retry. List updates preserve the selected tab and navigati
 Disconnecting and reconnecting release observers without stopping iPhone playback.
 
 `MuwaCarPlay.entitlements` requests `com.apple.developer.carplay-audio`, and the
-source preparation script registers it in both Xcode configurations. It also adds
+source preparation script provides an opt-in signing setting in both Xcode configurations. It also adds
 the CarPlay scene while preserving any existing phone scene configurations.
 This file requests a capability; it is not evidence of Apple approval.
 
 Physical installation requires Apple's CarPlay Audio approval and a provisioning
 profile for `app.muwa.nasheeds` with that entitlement. The normal device IPA stays
-unsigned. Sign it with the approved profile to test on a car/head unit. An ordinary
+unsigned. For an approved development/distribution profile, pass
+`MUWA_CARPLAY_ENTITLEMENTS=MuwaCarPlay.entitlements` to xcodebuild (or set that
+user-defined build setting in Xcode), then sign with the approved profile to test
+on a car/head unit. The setting is empty by default, so normal iPhone signing
+does not suddenly require an unapproved CarPlay capability. An ordinary
 sideloading profile may not include the CarPlay entitlement.
 
 CI `tests/capture_carplay.py` ad-hoc signs only the simulator fixture, tries to open

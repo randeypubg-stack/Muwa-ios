@@ -4,6 +4,7 @@ import UIKit
 struct RootView: View {
   @EnvironmentObject private var player: PlayerManager
   @EnvironmentObject private var auth: AuthManager
+  @EnvironmentObject private var launch: LaunchPresentation
 
   @State private var selection: AppTab = .home
   @State private var playerExpansion: CGFloat = 0
@@ -12,25 +13,35 @@ struct RootView: View {
 
   var body: some View {
     ZStack {
-      if auth.registrationJustCompleted {
-        RegistrationSuccessView()
-          .transition(.opacity.combined(with: .scale(scale: 0.985)))
-      } else {
-        switch auth.state {
-        case .checking:
-          LaunchGateView()
-            .transition(.opacity)
+      Group {
+        if auth.registrationJustCompleted {
+          RegistrationSuccessView()
+            .transition(.opacity.combined(with: .scale(scale: 0.985)))
+        } else {
+          switch auth.state {
+          case .checking:
+            LaunchGateView()
+              .transition(.opacity)
 
-        case .signedOut:
-          AuthFlowView()
-            .transition(.opacity)
+          case .signedOut:
+            AuthFlowView()
+              .transition(.opacity)
 
-        case .guest, .authenticated:
-          appShell
-            .transition(.opacity)
+          case .guest, .authenticated:
+            appShell
+              .transition(.opacity)
+          }
         }
       }
+      .accessibilityHidden(launch.isVisible)
+      .allowsHitTesting(!launch.isVisible)
+
+      if launch.isVisible {
+        MuwaLaunchView()
+          .zIndex(1000)
+      }
     }
+    .background(Color.black.ignoresSafeArea())
     .animation(.easeInOut(duration: 0.24), value: auth.state)
     .animation(.easeInOut(duration: 0.24), value: auth.registrationJustCompleted)
     .fullScreenCover(isPresented: $searchPresented) {
@@ -185,36 +196,16 @@ struct RootView: View {
 }
 
 private struct LaunchGateView: View {
-  @State private var reveal = false
-
   var body: some View {
     ZStack {
       Color.black.ignoresSafeArea()
-
-      ZStack {
-        Circle()
-          .stroke(.white.opacity(0.10), lineWidth: 1)
-          .frame(width: 132, height: 132)
-          .scaleEffect(reveal ? 1.26 : 0.72)
-          .opacity(reveal ? 0 : 0.62)
-
-        Image("AppMark")
-          .resizable()
-          .scaledToFit()
-          .frame(width: 92, height: 92)
-          .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-          .scaleEffect(reveal ? 1 : 0.84)
-          .opacity(reveal ? 1 : 0.18)
-          .shadow(
-            color: .white.opacity(reveal ? 0.14 : 0),
-            radius: reveal ? 18 : 0
-          )
+      VStack(spacing: 16) {
+        ProgressView().tint(.white.opacity(0.8))
+        Text("Открываем Muwa…")
+          .font(.system(size: 14))
+          .foregroundStyle(.secondary)
       }
-    }
-    .onAppear {
-      withAnimation(.easeOut(duration: 0.58)) {
-        reveal = true
-      }
+      .accessibilityElement(children: .combine)
     }
   }
 }

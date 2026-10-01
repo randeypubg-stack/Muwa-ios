@@ -15,6 +15,9 @@ class NativeScreensTest {
         val instrumentation=InstrumentationRegistry.getInstrumentation()
         val context=instrumentation.targetContext
         val device=UiDevice.getInstance(instrumentation)
+        device.wakeUp()
+        device.executeShellCommand("wm dismiss-keyguard")
+        device.pressHome()
         val output=File(context.getExternalFilesDir(null),"screenshots").apply {mkdirs()}
         assertFalse(FeatureAccess.premiumRestrictionsEnabled)
         for(route in listOf("home","library","profile","premium","promo","settings","search","queue","downloads","auth","publication","player")) {

@@ -13,6 +13,7 @@ files = {
     'Diagnostics.swift': 'Services',
     'AppSettingsView.swift': 'Views/Profile',
     'CarPlaySceneDelegate.swift': 'App',
+    'LaunchExperience.swift': 'App',
     'DownloadManager.swift': 'Services',
     'AuthManager.swift': 'Services',
     'SearchView.swift': 'Views/Search',
@@ -31,7 +32,9 @@ for name, directory in files.items():
     text = text.replace('E4F78730D65EE9F55E2BAC2F /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (', f'E4F78730D65EE9F55E2BAC2F /* Sources */ = {{isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (\n\t\t\t{build} /* {name} in Sources */,')
 (root / 'MuwaCarPlay.entitlements').write_bytes((patches / 'MuwaCarPlay.entitlements').read_bytes())
 if 'CODE_SIGN_ENTITLEMENTS' not in text:
-    text = text.replace('CODE_SIGN_STYLE = Automatic;', 'CODE_SIGN_STYLE = Automatic;\n\t\t\tCODE_SIGN_ENTITLEMENTS = MuwaCarPlay.entitlements;')
+    text = text.replace('CODE_SIGN_STYLE = Automatic;', 'CODE_SIGN_STYLE = Automatic;\n\t\t\tCODE_SIGN_ENTITLEMENTS = "$(MUWA_CARPLAY_ENTITLEMENTS)";')
+else:
+    text = text.replace('CODE_SIGN_ENTITLEMENTS = MuwaCarPlay.entitlements;', 'CODE_SIGN_ENTITLEMENTS = "$(MUWA_CARPLAY_ENTITLEMENTS)";')
 project.write_text(text)
 info = root / 'Info.plist'
 data = plistlib.loads(info.read_bytes())
@@ -43,3 +46,22 @@ manifest.setdefault('UISceneConfigurations', {})['CPTemplateApplicationSceneSess
             'UISceneDelegateClassName': '$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate',
         }]
 info.write_bytes(plistlib.dumps(data))
+
+# Apply the supplied brand assets after the immutable source has been verified.
+brand = patches.parent / 'branding'
+manifest = __import__('json').loads((brand / 'manifest.json').read_text())
+for name, directory in [('AppIcon-1024.png', 'AppIcon.appiconset'), ('AppMark.png', 'AppMark.imageset')]:
+    payload = (brand / name).read_bytes()
+    if hashlib.sha256(payload).hexdigest() != manifest['assets'][name]:
+        raise ValueError(f'Brand asset checksum mismatch: {name}')
+    destination = root / 'Resources/Assets.xcassets' / directory / name
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(payload)
+data['CFBundleDisplayName'] = 'Muwa'
+data['CFBundleName'] = 'Muwa'
+info.write_bytes(plistlib.dumps(data))
+text = text.replace('PRODUCT_NAME = "Muwa Nasheeds";', 'PRODUCT_NAME = Muwa;')
+text = text.replace('/* Muwa Nasheeds.app */', '/* Muwa.app */').replace('path = "Muwa Nasheeds.app";', 'path = Muwa.app;')
+project.write_text(text)
+scheme = root / 'MuwaNasheeds.xcodeproj/xcshareddata/xcschemes/MuwaNasheeds.xcscheme'
+scheme.write_text(scheme.read_text().replace('BuildableName="Muwa Nasheeds.app"', 'BuildableName="Muwa.app"'))

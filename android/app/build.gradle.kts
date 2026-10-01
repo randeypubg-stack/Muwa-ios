@@ -7,7 +7,7 @@ android {
         applicationId = "app.muwa.nasheeds"
         minSdk = 26
         targetSdk = 35
-        versionCode = 35
+        versionCode = 36
         versionName = "1.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
