@@ -82,8 +82,8 @@ jobs:
             adb shell wm dismiss-keyguard
             gradle -p android :app:connectedDebugAndroidTest --stacktrace
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-            MUWA_ANDROID_OUTPUT=build/android-previews/${{ matrix.screen.name }} python3 tests/capture_android.py
             MUWA_ANDROID_OUTPUT=build/android-previews/${{ matrix.screen.name }} python3 tests/capture_launch_android.py
+            MUWA_ANDROID_OUTPUT=build/android-previews/${{ matrix.screen.name }} python3 tests/capture_android.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

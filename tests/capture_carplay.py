@@ -9,7 +9,7 @@ out = Path('build/previews/carplay')
 out.mkdir(parents=True, exist_ok=True)
 status = {'captured': False, 'distribution': 'requires Apple-approved CarPlay Audio provisioning', 'steps': []}
 
-def run(*args, timeout=45):
+def run(*args, timeout=180):
     command = [str(arg) for arg in args]
     print('Running:', ' '.join(command), flush=True)
     started = time.monotonic()

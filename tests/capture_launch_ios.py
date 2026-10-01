@@ -42,7 +42,7 @@ def main():
     udid = None
     booted_here = False
 
-    def run(*args, timeout=45):
+    def run(*args, timeout=180):
         command = [str(arg) for arg in args]
         print("Running:", " ".join(command), flush=True)
         result = subprocess.run(command, text=True, stdout=subprocess.PIPE,

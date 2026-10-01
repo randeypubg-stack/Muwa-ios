@@ -137,7 +137,7 @@ def main():
         # Refuse to interfere with any other recording already on the emulator.
         assert not screenrecord_pids(), "Another Android screen recording is already running"
         recorder = subprocess.Popen(
-            ["adb", "shell", "screenrecord", "--time-limit", "20", "--bit-rate", "6000000", remote_video],
+            ["adb", "shell", "screenrecord", "--time-limit", "30", "--bit-rate", "6000000", remote_video],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         # Verify the recorder is running before asking Android to launch Muwa.
         for _ in range(20):
@@ -150,12 +150,13 @@ def main():
         assert recorder_pids, "Android screenrecord did not start"
         print("Record actual Android launch: review.route=launch", flush=True)
         manifest["launchResult"] = start_launch()
-        started = time.monotonic()
         time.sleep(0.25)
-        manifest["files"].append(screenshot(out / "launch-logo.png"))
-        remaining = 3 - (time.monotonic() - started)
-        if remaining > 0:
-            time.sleep(remaining)
+        manifest["files"].append(screenshot(out / "launch-window.png"))
+        # am start -W can return while the GPU is still presenting the starting
+        # window on a cold CI emulator. Keep recording through actual native home.
+        assert_home(remote_xml)
+        manifest["nativeHomeVerifiedBeforeStop"] = True
+        time.sleep(3)
         check_foreground()
         for pid in recorder_pids:
             adb("shell", "kill", "-2", pid, timeout=10)
