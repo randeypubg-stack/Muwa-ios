@@ -32,7 +32,8 @@ for i,d in enumerate(selected):
     udid=d['udid']
     print('Capture device:', d['name'], flush=True)
     (out/f'{i}-device.txt').write_text(d['name'])
-    if d['state']!='Booted': run('xcrun','simctl','boot',udid)
+    # shutdown all above invalidates the states from the original device list.
+    run('xcrun','simctl','boot',udid)
     run('xcrun','simctl','bootstatus',udid,'-b')
     run('xcrun','simctl','ui',udid,'appearance','dark')
     run('xcrun','simctl','install',udid,str(app))
@@ -49,6 +50,8 @@ for i,d in enumerate(selected):
             assert 'cover=true; backdrop=true' in report, report
             (out/f'{i}-artwork-check.txt').write_text(report)
             shutil.copy2(data/'Documents/cached-backdrop.png', out/f'{i}-cached-backdrop.png')
-    run('xcrun','simctl','shutdown',udid)
+    # The phone review immediately records launch motion with the same installed
+    # app. Keep its Simulator warm; every other matrix job closes its own device.
+    if kind != 'phone': run('xcrun','simctl','shutdown',udid)
     (out/f'{i}-device.txt').write_text(d['name'])
 (out/'manifest.json').write_text(json.dumps([{'device': d['name'], 'index': i} for i,d in enumerate(selected)], ensure_ascii=False, indent=2))

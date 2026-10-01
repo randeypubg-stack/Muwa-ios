@@ -96,9 +96,9 @@ def main():
         if phone["state"] != "Booted":
             run("xcrun", "simctl", "boot", udid)
             booted_here = True
-        run("xcrun", "simctl", "bootstatus", udid, "-b", timeout=180)
+        run("xcrun", "simctl", "bootstatus", udid, "-b", timeout=240)
         run("xcrun", "simctl", "ui", udid, "appearance", "dark")
-        run("xcrun", "simctl", "install", udid, app)
+        run("xcrun", "simctl", "install", udid, app, timeout=180)
 
         # A warm, idle Simulator avoids recording SpringBoard animations as Muwa.
         run("xcrun", "simctl", "launch", "--terminate-running-process", udid, PACKAGE, "--audit-home")
