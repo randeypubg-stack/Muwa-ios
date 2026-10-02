@@ -81,8 +81,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // Optimistically update UI
     queryClient.setQueryData(AUTH_QUERY_KEY, null);
     // Make the actual API call
-    await queryClient.cancelQueries({queryKey:['muwa-admin']});
-    queryClient.removeQueries({queryKey:['muwa-admin']});
+    await queryClient.cancelQueries({ queryKey: ["muwa-admin"] });
+    queryClient.removeQueries({ queryKey: ["muwa-admin"] });
     await postLogout();
     // Invalidate all queries after login so previous user's state don't corrupt new user state.
     queryClient.resetQueries();
@@ -92,10 +92,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   // and update the data linked to AUTH_QUERY_KEY.
   const onLogin = useCallback(
     (user: User) => {
-      queryClient.removeQueries({queryKey:['muwa-admin']});
+      queryClient.removeQueries({ queryKey: ["muwa-admin"] });
       queryClient.setQueryData(AUTH_QUERY_KEY, user);
     },
-    [queryClient]
+    [queryClient],
   );
 
   return (

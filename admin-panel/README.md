@@ -10,7 +10,7 @@ existing database/auth adapters stay in the Floot project. Server implementation
 are in `backend/helpers/admin*` and `backend/endpoints/admin`/`catalog`.
 
 - Use the existing Muwa account. Server checks `users.role = 'admin'` on every
-  panel request. The owner explicitly selected randey.pubg@gmail.com.
+  panel request. The owner explicitly selected their existing account in the conversation.
 - Audio and covers upload directly to Floot storage; files are verified before
   saving. Maximum audio 100 MiB, cover 10 MiB. No paid server was provisioned.
 - New tracks start as drafts unless Published is selected. Archive removes a
@@ -28,8 +28,8 @@ are in `backend/helpers/admin*` and `backend/endpoints/admin`/`catalog`.
   browser to public storage and atomically creates one catalogue entry.
 - All committed catalogue and moderation changes write the same database journal.
   Session tokens, passwords, private URLs and PUT credentials are not journaled.
-- Public endpoints: GET /_api/catalog/tracks and
-  GET /_api/catalog/captions?trackId=...; only published data is returned.
+- Public endpoints: GET /\_api/catalog/tracks and
+  GET /\_api/catalog/captions?trackId=...; only published data is returned.
 - Native build 38 consumes these endpoints. Older builds with a bundled catalogue
   need an app update. The public feed is cached for 30 seconds.
 

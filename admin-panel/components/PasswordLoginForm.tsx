@@ -28,7 +28,7 @@ interface PasswordLoginFormProps {
 
 export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
   className,
-  redirectTo = '/',
+  redirectTo = "/",
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,11 +50,13 @@ export const PasswordLoginForm: React.FC<PasswordLoginFormProps> = ({
     try {
       const result = await postLogin(data);
       onLogin(result.user);
-      navigate(redirectTo, {replace:true});
+      navigate(redirectTo, { replace: true });
     } catch (err) {
       console.error("Login error:", err);
       setError(
-        err instanceof Error ? err.message : "Не удалось войти. Повторите попытку."
+        err instanceof Error
+          ? err.message
+          : "Не удалось войти. Повторите попытку.",
       );
     } finally {
       setIsLoading(false);

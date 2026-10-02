@@ -21,13 +21,15 @@ export const GlobalContextProviders = ({
 }) => {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider><ThemeModeProvider>
-        <ScrollToHashElement />
-        <TooltipProvider>
-          {children}
-          <SonnerToaster />
-        </TooltipProvider>
-      </ThemeModeProvider></AuthProvider>
+      <AuthProvider>
+        <ThemeModeProvider>
+          <ScrollToHashElement />
+          <TooltipProvider>
+            {children}
+            <SonnerToaster />
+          </TooltipProvider>
+        </ThemeModeProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 };
