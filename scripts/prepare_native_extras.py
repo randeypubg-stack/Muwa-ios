@@ -13,6 +13,8 @@ text = project.read_text()
 text = ''.join(line for line in text.splitlines(keepends=True) if '/* SubtitlePanel.swift' not in line)
 (root / 'Sources/Views/Player/SubtitlePanel.swift').unlink(missing_ok=True)
 files = {
+    'CatalogStore.swift': 'Services',
+    'Track.swift': 'Models',
     'FeatureAccess.swift': 'Services',
     'Diagnostics.swift': 'Services',
     'AppSettingsView.swift': 'Views/Profile',

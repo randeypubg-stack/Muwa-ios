@@ -41,12 +41,15 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
     private var subtitleJob: Job? = null
     private var subtitleRevision = 0
     private var sessionRestoreJob: Job? = null
+    private var catalogJob: Job? = null
+    private var lastCatalogRefresh = 0L
     private val future = MediaController.Builder(application, SessionToken(application, ComponentName(application, PlaybackService::class.java))).buildAsync()
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) { updatePlayer() }
         override fun onPlayerError(error: PlaybackException) { this@MuwaModel.error = "Не удалось воспроизвести. Проверьте сеть и нажмите повтор." }
     }
     init {
+        refreshCatalog()
         future.addListener({ runCatching {
             controller = future.get(); controller?.addListener(listener); updatePlayer()
         }.onFailure { report("controller", it) } }, ContextCompat.getMainExecutor(application))
@@ -65,7 +68,7 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
         }
     }
     private fun updatePlayer() { controller?.let { p ->
-        val new = library.catalog.firstOrNull { it.id == p.currentMediaItem?.mediaId }
+        val new = p.currentMediaItem?.mediaId?.let { id -> track?.takeIf { it.id == id } ?: library.track(id) }
         if (new?.id != track?.id) {
             subtitleRevision++; subtitleJob?.cancel(); subtitleLoading = false
             subtitles = emptyList(); subtitleStatus = "Текст ещё не загружен"
@@ -76,7 +79,12 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
         val p = controller ?: run { error = "Плеер ещё подключается. Попробуйте через секунду."; return }
         val queue = if (track.id in library.queue) library.queue else library.queue + track.id
         library.replaceQueue(queue)
-        p.setMediaItems(library.tracks(queue).map(AppGraph::mediaItem), queue.indexOf(track.id), 0)
+        val playable = library.tracks(queue)
+        if (this.track?.id == track.id && this.track?.audio != track.audio) {
+            subtitleRevision++; subtitleJob?.cancel(); subtitles = emptyList(); subtitleLoading = false
+        }
+        this.track = track
+        p.setMediaItems(playable.map(AppGraph::mediaItem), playable.indexOfFirst { it.id == track.id }, 0)
         p.prepare(); p.playWhenReady = autoplay
         if (autoplay) library.played(track)
         resumeCandidate = null; error = null
@@ -88,7 +96,15 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
     fun seek(ms: Long) { controller?.seekTo(ms.coerceIn(0, duration.coerceAtLeast(0))) }
     fun toggleShuffle() { controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled } }
     fun cycleRepeat() { controller?.let { it.repeatMode = when(it.repeatMode) { Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL; Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE; else -> Player.REPEAT_MODE_OFF } } }
-    fun resume() { val value = resumeCandidate ?: return; library.catalog.firstOrNull { it.id == value.first }?.let { play(it); controller?.seekTo(value.second) } }
+    fun refreshCatalog() {
+        if (catalogJob?.isActive == true || System.currentTimeMillis() - lastCatalogRefresh < 30_000) return
+        catalogJob = viewModelScope.launch {
+            try { library.updateCatalog(backend.request("catalog/tracks")); lastCatalogRefresh = System.currentTimeMillis() }
+            catch (e: CancellationException) { throw e }
+            catch (e: Throwable) { Diagnostics.record("catalog",e) }
+        }
+    }
+    fun resume() { val value = resumeCandidate ?: return; library.track(value.first)?.let { play(it); controller?.seekTo(value.second) } }
     fun dismissResume() { resumeCandidate = null; library.resume = null }
     fun addQueue(track: Track, next: Boolean = false) {
         val p = controller
@@ -155,9 +171,17 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
         subtitleJob = viewModelScope.launch {
             subtitleLoading = true; subtitleStatus = "Загружаем текст…"
             try {
-                val cache = java.io.File(getApplication<Application>().cacheDir,"subtitles-${t.id}.json")
+                val cache = java.io.File(getApplication<Application>().cacheDir,if (t.captionsRevision > 0) "subtitles-${t.id}-r${t.captionsRevision}.json" else "subtitles-${t.id}.json")
                 val result = withContext(Dispatchers.IO) {
-                    if (cache.exists()) JSONObject(cache.readText()) else backend.request("transcribe", JSONObject().put("src",android.net.Uri.parse(t.audio).path).put("title",t.title).put("durationSeconds",t.duration),true).also { cache.writeText(it.toString()) }
+                    if (cache.exists()) JSONObject(cache.readText()) else {
+                        val published = try { backend.request("catalog/captions?trackId=${t.id}") }
+                        catch (e: CancellationException) { throw e }
+                        catch (e: Throwable) { if (t.captionsRevision > 0) throw e else null }
+                        val path = android.net.Uri.parse(t.audio).path.orEmpty()
+                        val result = if (t.captionsRevision > 0 || (published?.optJSONArray("segments")?.length() ?: 0) > 0 || !path.startsWith("/_cdn/static/")) published ?: JSONObject().put("segments",JSONArray())
+                        else backend.request("transcribe", JSONObject().put("src",path).put("title",t.title).put("durationSeconds",t.duration),true)
+                        cache.writeText(result.toString()); result
+                    }
                 }
                 if (subtitleRevision != revision || track?.id != t.id) return@launch
                 val values = result.optJSONArray("segments") ?: JSONArray()

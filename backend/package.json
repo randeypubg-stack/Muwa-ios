@@ -1,11 +1,16 @@
 {
   "name": "muwa-backend-checks",
   "private": true,
-  "scripts": { "test": "node tests/run_checks.cjs" },
+  "scripts": {
+    "test": "node tests/run_checks.cjs"
+  },
   "devDependencies": {
     "jasmine": "7.0.0",
     "kysely": "0.29.6",
+    "kysely-postgres-js": "^5.0.1",
     "pg": "8.16.3",
-    "typescript": "5.9.3"
+    "postgres": "^3.4.9",
+    "typescript": "5.9.3",
+    "zod": "^3.25.76"
   }
 }

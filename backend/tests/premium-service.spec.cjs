@@ -29,7 +29,7 @@ describe('Premium transactions on a disposable PostgreSQL database', () => {
     await testPool.query('TRUNCATE premium_redemptions, premium_code_limits, premium_codes, premium_access, premium_code_admins');
     await testPool.query('INSERT INTO premium_code_admins(user_id) VALUES (1)');
   });
-  afterAll(async () => { await db.destroy(); });
+
 
   it('enforces 50 creations per hour under concurrent requests', async () => {
     const responses = await Promise.all(Array.from({length: 60}, () => request(1,

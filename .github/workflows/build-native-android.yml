@@ -29,7 +29,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Muwa-Android-build37
+          name: Muwa-Android-build38
           path: |
             android/app/build/outputs/apk
             android/app/build/reports

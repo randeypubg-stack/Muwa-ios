@@ -104,7 +104,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     update(catalog, tracks: Track.catalog)
     update(favorites, tracks: library.favoriteTracks.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending })
     update(recent, tracks: library.historyTracks)
-    update(offline, tracks: Track.catalog.filter { CarPlayCoordinator.shared.downloads?.isDownloaded($0) == true })
+    update(offline, tracks: library.tracks(for: Array(CarPlayCoordinator.shared.downloads?.downloadedIDs ?? [])).filter { CarPlayCoordinator.shared.downloads?.isDownloaded($0) == true })
     update(queue, tracks: library.queueTracks)
     let rows = library.playlists.prefix(CPListTemplate.maximumItemCount).map { playlist in
       let item = CPListItem(text: playlist.name, detailText: "Нашидов: \(playlist.trackIDs.count)")

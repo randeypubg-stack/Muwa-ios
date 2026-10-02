@@ -72,7 +72,7 @@ class PlaybackService : MediaSessionService() {
             }
         }
     }
-    private fun currentTrack() = AppGraph.library.catalog.firstOrNull { it.id == player.currentMediaItem?.mediaId }
+    private fun currentTrack() = player.currentMediaItem?.mediaId?.let(AppGraph.library::track)
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
     override fun onTaskRemoved(rootIntent: Intent?) { if (!player.playWhenReady || player.mediaItemCount == 0) stopSelf() }
     override fun onDestroy() { scope.cancel(); SleepTimer.cancel(); SleepTimer.attach(null); session?.release(); player.release(); super.onDestroy() }

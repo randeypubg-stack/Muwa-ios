@@ -34,6 +34,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import org.json.JSONObject
 
@@ -67,6 +70,12 @@ class MainActivity : ComponentActivity() {
 }
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun MuwaApp(model: MuwaModel = viewModel(), initialRoute: String = "home", requestNotifications: () -> Unit = {}) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner,model) {
+        val observer = LifecycleEventObserver { _,event -> if (event == Lifecycle.Event.ON_START) model.refreshCatalog() }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var route by rememberSaveableState(if(initialRoute == "player") "home" else initialRoute)
     var expanded by rememberSaveableState(initialRoute == "player")
     var newPlaylist by remember { mutableStateOf(false) }
@@ -74,7 +83,7 @@ class MainActivity : ComponentActivity() {
     var addingTrack by remember { mutableStateOf<Track?>(null) }
     LaunchedEffect(model.controller) {
         if (BuildConfig.DEBUG && initialRoute == "player" && model.controller != null && model.track == null) {
-            model.play(model.library.catalog.first(), autoplay = false)
+            model.library.catalog.firstOrNull()?.let { model.play(it, autoplay = false) }
         }
     }
     BackHandler(route !in listOf("home","library","profile") || expanded) { if (expanded) expanded = false else route = if (route in listOf("premium","promo","settings","auth")) "profile" else "library" }
@@ -139,7 +148,7 @@ class MainActivity : ComponentActivity() {
                 }
                 "search" -> SearchScreen(model,play,{addingTrack=it})
                 "favorites","history","downloads","queue" -> {
-                    val tracks = when(route) {"favorites" -> model.library.tracks(model.library.favorites); "history" -> model.library.tracks(model.library.history); "downloads" -> model.library.catalog.filter { it.id in model.downloads.downloaded }; else -> model.library.tracks(model.library.queue)}
+                    val tracks = when(route) {"favorites" -> model.library.tracks(model.library.favorites); "history" -> model.library.tracks(model.library.history); "downloads" -> model.library.tracks(model.downloads.downloaded).filter { model.downloads.local(it) != null }; else -> model.library.tracks(model.library.queue)}
                     LazyColumn(Modifier.padding(horizontal=16.dp)) {
                         if (tracks.isEmpty()) item { Text("Пока пусто",Modifier.padding(30.dp),color=Color.Gray) }
                         items(tracks,key={it.id}) { t ->

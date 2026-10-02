@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SwiftUI
 
@@ -23,6 +24,7 @@ final class LibraryStore: ObservableObject {
   @Published private(set) var queueIDs: [String]
   @Published private(set) var publications: [PublicationDraft]
 
+  private var catalogChanges: AnyCancellable?
   private let defaults: UserDefaults
 
   private enum Key {
@@ -61,6 +63,7 @@ final class LibraryStore: ObservableObject {
     } else {
       publications = []
     }
+    catalogChanges = CatalogStore.shared.$tracks.dropFirst().sink { [weak self] _ in self?.objectWillChange.send() }
     // Persist migration once so playlist identities survive a restart.
     if defaults.data(forKey: Key.playlists) == nil { persistPlaylists() }
   }

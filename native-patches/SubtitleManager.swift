@@ -15,41 +15,42 @@ final class SubtitleManager: ObservableObject {
   @Published private(set) var stateByTrack: [String: LoadState] = [:]
 
   private var tasks: [String: Task<Void, Never>] = [:]
+  private var revisions: [String: Int] = [:]
+  private func cacheID(_ track: Track) -> String { (track.captionsRevision ?? 0) > 0 ? "\(track.id)-r\(track.captionsRevision!)" : track.id }
 
   func state(for track: Track) -> LoadState {
     stateByTrack[track.id] ?? .idle
   }
 
   func segments(for track: Track) -> [SubtitleSegment] {
-    segmentsByTrack[track.id] ?? loadCached(trackID: track.id) ?? []
+    (revisions[track.id] == (track.captionsRevision ?? 0) ? segmentsByTrack[track.id] : nil) ?? loadCached(trackID: cacheID(track)) ?? []
   }
 
   func load(for track: Track) {
+    let revision = track.captionsRevision ?? 0
+    if revisions[track.id] != revision {
+      tasks[track.id]?.cancel(); tasks[track.id] = nil; segmentsByTrack[track.id] = nil
+      revisions[track.id] = revision
+    }
     if segmentsByTrack[track.id] != nil { return }
-    if let cached = loadCached(trackID: track.id), !cached.isEmpty {
+    if let cached = loadCached(trackID: cacheID(track)), !cached.isEmpty {
       segmentsByTrack[track.id] = cached
       stateByTrack[track.id] = .ready
       return
     }
     guard tasks[track.id] == nil else { return }
-    guard let src = track.cdnSourcePath else {
-      stateByTrack[track.id] = .unavailable(
-        "Для этого файла нет поддерживаемого источника субтитров.")
-      return
-    }
-
     stateByTrack[track.id] = .loading
     tasks[track.id] = Task { [weak self] in
       guard let self else { return }
-      defer { self.tasks[track.id] = nil }
+      defer { if self.revisions[track.id] == revision { self.tasks[track.id] = nil } }
       do {
-        let result = try await self.fetch(track: track, src: src)
-        guard !Task.isCancelled else { return }
+        let result = try await self.fetchPublished(track: track)
+        guard !Task.isCancelled, self.revisions[track.id] == revision else { return }
         self.segmentsByTrack[track.id] = result
         self.stateByTrack[track.id] = .ready
-        self.saveCache(result, trackID: track.id)
+        self.saveCache(result, trackID: self.cacheID(track))
       } catch {
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, self.revisions[track.id] == revision else { return }
         Diagnostics.shared.record("subtitles", error: error)
         self.stateByTrack[track.id] = .unavailable(error.localizedDescription)
       }
@@ -80,6 +81,26 @@ final class SubtitleManager: ObservableObject {
   private struct ErrorBody: Codable {
     let error: String
     let code: String?
+  }
+
+  private func fetchPublished(track: Track) async throws -> [SubtitleSegment] {
+    var parts = URLComponents(url: BackendConfig.apiBaseURL.appending(path: "_api/catalog/captions"), resolvingAgainstBaseURL: false)!
+    parts.queryItems = [URLQueryItem(name: "trackId", value: track.id)]
+    var request = URLRequest(url: parts.url!); request.timeoutInterval = 20
+    do {
+      let (data, response) = try await URLSession.shared.data(for: request)
+      if (response as? HTTPURLResponse)?.statusCode == 200 {
+        let result = try JSONDecoder().decode(ResponseBody.self, from: data)
+        // A positive revision also represents an intentional removal of captions.
+        if (track.captionsRevision ?? 0) > 0 || !result.segments.isEmpty { return result.segments }
+      }
+    } catch {
+      if Task.isCancelled { throw CancellationError() }
+      if (track.captionsRevision ?? 0) > 0 { throw error }
+    }
+    if (track.captionsRevision ?? 0) > 0 { throw URLError(.badServerResponse) }
+    guard let src = track.cdnSourcePath else { return [] }
+    return try await fetch(track: track, src: src)
   }
 
   private func fetch(track: Track, src: String) async throws -> [SubtitleSegment] {

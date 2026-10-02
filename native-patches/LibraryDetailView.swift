@@ -348,7 +348,7 @@ struct LibraryDetailView: View {
 
   @ViewBuilder
   private func downloadsList(layout: AdaptiveLayout) -> some View {
-    let items = Track.catalog.filter(downloads.isDownloaded)
+    let items = library.tracks(for: Array(downloads.downloadedIDs)).filter(downloads.isDownloaded)
 
     if items.isEmpty {
       if FeatureAccess.allowsPremiumFeature(isPremium: premium.isPremium) {

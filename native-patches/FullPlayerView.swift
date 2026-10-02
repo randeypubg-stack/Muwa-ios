@@ -36,7 +36,7 @@ struct MorphingPlayerView: View {
   @State private var artworkVerticalStartExpansion: CGFloat?
 
   private var track: Track {
-    player.currentTrack ?? Track.catalog[0]
+    player.currentTrack ?? Track.bundledCatalog[0]
   }
 
   var body: some View {

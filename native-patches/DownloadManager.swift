@@ -17,6 +17,8 @@ final class DownloadManager: ObservableObject {
   @Published private(set) var downloadingIDs: Set<String> = []
   @Published private(set) var progress: [String: Double] = [:]
   @Published private(set) var lastError: String?
+  private var sources: [String: String]
+  private static let sourcesKey = "muwa.native.download.sources.v1"
   private let defaults: UserDefaults
   private let fileManager: FileManager
   private var tasks: [String: Task<Void, Error>] = [:]
@@ -30,6 +32,11 @@ final class DownloadManager: ObservableObject {
     self.session = session
     self.folder = folder ?? URL.applicationSupportDirectory.appending(path: "OfflineAudio")
     downloadedIDs = Set(defaults.stringArray(forKey: Self.key) ?? [])
+    sources = defaults.dictionary(forKey: Self.sourcesKey) as? [String: String] ?? [:]
+    for id in downloadedIDs where sources[id] == nil {
+      sources[id] = Track.bundledCatalog.first(where: { $0.id == id })?.audioURL.absoluteString ?? Track.track(id: id)?.audioURL.absoluteString
+    }
+    defaults.set(sources, forKey: Self.sourcesKey)
     try? fileManager.createDirectory(at: self.folder, withIntermediateDirectories: true)
     var values = URLResourceValues(); values.isExcludedFromBackup = true
     var url = self.folder; try? url.setResourceValues(values)
@@ -57,7 +64,7 @@ final class DownloadManager: ObservableObject {
     return Self.destination(track, folder: folder)
   }
   func isDownloaded(_ track: Track) -> Bool {
-    downloadedIDs.contains(track.id) && fileManager.fileExists(atPath: Self.destination(track, folder: folder).path)
+    downloadedIDs.contains(track.id) && sources[track.id] == track.audioURL.absoluteString && fileManager.fileExists(atPath: Self.destination(track, folder: folder).path)
   }
 
   func download(_ track: Track) async throws {
@@ -84,6 +91,8 @@ final class DownloadManager: ObservableObject {
         let destination = Self.destination(track, folder: self.folder)
         if self.fileManager.fileExists(atPath: destination.path) { try self.fileManager.removeItem(at: destination) }
         try self.fileManager.moveItem(at: temp, to: destination)
+        self.sources[track.id] = track.audioURL.absoluteString
+        self.defaults.set(self.sources, forKey: Self.sourcesKey)
         self.downloadedIDs.insert(track.id)
         self.defaults.set(Array(self.downloadedIDs), forKey: Self.key)
       } catch {
@@ -101,8 +110,13 @@ final class DownloadManager: ObservableObject {
   func cancel(_ track: Track) { tasks[track.id]?.cancel() }
   func remove(_ track: Track) throws {
     guard tasks[track.id] == nil else { cancel(track); return }
-    let url = Self.destination(track, folder: folder)
-    if fileManager.fileExists(atPath: url.path) { try fileManager.removeItem(at: url) }
+    let id = track.id.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "..", with: "_")
+    // Remove the saved version as well when a remote edit changes its extension.
+    for url in try fileManager.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) where url.deletingPathExtension().lastPathComponent == id {
+      try fileManager.removeItem(at: url)
+    }
+    sources.removeValue(forKey: track.id)
+    defaults.set(sources, forKey: Self.sourcesKey)
     downloadedIDs.remove(track.id)
     defaults.set(Array(downloadedIDs), forKey: Self.key)
   }

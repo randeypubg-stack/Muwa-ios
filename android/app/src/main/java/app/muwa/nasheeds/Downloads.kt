@@ -9,16 +9,26 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 class Downloads(context: Context) {
+    private val prefs = context.getSharedPreferences("muwa.download.sources", Context.MODE_PRIVATE)
     private val folder = File(context.filesDir, "OfflineAudio").apply { mkdirs() }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val client = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build()
     var downloaded by mutableStateOf(folder.listFiles().orEmpty().filter { it.extension == "mp3" && it.length() > 0 }.map { it.nameWithoutExtension }.toSet()); private set
+    init {
+        val original = org.json.JSONArray(context.assets.open("catalog.json").bufferedReader().use { it.readText() })
+        val editor = prefs.edit()
+        for (i in 0 until original.length()) {
+            val row = original.getJSONObject(i); val id = row.getString("id")
+            if (id in downloaded && !prefs.contains(id)) editor.putString(id,row.getString("audio"))
+        }
+        editor.apply()
+    }
     val progress = mutableStateMapOf<String, Float>()
     private val jobs = mutableMapOf<String, Job>()
-    fun local(track: Track): File? = File(folder, "${track.id}.mp3").takeIf { track.id in downloaded && it.exists() }
+    fun local(track: Track): File? = File(folder, "${track.id}.mp3").takeIf { track.id in downloaded && it.exists() && prefs.getString(track.id,null) == track.audio }
     fun bytes(): Long = folder.listFiles().orEmpty().filter { it.extension == "mp3" }.sumOf { it.length() }
     fun cancel(track: Track) { jobs[track.id]?.cancel() }
-    fun remove(track: Track) { if (jobs.containsKey(track.id)) { cancel(track); return }; check(File(folder, "${track.id}.mp3").let { !it.exists() || it.delete() }) { "Не удалось удалить файл." }; downloaded = downloaded - track.id }
+    fun remove(track: Track) { if (jobs.containsKey(track.id)) { cancel(track); return }; check(File(folder, "${track.id}.mp3").let { !it.exists() || it.delete() }) { "Не удалось удалить файл." }; downloaded = downloaded - track.id; prefs.edit().remove(track.id).apply() }
     fun download(track: Track, onError: (Throwable) -> Unit) {
         if (local(track) != null || jobs.containsKey(track.id)) return
         progress[track.id] = 0f
@@ -53,6 +63,7 @@ class Downloads(context: Context) {
                         check(partial.renameTo(File(folder, "${track.id}.mp3"))) { "Не удалось сохранить файл." }
                     } finally { call.cancel() }
                 }
+                prefs.edit().putString(track.id,track.audio).apply()
                 downloaded = downloaded + track.id
             } catch (e: CancellationException) { throw e }
             catch (e: Throwable) { Diagnostics.record("download", e); onError(e) }
