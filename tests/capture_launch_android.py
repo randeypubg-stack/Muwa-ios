@@ -96,11 +96,22 @@ def start_launch():
     return result.strip()
 
 
-def assert_home(remote_xml):
-    check_foreground()
-    adb("shell", "uiautomator", "dump", remote_xml, timeout=15)
-    hierarchy = adb("shell", "cat", remote_xml, timeout=15)
-    assert 'text="Главная"' in hierarchy and 'text="Нашиды без музыки"' in hierarchy, "Launch did not reveal the native home screen"
+def assert_home(remote_xml, out):
+    # Cold emulator renderers can keep the starting window above Compose after
+    # am start -W returns. Verify a fresh hierarchy until actual home is visible.
+    deadline = time.monotonic() + 20
+    hierarchy = ""
+    while time.monotonic() < deadline:
+        check_foreground()
+        adb("shell", "uiautomator", "dump", remote_xml, timeout=15)
+        hierarchy = adb("shell", "cat", remote_xml, timeout=15)
+        if 'text="Главная"' in hierarchy and 'text="Нашиды без музыки"' in hierarchy:
+            (out / "home-hierarchy.xml").write_text(hierarchy)
+            return
+        time.sleep(0.4)
+    (out / "failed-hierarchy.xml").write_text(hierarchy)
+    screenshot(out / "launch-failed.png")
+    raise AssertionError("Launch did not reveal native home within 20 seconds")
 
 
 def main():
@@ -154,7 +165,7 @@ def main():
         manifest["files"].append(screenshot(out / "launch-window.png"))
         # am start -W can return while the GPU is still presenting the starting
         # window on a cold CI emulator. Keep recording through actual native home.
-        assert_home(remote_xml)
+        assert_home(remote_xml, out)
         manifest["nativeHomeVerifiedBeforeStop"] = True
         time.sleep(3)
         check_foreground()
@@ -167,14 +178,14 @@ def main():
         adb("pull", remote_video, str(path), timeout=30)
         manifest["durationSeconds"] = video_duration(path)
         manifest["files"].append({"file": path.name, "bytes": path.stat().st_size, "source": "adb screenrecord"})
-        assert_home(remote_xml)
+        assert_home(remote_xml, out)
         manifest["files"].append(screenshot(out / "launch-home.png"))
         manifest["captureStatus"] = "recorded"
         # A real second cold start proves that disabling motion reveals usable home.
         manifest["confirmedReducedScales"] = set_animation_scale(0)
         manifest["reducedLaunchResult"] = start_launch()
         time.sleep(0.4)
-        assert_home(remote_xml)
+        assert_home(remote_xml, out)
         manifest["files"].append(screenshot(out / "launch-reduced-motion-home.png"))
         manifest["captureStatus"] = "complete"
     except Exception as error:

@@ -66,6 +66,10 @@ try:
     (data / 'Documents/carplay-connected.txt').unlink(missing_ok=True)
     run('open', '-a', 'Simulator', '--args', '-CurrentDeviceUDID', udid)
     time.sleep(3)
+    # Launch the phone scene before enabling the automotive display. SpringBoard
+    # may reject a new foreground phone launch while the CarPlay display is active.
+    run('xcrun', 'simctl', 'launch', '--terminate-running-process', udid, 'app.muwa.nasheeds', '--audit-player')
+    time.sleep(5)
     script = '''tell application "System Events"
       tell process "Simulator"
         set frontmost to true
@@ -79,7 +83,6 @@ try:
       end tell
     end tell'''
     status['menu'] = run('osascript', '-e', script)
-    run('xcrun', 'simctl', 'launch', '--terminate-running-process', udid, 'app.muwa.nasheeds', '--audit-player')
     time.sleep(5)
     status['displays'] = run('xcrun', 'simctl', 'io', udid, 'enumerate')
     run('xcrun', 'simctl', 'io', udid, 'screenshot', '--display=external', str(out / 'carplay.png'))
