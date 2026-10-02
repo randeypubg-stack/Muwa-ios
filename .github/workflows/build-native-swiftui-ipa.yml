@@ -403,17 +403,24 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: Muwa-build40-simulator-${{ github.run_id }}
-          path: build
-      - name: Unpack simulator app
+          name: Muwa-Full-Source-${{ github.run_number }}
+          path: build/carplay-source
+      - name: Build CarPlay review with Xcode simulator signing
         run: |
-          mkdir -p build/PreviewDerivedData/Build/Products/Debug-iphonesimulator
-          tar -xzf build/muwa-review-app.tar.gz -C build/PreviewDerivedData/Build/Products/Debug-iphonesimulator
+          SOURCE_ZIP="$(find build/carplay-source -name '*FULL-SOURCE.zip' -print -quit)"
+          test -n "$SOURCE_ZIP"
+          unzip -q "$SOURCE_ZIP" -d build/carplay-source/native
+          CARPLAY_SOURCE="$PWD/build/carplay-source/native/MuwaNasheedsNative"
+          python3 tests/prepare_previews.py "$CARPLAY_SOURCE"
+          set -o pipefail
+          xcodebuild -project "$CARPLAY_SOURCE/MuwaNasheeds.xcodeproj" -scheme MuwaNasheeds -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$PWD/build/PreviewDerivedData" CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= MUWA_CARPLAY_ENTITLEMENTS=MuwaCarPlay.entitlements build 2>&1 | tee build/carplay-xcodebuild.log
       - name: Capture real external display when supported
         run: python3 tests/capture_carplay.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: Muwa-build40-CarPlay-review
-          path: build/previews/carplay
+          path: |
+            build/previews/carplay
+            build/carplay-xcodebuild.log
           if-no-files-found: warn

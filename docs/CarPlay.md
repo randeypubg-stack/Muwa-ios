@@ -24,7 +24,10 @@ on a car/head unit. The setting is empty by default, so normal iPhone signing
 does not suddenly require an unapproved CarPlay capability. An ordinary
 sideloading profile may not include the CarPlay entitlement.
 
-CI `tests/capture_carplay.py` ad-hoc signs only the simulator fixture, tries to open
+CI builds a separate Simulator fixture using Xcode signing with the CarPlay
+entitlement; the phone review and unsigned device IPA are unaffected. The signing
+identity is local ad-hoc (`-`), not an Apple-approved distribution identity.
+`tests/capture_carplay.py` verifies the signature and embedded entitlement, tries to open
 Simulator's CarPlay external display, and captures that display only after Muwa's
 CarPlay scene reports a connection. If the runner cannot expose or connect the
 external display, `build/previews/carplay/status.json` records the reason. A missing

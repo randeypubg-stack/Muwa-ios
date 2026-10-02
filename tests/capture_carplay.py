@@ -41,9 +41,9 @@ try:
     status['device'] = phone['name']
     status['udid'] = udid
     app = next(Path('build/PreviewDerivedData/Build/Products/Debug-iphonesimulator').glob('*.app'))
-    # Only the simulator fixture is ad-hoc signed. The device IPA remains unsigned.
-    entitlement = Path('native-patches/MuwaCarPlay.entitlements').resolve()
-    run('codesign', '--force', '--sign', '-', '--entitlements', str(entitlement), str(app))
+    # Xcode signs the dedicated Simulator build and its debug dylib together.
+    # Re-signing only the app here would discard Xcode's platform/debug grants.
+    # The ordinary device IPA remains unsigned.
     run('codesign', '--verify', '--deep', '--strict', '--verbose=2', str(app))
     # Verify the signed app carries the entitlement, rather than only checking
     # that the source file exists. This concerns the Simulator fixture alone.
