@@ -43,15 +43,24 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     recent = makeList("Недавние", symbol: "clock")
     queue = makeList("Очередь", symbol: "list.bullet")
     guard let catalog, let favorites, let offline, let playlists, let recent else { return }
+    catalog.leadingNavigationBarButtons = [CPBarButton(title: "Недавние") { [weak self] _ in
+      Task { @MainActor in self?.controller?.pushTemplate(recent, animated: true, completion: nil) }
+    }]
     refreshLists()
-    // Set the root only on connection. Section updates preserve navigation.
-    interfaceController.setRootTemplate(CPTabBarTemplate(templates: [catalog, favorites, offline, playlists, recent]), animated: false, completion: nil)
-    #if DEBUG
-    if ProcessInfo.processInfo.arguments.contains("--audit-player") {
-      let proof = URL.documentsDirectory.appending(path: "carplay-connected.txt")
-      try? "Muwa CarPlay connected".write(to: proof, atomically: true, encoding: .utf8)
+    // Audio CarPlay allows four tabs. Recent tracks remain reachable from Muwa.
+    // Set the root only on connection; section updates preserve navigation.
+    interfaceController.setRootTemplate(CPTabBarTemplate(templates: [catalog, favorites, offline, playlists]), animated: false) { [weak self] success, error in
+      Task { @MainActor in
+        guard self?.controller === interfaceController else { return }
+        if let error { Diagnostics.shared.record("carplay", error: error) }
+        #if DEBUG
+        if success && ProcessInfo.processInfo.arguments.contains("--audit-player") {
+          let proof = URL.documentsDirectory.appending(path: "carplay-connected.txt")
+          try? "Muwa CarPlay connected".write(to: proof, atomically: true, encoding: .utf8)
+        }
+        #endif
+      }
     }
-    #endif
     CPNowPlayingTemplate.shared.add(self)
     CPNowPlayingTemplate.shared.isAlbumArtistButtonEnabled = false
     let coordinator = CarPlayCoordinator.shared
