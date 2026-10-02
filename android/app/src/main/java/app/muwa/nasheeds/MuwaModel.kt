@@ -80,8 +80,8 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
         val queue = if (track.id in library.queue) library.queue else library.queue + track.id
         library.replaceQueue(queue)
         val playable = library.tracks(queue)
-        if (this.track?.id == track.id && this.track?.audio != track.audio) {
-            subtitleRevision++; subtitleJob?.cancel(); subtitles = emptyList(); subtitleLoading = false
+        if (this.track?.id != track.id || this.track?.audio != track.audio) {
+            subtitleRevision++; subtitleJob?.cancel(); subtitles = emptyList(); subtitleLoading = false; subtitleStatus = "Текст ещё не загружен"
         }
         this.track = track
         p.setMediaItems(playable.map(AppGraph::mediaItem), playable.indexOfFirst { it.id == track.id }, 0)
