@@ -178,7 +178,9 @@ def main():
         adb("pull", remote_video, str(path), timeout=30)
         manifest["durationSeconds"] = video_duration(path)
         manifest["files"].append({"file": path.name, "bytes": path.stat().st_size, "source": "adb screenrecord"})
-        assert_home(remote_xml, out)
+        # Home was verified while the recording was still running. Avoid a
+        # second short-lived UiAutomation connection immediately after releasing
+        # the encoder surface; capture the actual foreground frame instead.
         manifest["files"].append(screenshot(out / "launch-home.png"))
         manifest["captureStatus"] = "recorded"
         # A real second cold start proves that disabling motion reveals usable home.
@@ -191,6 +193,12 @@ def main():
     except Exception as error:
         manifest["captureStatus"] = "failed"
         manifest["error"] = str(error)
+        try:
+            diagnostic = adb("logcat", "-d", "-t", "100", "-s", "UiAutomation", "UiAutomatorBridge",
+                             "UiAutomationConnection", timeout=5)
+            (out / "automation-diagnostic.log").write_text(diagnostic)
+        except Exception as diagnostic_error:
+            manifest["diagnosticError"] = str(diagnostic_error)
         raise
     finally:
         for pid in recorder_pids:

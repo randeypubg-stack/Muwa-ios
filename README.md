@@ -5,7 +5,7 @@ clients for Muwa. Both use the existing Muwa backend and the same account servic
 
 - App name: **Muwa**
 - Bundle/application ID: `app.muwa.nasheeds`
-- Version: `1.4.0`, build `37`
+- Version: `1.4.0`, build `40`
 - Brand assets: the supplied silver-blue logo in `branding/`, verified by SHA-256
 - Cold launch: short native reveal, light sweep and fade; respects reduced animation
 
@@ -22,4 +22,21 @@ in [docs/CarPlay.md](docs/CarPlay.md).
 
 The immutable iOS base stays at:
 `f07bce80d5b9b39583a8bce19f3e3b71caed205332649f13ccb45a8b28997f84`.
+It is tracked in `source-base/MuwaNativeBase.zip`; CI does not need a CDN source download.
 App name/asset updates preserve Bundle ID, backend contracts and user-data keys.
+
+Palette, typography, motion and backgrounds are separated from screens and data
+services. See [Architecture](docs/ARCHITECTURE.md) and
+[Build40 design review](docs/DESIGN-BUILD40.md). Both native clients use three soft
+ambient lights, compact catalog collections and a shared persistent queue with
+animated controls. Reduced motion and power-saving modes stop background movement.
+
+Premium restrictions remain disabled for feature testing. New ASR generation and
+paid infrastructure are deferred by the owner. Production StoreKit/Play Billing,
+CarPlay provisioning and physical-device validation still require completion.
+
+The owner permits a public repository. CI scans source history and archives for
+secrets. Prepared server security changes have **not** been deployed while Floot
+developer actions are unavailable; see
+[Build39 security status](docs/SECURITY-HARDENING-BUILD39.md). A passing client build
+does not prove those production changes are active.
