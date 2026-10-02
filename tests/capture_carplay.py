@@ -111,7 +111,12 @@ try:
         # template scene. Select the app from the actual external framebuffer.
         launcher = out / 'launcher.png'
         run('xcrun', 'simctl', 'io', udid, 'screenshot', '--display=external', str(launcher))
-        target = json.loads(run('swift', 'tests/locate_carplay_app.swift', str(launcher)))
+        recognition = run('swift', 'tests/locate_carplay_app.swift', str(launcher))
+        # Vision may print a driver notice before our single-line JSON result.
+        # Read the structured result rather than treating native notices as JSON.
+        target = json.loads(next(line for line in reversed(recognition.splitlines())
+                                 if line.strip().startswith('{') and line.strip().endswith('}')))
+        assert target['label'].lower() == 'muwa' and target['confidence'] >= 0.5
         bounds_script = '''tell application "System Events"
           tell process "Simulator"
             set frontmost to true
@@ -132,6 +137,7 @@ try:
               end repeat
             end if
             if chosenWindow is missing value then error "CarPlay window was not found"
+            perform action "AXRaise" of chosenWindow
             set windowPosition to position of chosenWindow
             set windowSize to size of chosenWindow
             return (item 1 of windowPosition as text) & "," & (item 2 of windowPosition as text) & "," & (item 1 of windowSize as text) & "," & (item 2 of windowSize as text)
@@ -143,6 +149,7 @@ try:
         y = round(wy + wh - target['height'] * scale + target['y'] * scale)
         status['launcher_selection'] = {'label': target['label'], 'confidence': target['confidence'],
                                         'nativeTarget': target, 'windowBounds': [wx, wy, ww, wh]}
+        time.sleep(0.2)
         run('cliclick', f'c:{x},{y}')
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline and not proof.exists():
