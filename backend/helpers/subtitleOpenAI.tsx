@@ -28,8 +28,9 @@ export function normalizeWhisper(raw: any) {
       if (names.of(code)?.toLowerCase() === languageName) { language=code; break; }
     }
   }
-  const words = Array.isArray(raw?.words) ? raw.words : [];
+  const words = Array.isArray(raw?.words) ? raw.words.filter((w:any) => w && typeof w === 'object') : [];
   const segments = (Array.isArray(raw?.segments) ? raw.segments : [])
+    .filter((s:any) => s && typeof s === 'object')
     .filter((s:any) => !(s.no_speech_prob > 0.6 && s.avg_logprob < -1))
     .map((s:any) => ({start:s.start,end:s.end,original:s.text,
       words:words.filter((w:any)=>w.start>=s.start && w.end<=s.end).map((w:any)=>({text:w.word,start:w.start,end:w.end}))}));

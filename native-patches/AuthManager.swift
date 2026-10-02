@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 @MainActor
 final class AuthManager: ObservableObject {
@@ -14,11 +15,13 @@ final class AuthManager: ObservableObject {
   @Published var errorMessage: String?
   @Published private(set) var registrationJustCompleted = false
 
-  private let service: AuthService
+  private let service: any AuthServing
   private let defaults: UserDefaults
   private let guestKey = "muwa.auth.continueAsGuest"
+  private var hasRestoredSession = false
+  private var stateRevision = UUID()
 
-  init(service: AuthService = .shared, defaults: UserDefaults = .standard) {
+  init(service: any AuthServing = AuthService.shared, defaults: UserDefaults = .standard) {
     self.service = service
     self.defaults = defaults
   }
@@ -32,9 +35,14 @@ final class AuthManager: ObservableObject {
   var isAuthenticated: Bool { user != nil }
 
   func restore() async {
+    guard !hasRestoredSession else { return }
+    hasRestoredSession = true
+    let revision = stateRevision
     state = .checking
     do {
-      if let user = try await service.restoreSession() {
+      let user = try await service.restoreSession()
+      guard stateRevision == revision else { return }
+      if let user {
         defaults.set(false, forKey: guestKey)
         registrationJustCompleted = false
         state = .authenticated(user)
@@ -42,14 +50,16 @@ final class AuthManager: ObservableObject {
         state = defaults.bool(forKey: guestKey) ? .guest : .signedOut
       }
     } catch {
+      guard stateRevision == revision else { return }
       Diagnostics.shared.record("auth-restore", error: error)
       state = defaults.bool(forKey: guestKey) ? .guest : .signedOut
     }
   }
 
   func login(email: String, password: String) async -> Bool {
-    await perform {
+    await perform { revision in
       let user = try await self.service.login(email: email, password: password)
+      guard self.stateRevision == revision else { throw CancellationError() }
       self.defaults.set(false, forKey: self.guestKey)
       self.registrationJustCompleted = false
       self.state = .authenticated(user)
@@ -57,9 +67,10 @@ final class AuthManager: ObservableObject {
   }
 
   func register(displayName: String, email: String, password: String) async -> Bool {
-    await perform {
+    await perform { revision in
       let user = try await self.service.register(
         displayName: displayName, email: email, password: password)
+      guard self.stateRevision == revision else { throw CancellationError() }
       self.defaults.set(false, forKey: self.guestKey)
       self.registrationJustCompleted = true
       self.state = .authenticated(user)
@@ -71,6 +82,7 @@ final class AuthManager: ObservableObject {
   }
 
   func continueAsGuest() {
+    stateRevision = UUID()
     registrationJustCompleted = false
     defaults.set(true, forKey: guestKey)
     errorMessage = nil
@@ -78,6 +90,7 @@ final class AuthManager: ObservableObject {
   }
 
   func showAuthentication() {
+    stateRevision = UUID()
     registrationJustCompleted = false
     defaults.set(false, forKey: guestKey)
     errorMessage = nil
@@ -85,23 +98,29 @@ final class AuthManager: ObservableObject {
   }
 
   func logout() async {
+    guard !isWorking else { return }
+    stateRevision = UUID()
+    defaults.set(false, forKey: guestKey)
+    registrationJustCompleted = false
+    errorMessage = nil
+    state = .signedOut
     isWorking = true
     defer { isWorking = false }
     do { try await service.logout() } catch { Diagnostics.shared.record("auth-logout", error: error) }
-    defaults.set(false, forKey: guestKey)
-    registrationJustCompleted = false
-    state = .signedOut
   }
 
-  private func perform(_ operation: @escaping @MainActor () async throws -> Void) async -> Bool {
+  private func perform(_ operation: @escaping @MainActor (UUID) async throws -> Void) async -> Bool {
     guard !isWorking else { return false }
+    stateRevision = UUID()
+    let revision = stateRevision
     isWorking = true
     errorMessage = nil
     defer { isWorking = false }
     do {
-      try await operation()
+      try await operation(revision)
       return true
     } catch {
+      guard stateRevision == revision, !(error is CancellationError) else { return false }
       Diagnostics.shared.record("auth", error: error)
       errorMessage = error.localizedDescription
       return false

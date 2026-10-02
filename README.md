@@ -5,7 +5,7 @@ clients for Muwa. Both use the existing Muwa backend and the same account servic
 
 - App name: **Muwa**
 - Bundle/application ID: `app.muwa.nasheeds`
-- Version: `1.4.0`, build `36`
+- Version: `1.4.0`, build `37`
 - Brand assets: the supplied silver-blue logo in `branding/`, verified by SHA-256
 - Cold launch: short native reveal, light sweep and fade; respects reduced animation
 

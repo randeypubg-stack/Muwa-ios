@@ -5,6 +5,7 @@ struct PlayerSubtitleOverlay: View {
   let track: Track
   let currentTime: TimeInterval
   let language: SubtitleLanguage
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   private var segments: [SubtitleSegment] { subtitles.segments(for: track) }
   private var activeIndex: Int? { subtitles.activeIndex(for: track, time: currentTime) }
@@ -65,7 +66,8 @@ struct PlayerSubtitleOverlay: View {
       }
     }
     .allowsHitTesting(false)
-    .animation(.easeInOut(duration: 0.18), value: activeIndex)
+    .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: activeIndex)
+    .task(id: track.id) { subtitles.load(for: track) }
   }
 }
 
@@ -110,13 +112,19 @@ struct AISubtitleExperience: View {
       .background(LinearGradient(colors: [.black.opacity(0.55), .black.opacity(0.86)], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 18))
       .overlay(alignment: .leading) { Capsule().fill(Color(red: 0.73, green: 0.83, blue: 1)).frame(width: 2, height: 30).padding(.leading, 2) }
         } else {
-          HStack(spacing: 7) {
-            if manager.isRecognizing { ProgressView().tint(.white) }
-            else { Image(systemName: "captions.bubble") }
-            Text(manager.isRecognizing ? "Обработка" : "Текст").font(.caption.weight(.semibold))
+          VStack(alignment: .trailing, spacing: 8) {
+            if manager.document == nil {
+              PlayerSubtitleOverlay(track: track, currentTime: timeline.snapshot.time,
+                language: SubtitleLanguage(rawValue: language.rawValue.uppercased()) ?? .arabic)
+            }
+            HStack(spacing: 7) {
+              if manager.isRecognizing { ProgressView().tint(.white) }
+              else { Image(systemName: "captions.bubble") }
+              Text(manager.isRecognizing ? "Обработка" : "Текст").font(.caption.weight(.semibold))
+            }
+            .padding(.horizontal, 14).frame(minHeight: 44)
+            .background(.black.opacity(0.76), in: Capsule())
           }
-          .padding(.horizontal, 14).frame(minHeight: 44)
-          .background(.black.opacity(0.76), in: Capsule())
         }
       }
 

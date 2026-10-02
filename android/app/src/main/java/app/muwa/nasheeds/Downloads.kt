@@ -25,10 +25,12 @@ class Downloads(context: Context) {
         jobs[track.id] = scope.launch {
             val partial = File(folder, "${track.id}.part")
             try {
+                val owner = currentCoroutineContext()[Job]
                 withContext(Dispatchers.IO) {
+                    val downloadContext = currentCoroutineContext()
                     val call = client.newCall(Request.Builder().url(track.audio).build())
                     try {
-                        call.execute().use { response ->
+                        call.awaitResult { response ->
                             check(response.isSuccessful) { "Не удалось скачать (${response.code})." }
                             val mime = response.header("Content-Type").orEmpty()
                             check(!mime.contains("html") && !mime.contains("json")) { "Сервер вернул файл неверного формата." }
@@ -36,14 +38,19 @@ class Downloads(context: Context) {
                             partial.outputStream().use { out -> body.byteStream().use { input ->
                                 val buffer = ByteArray(64 * 1024)
                                 while (true) {
-                                    ensureActive(); val count = input.read(buffer); if (count < 0) break
+                                    downloadContext.ensureActive(); val count = input.read(buffer); if (count < 0) break
                                     out.write(buffer, 0, count); done += count
-                                    if (System.currentTimeMillis() - last > 200) { last = System.currentTimeMillis(); withContext(Dispatchers.Main) { progress[track.id] = if (total > 0) (done.toFloat() / total).coerceIn(0f,1f) else 0f } }
+                                    if (System.currentTimeMillis() - last > 200) {
+                                        last = System.currentTimeMillis()
+                                        val value = if (total > 0) (done.toFloat() / total).coerceIn(0f,1f) else 0f
+                                        scope.launch { if (jobs[track.id] === owner && owner?.isActive == true) progress[track.id] = value }
+                                    }
                                 }
                             } }
-                            check(done > 0) { "Скачан пустой файл." }; ensureActive()
-                            check(partial.renameTo(File(folder, "${track.id}.mp3"))) { "Не удалось сохранить файл." }
+                            check(done > 0) { "Скачан пустой файл." }
                         }
+                        ensureActive()
+                        check(partial.renameTo(File(folder, "${track.id}.mp3"))) { "Не удалось сохранить файл." }
                     } finally { call.cancel() }
                 }
                 downloaded = downloaded + track.id

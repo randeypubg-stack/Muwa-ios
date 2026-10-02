@@ -1,5 +1,12 @@
 # Muwa Premium and subtitles
 
+## Reproducible checks
+Run `npm ci && npm test` in this directory for provider/document tests without
+paid API calls. Setting `MUWA_TEST_DATABASE_URL` additionally runs transaction
+checks on a **new disposable PostgreSQL database** (it creates fixture tables
+and truncates Premium data). Never point this variable at production. The test
+runner supplies fixture auth adapters only in its temporary test tree.
+
 ## Account access and gifts (2026-09-27)
 Additive endpoint POST /_api/premium/access accepts JSON actions status, redeem, list, create, disable. Authentication uses the existing HTTP-only session; user ID is derived server-side. Apply premium-migration.sql before deployment. Existing authentication, uploads and v1 transcription contracts stay unchanged.
 

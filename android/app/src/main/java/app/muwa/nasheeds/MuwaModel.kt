@@ -39,6 +39,8 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
     var resumeCandidate by mutableStateOf(library.resume); private set
     private var accountRevision = 0
     private var subtitleJob: Job? = null
+    private var subtitleRevision = 0
+    private var sessionRestoreJob: Job? = null
     private val future = MediaController.Builder(application, SessionToken(application, ComponentName(application, PlaybackService::class.java))).buildAsync()
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) { updatePlayer() }
@@ -51,15 +53,23 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             while (isActive) { delay(350); controller?.let { position = it.currentPosition.coerceAtLeast(0); duration = if (it.duration > 0) it.duration else (track?.duration ?: 0) * 1000 } }
         }
-        viewModelScope.launch {
-            try { user = backend.request("auth/session").optJSONObject("user"); refreshPremium() }
-            catch (e: ApiException) { if (e.status != 401) report("session", e) }
-            catch (e: Throwable) { report("session", e) }
+        sessionRestoreJob = viewModelScope.launch {
+            val revision = accountRevision
+            try {
+                val restored = backend.request("auth/session").optJSONObject("user")
+                if (revision == accountRevision) { user = restored; refreshPremium() }
+            }
+            catch (e: CancellationException) { throw e }
+            catch (e: ApiException) { if (revision == accountRevision && e.status != 401) report("session", e) }
+            catch (e: Throwable) { if (revision == accountRevision) report("session", e) }
         }
     }
     private fun updatePlayer() { controller?.let { p ->
         val new = library.catalog.firstOrNull { it.id == p.currentMediaItem?.mediaId }
-        if (new?.id != track?.id) { subtitleJob?.cancel(); subtitles = emptyList(); subtitleStatus = "Текст ещё не загружен" }
+        if (new?.id != track?.id) {
+            subtitleRevision++; subtitleJob?.cancel(); subtitleLoading = false
+            subtitles = emptyList(); subtitleStatus = "Текст ещё не загружен"
+        }
         track = new; playing = p.isPlaying; buffering = p.playbackState == Player.STATE_BUFFERING; shuffle = p.shuffleModeEnabled; repeat = p.repeatMode
     } }
     fun play(track: Track, autoplay: Boolean = true) {
@@ -102,13 +112,18 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { try { operation() } catch(e: CancellationException) { throw e } catch(e: Throwable) { report(area,e) } finally { busy = false } }
     }
     fun login(email: String, password: String, name: String? = null) = action("auth") {
+        accountRevision++; sessionRestoreJob?.cancel()
         val body = JSONObject().put("email",email.trim().lowercase()).put("password",password)
         if (name != null) body.put("displayName",name.trim())
         val result = backend.request(if(name == null) "auth/login_with_password" else "auth/register_with_password",body,true)
-        accountRevision++; user = result.getJSONObject("user"); premium = null; refreshPremium(); message = "Вы вошли в Muwa."
+        user = result.getJSONObject("user"); premium = null; codes = emptyList(); createdCode = null
+        message = "Вы вошли в Muwa."
+        try { refreshPremium() }
+        catch (e: CancellationException) { throw e }
+        catch (e: Throwable) { Diagnostics.record("premium", e); message = "Вы вошли в Muwa. Статус Premium временно недоступен." }
     }
     fun logout() = action("logout") {
-        accountRevision++; user = null; premium = null; codes = emptyList(); createdCode = null
+        accountRevision++; sessionRestoreJob?.cancel(); user = null; premium = null; codes = emptyList(); createdCode = null
         try { backend.request("auth/logout",JSONObject(),true) } finally { backend.clearSession() }
     }
     suspend fun refreshPremium() {
@@ -135,6 +150,7 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
     fun savedCode() { createdCode = null }
     fun loadSubtitles() {
         val t = track ?: return
+        val revision = ++subtitleRevision
         subtitleJob?.cancel()
         subtitleJob = viewModelScope.launch {
             subtitleLoading = true; subtitleStatus = "Загружаем текст…"
@@ -143,13 +159,17 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
                 val result = withContext(Dispatchers.IO) {
                     if (cache.exists()) JSONObject(cache.readText()) else backend.request("transcribe", JSONObject().put("src",android.net.Uri.parse(t.audio).path).put("title",t.title).put("durationSeconds",t.duration),true).also { cache.writeText(it.toString()) }
                 }
-                if (track?.id != t.id) return@launch
+                if (subtitleRevision != revision || track?.id != t.id) return@launch
                 val values = result.optJSONArray("segments") ?: JSONArray()
                 subtitles = List(values.length()) { values.getJSONObject(it) }
                 subtitleStatus = if (subtitles.isEmpty()) "Для этого нашида готового текста пока нет." else "Субтитры доступны бесплатно."
             } catch(e: CancellationException) { throw e }
-            catch(e: Throwable) { Diagnostics.record("subtitles", e); subtitleStatus = "Готовый текст недоступен. Автоматическое распознавание пока приостановлено." }
-            finally { subtitleLoading = false }
+            catch(e: Throwable) {
+                if (subtitleRevision == revision && track?.id == t.id) {
+                    Diagnostics.record("subtitles", e); subtitleStatus = "Готовый текст недоступен. Автоматическое распознавание пока приостановлено."
+                }
+            }
+            finally { if (subtitleRevision == revision) subtitleLoading = false }
         }
     }
     override fun onCleared() { controller?.removeListener(listener); MediaController.releaseFuture(future); super.onCleared() }

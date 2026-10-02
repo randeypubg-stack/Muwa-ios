@@ -10,7 +10,7 @@ data class Track(val id: String, val title: String, val artist: String, val dura
 data class Playlist(val id: String, val name: String, val ids: List<String>)
 object FeatureAccess { const val premiumRestrictionsEnabled = false; fun allowed(premium: Boolean) = !premiumRestrictionsEnabled || premium }
 
-class Library(private val context: Context) {
+class Library(context: Context) {
     private val prefs = context.getSharedPreferences("muwa.library", Context.MODE_PRIVATE)
     val catalog: List<Track> = JSONArray(context.assets.open("catalog.json").bufferedReader().use { it.readText() }).let { rows ->
         List(rows.length()) { i -> rows.getJSONObject(i).let { Track(it.getString("id"), it.getString("title"), it.getString("artist"), it.getLong("duration"), it.getString("artwork"), it.getString("audio")) } }

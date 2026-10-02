@@ -88,7 +88,6 @@ struct RootView: View {
 
         if player.hasStartedPlaybackThisSession, player.currentTrack != nil {
           MorphingPlayerView(
-            selection: $selection,
             expansion: $playerExpansion,
             chromeDrop: chromeDrop,
             safeTopInset: safeTop,
@@ -213,5 +212,4 @@ private struct LaunchGateView: View {
 enum AppTab: Hashable {
   case home, library, profile
 }
-
 

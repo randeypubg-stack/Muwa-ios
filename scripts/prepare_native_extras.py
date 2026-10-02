@@ -8,6 +8,10 @@ root = Path(sys.argv[1])
 patches = Path(__file__).resolve().parents[1] / 'native-patches'
 project = root / 'MuwaNasheeds.xcodeproj/project.pbxproj'
 text = project.read_text()
+# The old subtitle panel has no callers after the player moved to the rail and
+# reader. Remove its original registration instead of compiling a second UI.
+text = ''.join(line for line in text.splitlines(keepends=True) if '/* SubtitlePanel.swift' not in line)
+(root / 'Sources/Views/Player/SubtitlePanel.swift').unlink(missing_ok=True)
 files = {
     'FeatureAccess.swift': 'Services',
     'Diagnostics.swift': 'Services',
@@ -16,6 +20,7 @@ files = {
     'LaunchExperience.swift': 'App',
     'DownloadManager.swift': 'Services',
     'AuthManager.swift': 'Services',
+    'AuthService.swift': 'Services',
     'SearchView.swift': 'Views/Search',
 }
 for name, directory in files.items():

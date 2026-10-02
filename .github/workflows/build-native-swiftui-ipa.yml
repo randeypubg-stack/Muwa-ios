@@ -14,6 +14,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  backend:
+    name: Check backend contracts and PostgreSQL transactions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: muwa_audit
+          POSTGRES_PASSWORD: muwa-fixture-only
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci && npm test
+        working-directory: backend
+        env:
+          MUWA_TEST_DATABASE_URL: postgres://postgres:muwa-fixture-only@localhost:5432/muwa_audit
+
   build:
     name: Build native SwiftUI unsigned IPA
     runs-on: macos-15
@@ -146,7 +170,7 @@ jobs:
           test "$WIDTH" = "1024"
           test "$HEIGHT" = "1024"
 
-          sed -i '' 's/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = 36;/g' "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
+          sed -i '' 's/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = 37;/g' "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
           echo "SOURCE_ROOT=$ROOT" >> "$GITHUB_ENV"
 
       - name: Package full source archive
@@ -169,7 +193,7 @@ jobs:
           cat > build/full-source/README-SOURCE.txt <<EOF
           Muwa — Full Source Archive
           Version: 1.4.0
-          Build: 36
+          Build: 37
           Commit: ${GITHUB_SHA}
 
           Contents:
@@ -183,25 +207,25 @@ jobs:
 
           Notes:
           - This archive contains source code and project resources, not only the IPA.
-          - The project is the same assembled source tree used for the build-36 IPA.
+          - The project is the same assembled source tree used for the build-37 IPA.
           - Audio tracks and remote artwork remain CDN-backed and are not bundled as local media.
           EOF
 
           find build/full-source -name '.DS_Store' -delete
           (
             cd build/full-source
-            /usr/bin/zip -qry -y ../Muwa-v1.4.0-build36-FULL-SOURCE.zip .
+            /usr/bin/zip -qry -y ../Muwa-v1.4.0-build37-FULL-SOURCE.zip .
           )
-          shasum -a 256 build/Muwa-v1.4.0-build36-FULL-SOURCE.zip \
-            | tee build/Muwa-v1.4.0-build36-FULL-SOURCE.zip.sha256
+          shasum -a 256 build/Muwa-v1.4.0-build37-FULL-SOURCE.zip \
+            | tee build/Muwa-v1.4.0-build37-FULL-SOURCE.zip.sha256
 
       - name: Upload full source archive
         uses: actions/upload-artifact@v4
         with:
           name: Muwa-Full-Source-${{ github.run_number }}
           path: |
-            build/Muwa-v1.4.0-build36-FULL-SOURCE.zip
-            build/Muwa-v1.4.0-build36-FULL-SOURCE.zip.sha256
+            build/Muwa-v1.4.0-build37-FULL-SOURCE.zip
+            build/Muwa-v1.4.0-build37-FULL-SOURCE.zip.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 90
@@ -220,7 +244,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
-          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='36'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='37'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
         shell: bash
@@ -237,7 +261,7 @@ jobs:
 
           test "$BUNDLE_ID" = "app.muwa.nasheeds"
           test "$VERSION" = "1.4.0"
-          test "$BUILD_NO" = "36"
+          test "$BUILD_NO" = "37"
           test -x "$APP_PATH/$EXECUTABLE"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist")" = "true"
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIColorName' "$APP_PATH/Info.plist")" = "LaunchBackground"
@@ -253,10 +277,10 @@ jobs:
 
           (
             cd build/package
-            /usr/bin/zip -qry -y ../Muwa-v1.4.0-build36-native-unsigned.ipa Payload
+            /usr/bin/zip -qry -y ../Muwa-v1.4.0-build37-native-unsigned.ipa Payload
           )
 
-          shasum -a 256 build/Muwa-v1.4.0-build36-native-unsigned.ipa | tee build/Muwa-v1.4.0-build36-native-unsigned.ipa.sha256
+          shasum -a 256 build/Muwa-v1.4.0-build37-native-unsigned.ipa | tee build/Muwa-v1.4.0-build37-native-unsigned.ipa.sha256
 
           cat > build/build-info.json <<EOF
           {
@@ -280,8 +304,8 @@ jobs:
         with:
           name: Muwa-Native-IPA-${{ github.run_number }}
           path: |
-            build/Muwa-v1.4.0-build36-native-unsigned.ipa
-            build/Muwa-v1.4.0-build36-native-unsigned.ipa.sha256
+            build/Muwa-v1.4.0-build37-native-unsigned.ipa
+            build/Muwa-v1.4.0-build37-native-unsigned.ipa.sha256
             build/build-info.json
           if-no-files-found: error
           compression-level: 0
@@ -298,7 +322,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Muwa-build36-simulator-${{ github.run_id }}
+          name: Muwa-build37-simulator-${{ github.run_id }}
           path: build/muwa-review-app.tar.gz
           if-no-files-found: error
 
@@ -327,7 +351,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: Muwa-build36-simulator-${{ github.run_id }}
+          name: Muwa-build37-simulator-${{ github.run_id }}
           path: build
       - name: Unpack simulator app
         run: |
@@ -343,7 +367,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Muwa-build36-${{ matrix.device }}-screenshots
+          name: Muwa-build37-${{ matrix.device }}-screenshots
           path: build/previews
           if-no-files-found: warn
 
@@ -356,7 +380,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: Muwa-build36-simulator-${{ github.run_id }}
+          name: Muwa-build37-simulator-${{ github.run_id }}
           path: build
       - name: Unpack simulator app
         run: |
@@ -367,6 +391,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Muwa-build36-CarPlay-review
+          name: Muwa-build37-CarPlay-review
           path: build/previews/carplay
           if-no-files-found: warn

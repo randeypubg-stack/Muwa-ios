@@ -2,6 +2,7 @@ from pathlib import Path
 import subprocess, sys
 root = Path(sys.argv[1])
 build = Path('build')
+build.mkdir(exist_ok=True)
 source = (root/'Sources/Views/Player/FullPlayerView.swift').read_text()
 geometry = source[source.index('struct PlayerGeometry {'):].split('\nprivate struct PlaybackScrubber:')[0]
 (build/'PlayerGeometry.swift').write_text('import Foundation\n'+geometry)
@@ -32,3 +33,13 @@ launch = (root/'Sources/App/LaunchExperience.swift').read_text().split('\nstruct
 subprocess.run(['swiftc', '-parse-as-library', '-o', str(build/'launch-checks'),
  str(build/'LaunchPresentation.swift'), 'tests/LaunchChecks.swift'], check=True)
 subprocess.run([str(build/'launch-checks')], check=True)
+
+# Test-only diagnostics sink; these executables do not link MetricKit or ship.
+(build/'AuditDiagnostics.swift').write_text('import Foundation\n@MainActor final class Diagnostics { static let shared = Diagnostics(); func record(_ area: String, error: Error) {} }\n')
+for executable, sources, check in [
+    ('auth-checks', ['Services/AuthManager.swift', 'Services/AuthService.swift', 'Services/BackendConfig.swift', 'Models/AuthUser.swift'], 'tests/AuthChecks.swift'),
+    ('download-checks', ['Services/DownloadManager.swift', 'Models/Track.swift'], 'tests/DownloadChecks.swift'),
+]:
+    subprocess.run(['swiftc', '-parse-as-library', '-o', str(build/executable),
+        *[str(root/'Sources'/source) for source in sources], str(build/'AuditDiagnostics.swift'), check], check=True)
+    subprocess.run([str(build/executable)], check=True)

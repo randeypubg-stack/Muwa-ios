@@ -13,7 +13,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,21 +27,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.media3.common.Player
 import coil.compose.AsyncImage
-import kotlinx.coroutines.launch
 import org.json.JSONObject
-import kotlin.math.abs
 
 class MainActivity : ComponentActivity() {
     companion object { private var launchHasPlayed = false }
@@ -79,7 +72,6 @@ class MainActivity : ComponentActivity() {
     var newPlaylist by remember { mutableStateOf(false) }
     var playlistName by remember { mutableStateOf("") }
     var addingTrack by remember { mutableStateOf<Track?>(null) }
-    val context = LocalContext.current
     LaunchedEffect(model.controller) {
         if (BuildConfig.DEBUG && initialRoute == "player" && model.controller != null && model.track == null) {
             model.play(model.library.catalog.first(), autoplay = false)

@@ -14,7 +14,6 @@ final class SubtitleManager: ObservableObject {
   @Published private(set) var segmentsByTrack: [String: [SubtitleSegment]] = [:]
   @Published private(set) var stateByTrack: [String: LoadState] = [:]
 
-  private let apiBaseURL = BackendConfig.apiBaseURL
   private var tasks: [String: Task<Void, Never>] = [:]
 
   func state(for track: Track) -> LoadState {
@@ -51,6 +50,7 @@ final class SubtitleManager: ObservableObject {
         self.saveCache(result, trackID: track.id)
       } catch {
         guard !Task.isCancelled else { return }
+        Diagnostics.shared.record("subtitles", error: error)
         self.stateByTrack[track.id] = .unavailable(error.localizedDescription)
       }
     }

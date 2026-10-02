@@ -5,18 +5,37 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import org.json.JSONArray
 import java.io.File
+import java.io.IOException
 import java.security.KeyStore
 import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+
+// Keep the continuation pending until the body is consumed so cancellation also
+// closes a stalled download/upload, not only the wait for response headers.
+internal suspend fun <T> Call.awaitResult(read: (Response) -> T): T = suspendCancellableCoroutine { continuation ->
+    continuation.invokeOnCancellation { cancel() }
+    enqueue(object : Callback {
+        override fun onFailure(call: Call, error: IOException) { continuation.resumeWithException(error) }
+        override fun onResponse(call: Call, response: Response) {
+            runCatching { response.use(read) }.fold(
+                onSuccess = { continuation.resume(it) },
+                onFailure = { continuation.resumeWithException(it) }
+            )
+        }
+    })
+}
 
 private class SessionCookies(context: Context) : CookieJar {
     private val file = File(context.filesDir, "session.bin")
@@ -41,7 +60,9 @@ private class SessionCookies(context: Context) : CookieJar {
         values.forEach { cookie -> cookies.removeAll { it.name == cookie.name && it.domain == cookie.domain && it.path == cookie.path }; cookies.add(cookie) }
         cookies.removeAll { it.expiresAt < System.currentTimeMillis() }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key()) }
-        file.writeBytes(cipher.iv + cipher.doFinal(JSONArray(cookies.map { it.toString() }).toString().toByteArray()))
+        runCatching {
+            file.writeBytes(cipher.iv + cipher.doFinal(JSONArray(cookies.map { it.toString() }).toString().toByteArray()))
+        }.onFailure { Diagnostics.record("session-storage", it) }
     }
     @Synchronized override fun loadForRequest(url: HttpUrl): List<Cookie> = cookies.filter { it.expiresAt >= System.currentTimeMillis() && it.matches(url) }
     @Synchronized fun clear() { cookies.clear(); file.delete() }
@@ -57,7 +78,7 @@ class Backend(context: Context) {
     suspend fun request(path: String, body: JSONObject? = null, envelope: Boolean = false): JSONObject = withContext(Dispatchers.IO) {
         val builder = Request.Builder().url("$base/_api/$path").header("Accept", "application/json")
         if (body != null) builder.post((if (envelope) JSONObject().put("json", body) else body).toString().toRequestBody("application/json".toMediaType()))
-        client.newCall(builder.build()).execute().use { response ->
+        client.newCall(builder.build()).awaitResult { response ->
             val text = response.body?.string().orEmpty()
             val raw = runCatching { JSONObject(text) }.getOrElse { throw IllegalStateException("Сервер вернул неверный ответ (${response.code}).") }
             val data = raw.optJSONObject("json") ?: raw
@@ -72,7 +93,7 @@ class Backend(context: Context) {
             override fun contentType() = mime.toMediaType()
             override fun contentLength() = file.length()
             override fun writeTo(sink: okio.BufferedSink) { file.inputStream().use { input -> val bytes = ByteArray(64 * 1024); var count: Int; while (input.read(bytes).also { count = it } != -1) sink.write(bytes, 0, count) } }
-        }).build()).execute().use { check(it.isSuccessful) { "Не удалось загрузить файл (${it.code})." } }
+        }).build()).awaitResult { check(it.isSuccessful) { "Не удалось загрузить файл (${it.code})." } }
     }
 }
 class ApiException(val status: Int, message: String) : Exception(message)

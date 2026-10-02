@@ -329,10 +329,6 @@ struct HomeView: View {
       action: {
         player.play(track)
       },
-      isInPlaylist: library.isInPlaylist(track),
-      togglePlaylistAction: {
-        library.togglePlaylist(track)
-      },
       playNextAction: {
         library.addNext(track, after: player.currentTrack)
       },

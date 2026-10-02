@@ -26,7 +26,6 @@ import kotlin.math.abs
 
 @Composable fun PlayerSheet(model: MuwaModel,onClose: ()->Unit,onQueue: ()->Unit,onSubtitles: ()->Unit,onPlaylist: ()->Unit) {
     val track = model.track ?: return
-    val scope = rememberCoroutineScope()
     var slider by remember { mutableStateOf<Float?>(null) }
     var menu by remember {mutableStateOf(false)}
     Dialog(onDismissRequest=onClose,properties=DialogProperties(usePlatformDefaultWidth=false,decorFitsSystemWindows=false)) {
@@ -79,10 +78,20 @@ import kotlin.math.abs
     val queue=model.library.tracks(model.library.queue)
     val index=queue.indexOfFirst {it.id==track.id}
     val neighbor=queue.getOrNull(index + if(offset.value<=0) 1 else -1)
-    Box(Modifier.size(size).pointerInput(track.id,locked) {
-        detectDragGestures(onDragStart={horizontal=null;travel=this.size.width.toFloat()},onDragCancel={scope.launch {offset.animateTo(0f)}},onDragEnd={
+    val currentNeighbor by rememberUpdatedState(neighbor)
+    Box(Modifier.size(size).pointerInput(track.id) {
+        detectDragGestures(onDragStart={horizontal=null;travel=this.size.width.toFloat()},onDragCancel={if(!locked) scope.launch {offset.animateTo(0f)}},onDragEnd={
             if(locked) return@detectDragGestures
-            if(horizontal==true && abs(offset.value)>travel*.25f && neighbor!=null) {locked=true;scope.launch {offset.animateTo(if(offset.value<0) -travel else travel,spring());if(offset.value<0) model.next() else model.previous();offset.snapTo(0f);locked=false}}
+            val destination = currentNeighbor
+            if(horizontal==true && abs(offset.value)>travel*.25f && destination!=null) {
+                locked=true
+                scope.launch {
+                    try {
+                        offset.animateTo(if(offset.value<0) -travel else travel,spring())
+                        if(model.track?.id==track.id) model.play(destination)
+                    } finally { offset.snapTo(0f); locked=false }
+                }
+            }
             else {if(horizontal==false && offset.value>80) onClose();scope.launch {offset.animateTo(0f)}}
         }) {change,amount ->
             if(locked) return@detectDragGestures

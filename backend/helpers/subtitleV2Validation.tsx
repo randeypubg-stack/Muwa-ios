@@ -9,7 +9,8 @@ function original(raw: unknown, duration: number, id: string): Document {
   const language = text(obj.language, 16).toLowerCase();
   if (!/^[a-z]{2,3}(-[a-z]{2,4})?$/.test(language)) throw new Error("INVALID_LANGUAGE");
   const segments: Segment[] = [];
-  const rows = obj.segments.filter(x => x && typeof x === "object").sort((a,b) => number(a.start)-number(b.start));
+  const rows = obj.segments.filter(x => x && typeof x === "object" && Number.isFinite(number(x.start)))
+    .sort((a,b) => number(a.start)-number(b.start));
   for (const row of rows) {
     const start = number(row.start), end = number(row.end), value = text(row.original);
     if (!value || start < 0 || !Number.isFinite(start) || !Number.isFinite(end) || end <= start || end > duration+0.25) continue;
@@ -27,7 +28,7 @@ function original(raw: unknown, duration: number, id: string): Document {
     const normalize=(s:string)=>s.replace(/\s+/g," ").trim();
     if (normalize(words.map(w=>w.text).join(" "))!==normalize(value)) validWords=false;
     segments.push({id:`s${segments.length}`,start,end:safeEnd,original:value,words:validWords?words:[],timing:validWords?"estimated":"phrase"});
-    if(segments.length>=600) throw new Error("TRANSCRIPT_TOO_LONG");
+    if(segments.length>600) throw new Error("TRANSCRIPT_TOO_LONG");
   }
   if(!segments.length) throw new Error("NO_SPEECH");
   return {version:2,id,language,segments};

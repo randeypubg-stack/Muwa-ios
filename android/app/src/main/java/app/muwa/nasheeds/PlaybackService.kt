@@ -21,16 +21,17 @@ object AppGraph {
         .setUri(downloads.local(track)?.toURI()?.toString() ?: track.audio)
         .setMediaMetadata(MediaMetadata.Builder().setTitle(track.title).setArtist(track.artist).setArtworkUri(android.net.Uri.parse(track.artwork)).build()).build()
 }
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 object SleepTimer {
     var endAt by mutableStateOf<Long?>(null); private set
     var afterTrack by mutableStateOf(false); private set
-    private var player: Player? = null
+    private var player: ExoPlayer? = null
     private val handler = Handler(Looper.getMainLooper())
     private val stop = Runnable { player?.pause(); endAt = null; afterTrack = false }
-    fun attach(player: Player?) { this.player = player }
+    fun attach(player: ExoPlayer?) { this.player = player; player?.pauseAtEndOfMediaItems = afterTrack }
     fun start(minutes: Int) { cancel(); endAt = System.currentTimeMillis() + minutes * 60_000L; handler.postDelayed(stop, minutes * 60_000L) }
-    fun afterCurrent() { cancel(); afterTrack = true }
-    fun cancel() { handler.removeCallbacks(stop); endAt = null; afterTrack = false }
+    fun afterCurrent() { cancel(); afterTrack = true; player?.pauseAtEndOfMediaItems = true }
+    fun cancel() { handler.removeCallbacks(stop); endAt = null; afterTrack = false; player?.pauseAtEndOfMediaItems = false }
     fun finished() { if (afterTrack) { player?.pause(); cancel() } }
 }
 class PlaybackService : MediaSessionService() {
@@ -47,6 +48,9 @@ class PlaybackService : MediaSessionService() {
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) currentTrack()?.let { AppGraph.library.played(it) }
+            }
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) SleepTimer.finished()
             }
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 if (player.playWhenReady) currentTrack()?.let { AppGraph.library.played(it) }

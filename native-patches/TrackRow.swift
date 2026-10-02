@@ -9,8 +9,6 @@ struct TrackRow: View {
   var action: () -> Void
   var trailingAction: (() -> Void)? = nil
 
-  var isInPlaylist = false
-  var togglePlaylistAction: (() -> Void)? = nil
   var playNextAction: (() -> Void)? = nil
   var addToQueueAction: (() -> Void)? = nil
 
@@ -112,7 +110,7 @@ struct TrackRow: View {
   }
 
   private var hasContextMenu: Bool {
-    togglePlaylistAction != nil || playNextAction != nil || addToQueueAction != nil
+    playNextAction != nil || addToQueueAction != nil
   }
 }
 

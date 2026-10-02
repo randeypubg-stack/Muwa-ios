@@ -278,8 +278,8 @@ final class PlayerManager: ObservableObject {
       if let first = library.queueTracks.first { play(first) }
       return
     }
-    let queue = library.queueTracks.isEmpty ? Track.catalog : library.queueTracks
-    guard !queue.isEmpty else { return }
+    let queue = library.queueTracks
+    guard !queue.isEmpty else { finishPlayback(); return }
 
     if shuffleOn, queue.count > 1 {
       let candidates = queue.filter { $0.id != current.id }
@@ -297,13 +297,17 @@ final class PlayerManager: ObservableObject {
     } else if repeatOn {
       play(queue[0])
     } else {
-      player?.pause()
-      isPlaying = false
-      currentTime = duration
-      progress = duration > 0 ? 1 : 0
-      clearResumeCandidate()
-      updateNowPlaying()
+      finishPlayback()
     }
+  }
+
+  private func finishPlayback() {
+    player?.pause()
+    isPlaying = false
+    currentTime = duration
+    progress = duration > 0 ? 1 : 0
+    clearResumeCandidate()
+    updateNowPlaying()
   }
 
   func previous() {
@@ -312,7 +316,7 @@ final class PlayerManager: ObservableObject {
       return
     }
     guard let current = currentTrack else { return }
-    let queue = library.queueTracks.isEmpty ? Track.catalog : library.queueTracks
+    let queue = library.queueTracks
     guard let index = queue.firstIndex(where: { $0.id == current.id }), !queue.isEmpty else {
       return
     }
@@ -522,14 +526,15 @@ final class PlayerManager: ObservableObject {
   }
 
   private func prefetchFollowingTrack(after track: Track) {
+    prefetchTask?.cancel()
+    prefetchedTrackID = nil
+    prefetchedURL = nil
+    prefetchedAsset = nil
     guard !shuffleOn else {
-      prefetchedTrackID = nil
-      prefetchedURL = nil
-      prefetchedAsset = nil
       return
     }
 
-    let queue = library.queueTracks.isEmpty ? Track.catalog : library.queueTracks
+    let queue = library.queueTracks
     guard !queue.isEmpty, let index = queue.firstIndex(where: { $0.id == track.id }) else {
       return
     }
@@ -563,7 +568,6 @@ final class PlayerManager: ObservableObject {
     prefetchedAsset = asset
 
     // Warm metadata/network resolution without starting playback.
-    prefetchTask?.cancel()
     prefetchTask = Task { _ = try? await asset.load(.isPlayable) }
   }
 

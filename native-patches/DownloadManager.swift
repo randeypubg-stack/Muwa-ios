@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
   let onProgress: (Double) -> Void
@@ -51,7 +52,10 @@ final class DownloadManager: ObservableObject {
     return folder.appendingPathComponent("\(safeID).\(ext)")
   }
 
-  func localURL(for track: Track) -> URL? { Self.destination(track, folder: folder) }
+  func localURL(for track: Track) -> URL? {
+    guard isDownloaded(track) else { return nil }
+    return Self.destination(track, folder: folder)
+  }
   func isDownloaded(_ track: Track) -> Bool {
     downloadedIDs.contains(track.id) && fileManager.fileExists(atPath: Self.destination(track, folder: folder).path)
   }

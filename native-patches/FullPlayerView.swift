@@ -12,7 +12,6 @@ struct MorphingPlayerView: View {
   @EnvironmentObject private var premium: PremiumManager
   @EnvironmentObject private var downloads: DownloadManager
 
-  @Binding var selection: AppTab
   @Binding var expansion: CGFloat
   let chromeDrop: CGFloat
   let safeTopInset: CGFloat
@@ -177,7 +176,6 @@ struct MorphingPlayerView: View {
 
         miniControls(
           playerWidth: playerWidth,
-          playerHeight: playerHeight,
           centerY: playerCenterY,
           opacity: miniOpacity,
           viewportWidth: viewportWidth
@@ -193,16 +191,11 @@ struct MorphingPlayerView: View {
 
         fullControls(
           layout: layout,
-          playerWidth: playerWidth,
           playerHeight: playerHeight,
           centerY: playerCenterY,
           contentWidth: fullContentWidth,
-          artworkY: fullArtworkY,
-          artworkSize: fullArtworkSize,
           metadataY: fullMetadataY,
           opacity: fullOpacity,
-          isShortPhone: isShortPhone,
-          chromeDrop: chromeDrop,
           safeTopInset: safeTopInset,
           geometry: geometry
         )
@@ -545,7 +538,7 @@ struct MorphingPlayerView: View {
   }
 
   private func swipeNeighbor(direction: Int) -> Track? {
-    let queue = library.queueTracks.isEmpty ? Track.catalog : library.queueTracks
+    let queue = library.queueTracks
     guard !queue.isEmpty else { return nil }
 
     guard let currentIndex = queue.firstIndex(where: { $0.id == track.id }) else {
@@ -627,7 +620,6 @@ struct MorphingPlayerView: View {
 
   private func miniControls(
     playerWidth: CGFloat,
-    playerHeight: CGFloat,
     centerY: CGFloat,
     opacity: CGFloat,
     viewportWidth: CGFloat
@@ -678,16 +670,11 @@ struct MorphingPlayerView: View {
 
   private func fullControls(
     layout: AdaptiveLayout,
-    playerWidth: CGFloat,
     playerHeight: CGFloat,
     centerY: CGFloat,
     contentWidth: CGFloat,
-    artworkY: CGFloat,
-    artworkSize: CGFloat,
     metadataY: CGFloat,
     opacity: CGFloat,
-    isShortPhone: Bool,
-    chromeDrop: CGFloat,
     safeTopInset: CGFloat,
     geometry: PlayerGeometry
   ) -> some View {
@@ -1106,18 +1093,10 @@ struct MorphingPlayerView: View {
       do {
         try await downloads.download(track)
       } catch {
+        guard !(error is CancellationError), (error as NSError).code != NSURLErrorCancelled else { return }
         downloadError = error.localizedDescription
       }
     }
-  }
-
-  private func time(_ seconds: TimeInterval) -> String {
-    guard seconds.isFinite, seconds >= 0 else { return "0:00" }
-    return String(
-      format: "%d:%02d",
-      Int(seconds) / 60,
-      Int(seconds) % 60
-    )
   }
 
   private func clamp(_ value: CGFloat) -> CGFloat {

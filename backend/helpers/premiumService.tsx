@@ -52,11 +52,18 @@ async function handle(request:Request,schema:typeof inputSchema):Promise<Respons
     } else if(input.action!=='status') {
       if(!current.canManageCodes)return fail('Создавать и управлять кодами может только владелец.',403);
       if(input.action==='create') {
-        const count=await db.selectFrom('premiumCodes').select(eb=>eb.fn.countAll<string>().as('count')).where('createdBy','=',user.id).where('createdAt','>',new Date(Date.now()-3600000)).executeTakeFirstOrThrow();
-        if(Number(count.count)>=50)return fail('Лимит создания кодов на час достигнут.',429);
         const token=randomBytes(12).toString('hex').toUpperCase();
         const code='MUWA-'+token.match(/.{1,4}/g)!.join('-');
-        await db.insertInto('premiumCodes').values({id:randomUUID(),codeHash:createHash('sha256').update('MUWA'+token).digest('hex'),label:input.label,durationDays:input.durationDays,maxUses:input.maxUses,expiresAt:new Date(Date.now()+input.validDays*86400000),createdBy:user.id}).execute();
+        const created=await db.transaction().execute(async tx=>{
+          // Use the same first lock as redemption. Concurrent creates cannot all
+          // observe the same remaining hourly capacity before inserting.
+          await tx.selectFrom('users').select('id').where('id','=',user.id).forUpdate().executeTakeFirstOrThrow();
+          const count=await tx.selectFrom('premiumCodes').select(eb=>eb.fn.countAll<string>().as('count')).where('createdBy','=',user.id).where('createdAt','>',new Date(Date.now()-3600000)).executeTakeFirstOrThrow();
+          if(Number(count.count)>=50)return false;
+          await tx.insertInto('premiumCodes').values({id:randomUUID(),codeHash:createHash('sha256').update('MUWA'+token).digest('hex'),label:input.label,durationDays:input.durationDays,maxUses:input.maxUses,expiresAt:new Date(Date.now()+input.validDays*86400000),createdBy:user.id}).execute();
+          return true;
+        });
+        if(!created)return fail('Лимит создания кодов на час достигнут.',429);
         extra={code}; // Full code is returned once; only its hash is stored.
       } else if(input.action==='disable') {
         await db.updateTable('premiumCodes').set({disabled:true}).where('id','=',input.id).execute();
@@ -75,4 +82,3 @@ async function handle(request:Request,schema:typeof inputSchema):Promise<Respons
   }
 }
 export const premiumService={handle,status};
-

@@ -12,3 +12,5 @@ android/**/build/
 __pycache__/
 
 android/.kotlin/
+backend/node_modules/
+backend/.test-run-*/

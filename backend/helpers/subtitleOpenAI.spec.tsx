@@ -2,6 +2,11 @@ import { normalizeWhisper, subtitleOpenAI, SubtitleProviderError } from './subti
 import { subtitleV2Validation } from './subtitleV2Validation';
 
 describe('OpenAI subtitle provider', () => {
+  it('ignores malformed provider entries without losing valid speech', () => {
+    const raw=normalizeWhisper({language:'english',segments:[null,{start:1,end:2,text:'Hello'}],words:[null,{word:'Hello',start:1,end:2}]});
+    const doc=subtitleV2Validation.original(raw,10,'test');
+    expect(doc.segments.length).toBe(1);expect(doc.segments[0].words[0].text).toBe('Hello');
+  });
   it('maps detected language and preserves timed original words', () => {
     const raw=normalizeWhisper({language:'arabic',segments:[{start:1,end:3,text:'مرحبا بكم'}],words:[{word:'مرحبا',start:1,end:2},{word:'بكم',start:2,end:3}]});
     const doc=subtitleV2Validation.original(raw,10,'test');
@@ -32,4 +37,3 @@ describe('OpenAI subtitle provider', () => {
     } finally { if(previous===undefined)Reflect.deleteProperty(process.env, 'OPENAI_API_KEY');else process.env.OPENAI_API_KEY=previous; }
   });
 });
-

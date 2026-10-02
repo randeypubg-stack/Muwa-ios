@@ -76,10 +76,6 @@ final class LibraryStore: ObservableObject {
   var drafts: [PublicationDraft] { publications.filter { $0.status == .draft } }
 
   func isLiked(_ track: Track) -> Bool { likedIDs.contains(track.id) }
-  func isInPlaylist(_ track: Track) -> Bool {
-    playlists.contains { $0.trackIDs.contains(track.id) }
-  }
-
   func playlist(id: UUID) -> UserPlaylist? {
     playlists.first(where: { $0.id == id })
   }
@@ -100,17 +96,6 @@ final class LibraryStore: ObservableObject {
       likedIDs.insert(track.id)
     }
     persistLiked()
-  }
-
-  // Compatibility helper for existing menus: use the first playlist, creating one if needed.
-  func togglePlaylist(_ track: Track) {
-    let targetID: UUID
-    if let first = playlists.first {
-      targetID = first.id
-    } else {
-      targetID = createPlaylist(name: "Мой плей-лист")
-    }
-    toggleTrack(track, in: targetID)
   }
 
   @discardableResult
@@ -167,6 +152,7 @@ final class LibraryStore: ObservableObject {
   }
 
   func addNext(_ track: Track, after current: Track?) {
+    guard track.id != current?.id else { ensureQueueContains(track); return }
     queueIDs.removeAll(where: { $0 == track.id })
     if let current, let index = queueIDs.firstIndex(of: current.id) {
       queueIDs.insert(track.id, at: min(index + 1, queueIDs.count))
@@ -242,4 +228,3 @@ final class LibraryStore: ObservableObject {
     }
   }
 }
-

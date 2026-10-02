@@ -19,5 +19,7 @@ CREATE TABLE IF NOT EXISTS premium_code_limits (
   user_id integer PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   window_start timestamptz NOT NULL DEFAULT now(), attempts integer NOT NULL DEFAULT 1
 );
+CREATE INDEX IF NOT EXISTS premium_codes_creator_time_idx ON premium_codes(created_by, created_at);
+CREATE INDEX IF NOT EXISTS premium_redemptions_user_idx ON premium_redemptions(user_id);
 -- Provisioning an owner's grant/admin is a separate, explicitly authorized operation.
 -- Never infer entitlement or administration from a client-supplied email.
