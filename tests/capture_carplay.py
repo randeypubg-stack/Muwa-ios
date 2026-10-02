@@ -171,6 +171,18 @@ try:
         run('cliclick', f'c:{round(wx + ww / 2)},{round(wy + 14)}')
         time.sleep(0.2)
         run('cliclick', f'c:{x},{y}')
+        status['mouse_position'] = run('cliclick', 'p').strip()
+        if not proof.exists():
+            # System Events already owns the Simulator accessibility session.
+            # Some hosted macOS sessions drop events from a newly installed
+            # command-line mouse tool even though it returns success.
+            run('osascript', '-e', f'tell application "System Events" to tell process "Simulator" to click at {{{x}, {y}}}')
+            time.sleep(2)
+        if not proof.exists():
+            # The native launcher starts with Messages focused; Muwa is the
+            # first tile on its second row. CarPlay also supports directional
+            # controls, so exercise that input route when pointer input stalls.
+            run('osascript', '-e', 'tell application "System Events" to tell process "Simulator"\nkey code 125\ndelay 0.2\nkey code 36\nend tell')
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline and not proof.exists():
         time.sleep(0.5)
