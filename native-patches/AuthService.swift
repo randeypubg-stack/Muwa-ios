@@ -37,7 +37,7 @@ actor AuthService: AuthServing {
     configuration.httpCookieStorage = .shared
     configuration.timeoutIntervalForRequest = 30
     configuration.timeoutIntervalForResource = 60
-    session = URLSession(configuration: configuration)
+    self.session = URLSession(configuration: configuration)
   }
 
   func restoreSession() async throws -> AuthUser? {
