@@ -106,6 +106,44 @@ try:
     # Prove that the screenshot is from a connected CarPlay scene, not an empty display.
     data = Path(run('xcrun', 'simctl', 'get_app_container', udid, 'app.muwa.nasheeds', 'data').strip())
     proof = data / 'Documents/carplay-connected.txt'
+    if not proof.exists():
+        # Connecting CarPlay exposes its launcher, not automatically Muwa's
+        # template scene. Select the app from the actual external framebuffer.
+        launcher = out / 'launcher.png'
+        run('xcrun', 'simctl', 'io', udid, 'screenshot', '--display=external', str(launcher))
+        target = json.loads(run('swift', 'tests/locate_carplay_app.swift', str(launcher)))
+        bounds_script = '''tell application "System Events"
+          tell process "Simulator"
+            set frontmost to true
+            set chosenWindow to missing value
+            repeat with w in windows
+              if name of w contains "CarPlay" then
+                set chosenWindow to w
+                exit repeat
+              end if
+            end repeat
+            if chosenWindow is missing value then
+              repeat with w in windows
+                set windowSize to size of w
+                if item 1 of windowSize > item 2 of windowSize then
+                  set chosenWindow to w
+                  exit repeat
+                end if
+              end repeat
+            end if
+            if chosenWindow is missing value then error "CarPlay window was not found"
+            set windowPosition to position of chosenWindow
+            set windowSize to size of chosenWindow
+            return (item 1 of windowPosition as text) & "," & (item 2 of windowPosition as text) & "," & (item 1 of windowSize as text) & "," & (item 2 of windowSize as text)
+          end tell
+        end tell'''
+        wx, wy, ww, wh = map(float, run('osascript', '-e', bounds_script).strip().split(','))
+        scale = ww / target['width']
+        x = round(wx + target['x'] * scale)
+        y = round(wy + wh - target['height'] * scale + target['y'] * scale)
+        status['launcher_selection'] = {'label': target['label'], 'confidence': target['confidence'],
+                                        'nativeTarget': target, 'windowBounds': [wx, wy, ww, wh]}
+        run('cliclick', f'c:{x},{y}')
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline and not proof.exists():
         time.sleep(0.5)

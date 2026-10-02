@@ -37,6 +37,9 @@ Simulator's CarPlay external display, and captures that display only after Muwa'
 CarPlay scene reports a connection. If the runner cannot expose or connect the
 external display, `build/previews/carplay/status.json` records the reason. A missing
 capture is never replaced by a mockup or a phone screenshot.
+The script selects Muwa from the real CarPlay launcher using on-runner Vision
+text recognition and a Simulator mouse click; opening the display alone does
+not select an app. The original launcher frame is retained for diagnosis.
 An unconnected external display is retained as a diagnostic image only; it is
 never marked as a successful Muwa CarPlay screenshot.
 
