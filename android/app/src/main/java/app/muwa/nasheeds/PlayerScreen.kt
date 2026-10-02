@@ -26,13 +26,16 @@ import kotlin.math.abs
 
 @Composable fun PlayerSheet(model: MuwaModel,onClose: ()->Unit,onQueue: ()->Unit,onSubtitles: ()->Unit,onPlaylist: ()->Unit) {
     val track = model.track ?: return
+    // Read the activity's insets before entering the separate Dialog window.
+    // The dialog may report zero navigation-bar insets on older Android versions.
+    val safeInsets = WindowInsets.safeDrawing.asPaddingValues()
     var slider by remember { mutableStateOf<Float?>(null) }
     var menu by remember {mutableStateOf(false)}
     Dialog(onDismissRequest=onClose,properties=DialogProperties(usePlatformDefaultWidth=false,decorFitsSystemWindows=false)) {
         // This dialog has a custom background rather than a Material Surface;
         // provide its foreground explicitly instead of inheriting default black.
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-        BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF080D16)).systemBarsPadding().padding(16.dp)) {
+        BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF080D16)).padding(safeInsets).padding(16.dp)) {
             val wide = maxWidth > maxHeight || maxWidth > 700.dp
             val artworkSize = if(wide) minOf(maxHeight - 130.dp,maxWidth * .4f) else minOf(maxWidth - 48.dp,maxHeight * .39f)
             Column(Modifier.fillMaxSize()) {
