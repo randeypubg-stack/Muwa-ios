@@ -7,6 +7,7 @@ emulator settings back. All frames come from Android's screenrecord/screencap.
 import json
 import os
 from pathlib import Path
+import re
 import struct
 import subprocess
 import time
@@ -99,11 +100,11 @@ def start_launch():
 def assert_home(remote_xml, out):
     # Cold emulator renderers can keep the starting window above Compose after
     # am start -W returns. Verify a fresh hierarchy until actual home is visible.
-    deadline = time.monotonic() + 20
+    deadline = time.monotonic() + 30
     hierarchy = ""
     while time.monotonic() < deadline:
         check_foreground()
-        adb("shell", "uiautomator", "dump", remote_xml, timeout=15)
+        adb("shell", "uiautomator", "dump", remote_xml, timeout=30)
         hierarchy = adb("shell", "cat", remote_xml, timeout=15)
         if 'text="Главная"' in hierarchy and 'text="Нашиды без музыки"' in hierarchy:
             (out / "home-hierarchy.xml").write_text(hierarchy)
@@ -111,7 +112,7 @@ def assert_home(remote_xml, out):
         time.sleep(0.4)
     (out / "failed-hierarchy.xml").write_text(hierarchy)
     screenshot(out / "launch-failed.png")
-    raise AssertionError("Launch did not reveal native home within 20 seconds")
+    raise AssertionError("Launch did not reveal native home within 30 seconds")
 
 
 def main():
@@ -134,6 +135,13 @@ def main():
         "recordingAnimationScale": 1, "reducedAnimationScale": 0,
         "files": [], "cleanupErrors": []
     }
+    width, height = map(int, re.findall(r"(\d+)x(\d+)", manifest["size"])[-1])
+    # Keep original screenshots at the device resolution. Downscale only the
+    # native encoder output, so a software-rendered tablet does not starve the
+    # accessibility service while recording its 1600x2560 framebuffer.
+    recording_width = min(width, 720)
+    recording_height = round(height * recording_width / width / 2) * 2
+    manifest["videoResolution"] = f"{recording_width}x{recording_height}"
     recorder = None
     recorder_pids = set()
     try:
@@ -148,7 +156,8 @@ def main():
         # Refuse to interfere with any other recording already on the emulator.
         assert not screenrecord_pids(), "Another Android screen recording is already running"
         recorder = subprocess.Popen(
-            ["adb", "shell", "screenrecord", "--time-limit", "30", "--bit-rate", "6000000", remote_video],
+            ["adb", "shell", "screenrecord", "--time-limit", "45", "--bit-rate", "4000000",
+             "--size", manifest["videoResolution"], remote_video],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         # Verify the recorder is running before asking Android to launch Muwa.
         for _ in range(20):
@@ -193,6 +202,10 @@ def main():
     except Exception as error:
         manifest["captureStatus"] = "failed"
         manifest["error"] = str(error)
+        try:
+            screenshot(out / "launch-failed.png")
+        except Exception as capture_error:
+            manifest["failureScreenshotError"] = str(capture_error)
         try:
             diagnostic = adb("logcat", "-d", "-t", "100", "-s", "UiAutomation", "UiAutomatorBridge",
                              "UiAutomationConnection", timeout=5)
