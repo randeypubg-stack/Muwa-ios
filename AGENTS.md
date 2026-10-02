@@ -1,5 +1,8 @@
 # Muwa development rules
 
+Правило владельца: редактируем существующий код, а не дописываем вторую
+реализацию поверх первой.
+
 - Edit the existing implementation of a feature. Do not append a second class,
   handler, state owner or alternate code path to override the first one.
 - Before changing a feature, find its callers and the source file actually used
