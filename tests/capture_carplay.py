@@ -9,12 +9,16 @@ out = Path('build/previews/carplay')
 out.mkdir(parents=True, exist_ok=True)
 status = {'captured': False, 'distribution': 'requires Apple-approved CarPlay Audio provisioning', 'steps': []}
 
+def save_status():
+    (out / 'status.json').write_text(json.dumps(status, ensure_ascii=False, indent=2))
+
 def run(*args, timeout=180):
     command = [str(arg) for arg in args]
     print('Running:', ' '.join(command), flush=True)
     started = time.monotonic()
     step = {'command': command, 'timeout_seconds': timeout}
     status['steps'].append(step)
+    save_status()
     try:
         result = subprocess.run(command, text=True, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, timeout=timeout)
@@ -32,6 +36,7 @@ def run(*args, timeout=180):
         raise
     finally:
         step['elapsed_seconds'] = round(time.monotonic() - started, 3)
+        save_status()
         print(f"Completed in {step['elapsed_seconds']}s: {' '.join(command)}", flush=True)
 
 try:
@@ -149,6 +154,7 @@ try:
         y = round(wy + wh - target['height'] * scale + target['y'] * scale)
         status['launcher_selection'] = {'label': target['label'], 'confidence': target['confidence'],
                                         'nativeTarget': target, 'windowBounds': [wx, wy, ww, wh]}
+        save_status()
         time.sleep(0.2)
         run('cliclick', f'c:{x},{y}')
     deadline = time.monotonic() + 30
@@ -177,5 +183,5 @@ except Exception as error:
         except Exception as diagnostic_error:
             status['diagnostic_error'] = str(diagnostic_error)
 finally:
-    (out / 'status.json').write_text(json.dumps(status, ensure_ascii=False, indent=2))
+    save_status()
     print(json.dumps(status, ensure_ascii=False), flush=True)

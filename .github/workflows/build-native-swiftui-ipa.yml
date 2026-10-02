@@ -395,7 +395,9 @@ jobs:
     name: Review CarPlay external display
     needs: build
     runs-on: macos-15
-    timeout-minutes: 10
+    # A cold hosted Simulator plus local Vision startup can consume ten minutes
+    # before the app is selected. Leave time for its scene handshake and capture.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
