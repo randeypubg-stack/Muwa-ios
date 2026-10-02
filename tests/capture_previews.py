@@ -1,4 +1,4 @@
-import json, subprocess, time
+import json, re, subprocess, time
 import shutil
 import os
 from pathlib import Path
@@ -6,6 +6,22 @@ from pathlib import Path
 def run(*args):
     print("Running:", " ".join(args), flush=True)
     return subprocess.check_output(list(args), text=True, timeout=240)
+
+def launch_ready(udid, args):
+    data = Path(run('xcrun','simctl','get_app_container',udid,'app.muwa.nasheeds','data').strip())
+    for name in ['preview-ready.txt', 'queue-ready.txt', 'clock-check.txt', 'artwork-check.txt']:
+        (data / 'Documents' / name).unlink(missing_ok=True)
+    response = run('xcrun','simctl','launch','--terminate-running-process',udid,'app.muwa.nasheeds',*args)
+    match = re.search(r'app\.muwa\.nasheeds:\s*(\d+)', response)
+    assert match, f'No native fixture process: {response}'
+    pid = match.group(1)
+    ready = data / 'Documents' / ('queue-ready.txt' if '--audit-queue' in args else 'preview-ready.txt')
+    deadline = time.monotonic() + 30
+    while not ready.exists() or ready.read_text() != pid:
+        assert time.monotonic() < deadline, f'Native screen did not become ready: {args}'
+        time.sleep(0.25)
+    time.sleep(3)
+    return data
 
 devices=json.loads(run('xcrun','simctl','list','devices','available','--json'))['devices']
 available=[d for group in devices.values() for d in group if d.get('isAvailable')]
@@ -38,15 +54,18 @@ for i,d in enumerate(selected):
     run('xcrun','simctl','ui',udid,'appearance','dark')
     run('xcrun','simctl','install',udid,str(app))
     for label,args in [('home',[]),('settings',['--audit-profile','--audit-settings']),('search',['--audit-search']),('queue',['--audit-player','--audit-queue']),('profile',['--audit-profile']),('premium',['--audit-profile','--audit-premium']),('promo',['--audit-profile','--audit-promo']),('owner-premium',['--audit-profile','--audit-premium','--audit-owner']),('owner-promo',['--audit-profile','--audit-promo','--audit-owner']),('ai-unavailable',['--audit-player','--audit-ai-unavailable']),('player',['--audit-player']),('library',['--audit-library']),('landscape',['--audit-player','--audit-landscape']),('ai',['--audit-player','--audit-ai']),('ai-reader',['--audit-player','--audit-ai','--audit-ai-expanded'])]:
-        run('xcrun','simctl','launch','--terminate-running-process',udid,'app.muwa.nasheeds',*args)
-        time.sleep(5)
+        data = launch_ready(udid, args)
         run('xcrun','simctl','io',udid,'screenshot',str(out/f'{i}-{label}.png'))
-        data = Path(run('xcrun','simctl','get_app_container',udid,'app.muwa.nasheeds','data').strip())
         proof = (data/'Documents/clock-check.txt').read_text()
         assert proof == '100 ticks; PlayerManager notifications: 0', 'Clock isolation check did not complete'
         (out/f'{i}-clock-check.txt').write_text(proof)
         if label == 'player':
-            report = (data/'Documents/artwork-check.txt').read_text()
+            report_path = data/'Documents/artwork-check.txt'
+            deadline = time.monotonic() + 45
+            while not report_path.exists():
+                assert time.monotonic() < deadline, 'Current fixture artwork check did not finish'
+                time.sleep(0.25)
+            report = report_path.read_text()
             assert 'cover=true; backdrop=true' in report, report
             (out/f'{i}-artwork-check.txt').write_text(report)
             shutil.copy2(data/'Documents/cached-backdrop.png', out/f'{i}-cached-backdrop.png')
@@ -55,8 +74,7 @@ for i,d in enumerate(selected):
     try:
         run('xcrun','simctl','ui',udid,'content_size','accessibility-large')
         for label,args in [('home-large-text',[]),('queue-large-text',['--audit-player','--audit-queue'])]:
-            run('xcrun','simctl','launch','--terminate-running-process',udid,'app.muwa.nasheeds',*args)
-            time.sleep(4)
+            launch_ready(udid, args)
             run('xcrun','simctl','io',udid,'screenshot',str(out/f'{i}-{label}.png'))
     finally:
         run('xcrun','simctl','ui',udid,'content_size','large')

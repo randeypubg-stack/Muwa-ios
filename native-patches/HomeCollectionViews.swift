@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeCollections: View {
   let tracks: [Track]
+  let contentWidth: CGFloat
   @Environment(\.dynamicTypeSize) private var typeSize
 
   var body: some View {
@@ -24,9 +25,12 @@ struct HomeCollections: View {
         .accessibilityLabel("Вся коллекция")
       }
 
-      ViewThatFits(in: .horizontal) {
-        HStack(alignment: .top, spacing: 12) { cards }
+      // Card titles have wide ideal sizes. ViewThatFits measures those before
+      // wrapping and would choose a tall column even on a regular iPhone.
+      if typeSize.isAccessibilitySize || contentWidth < 300 {
         VStack(spacing: 12) { cards }
+      } else {
+        HStack(alignment: .top, spacing: 12) { cards }
       }
     }
   }
@@ -45,7 +49,7 @@ struct HomeCollections: View {
         CollectionTrackList(title: title, tracks: tracks)
       } label: {
         HomeCollectionCard(title: title, detail: detail, symbol: symbol, tint: tint, tracks: tracks)
-          .frame(minWidth: typeSize.isAccessibilitySize ? 240 : 136, maxWidth: .infinity)
+          .frame(maxWidth: .infinity)
       }
       .buttonStyle(MuwaPressStyle())
       .accessibilityLabel("\(title), \(detail), \(MuwaText.trackCount(tracks.count))")
@@ -91,7 +95,7 @@ private struct HomeCollectionCard: View {
         .foregroundStyle(MuwaPalette.text)
         .lineLimit(3)
         .fixedSize(horizontal: false, vertical: true)
-        .frame(minHeight: 44, alignment: .topLeading)
+        .frame(minHeight: 60, alignment: .topLeading)
       HStack(alignment: .bottom, spacing: 4) {
         VStack(alignment: .leading, spacing: 3) {
           Text(detail).font(MuwaTypography.caption)

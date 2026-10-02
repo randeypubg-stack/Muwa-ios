@@ -97,6 +97,17 @@ try:
     status['device'] = phone['name']
 except Exception as error:
     status['reason'] = str(error)
+    # Preserve the native launch denial so signing/runtime failures can be
+    # distinguished from a missing external display or an app scene failure.
+    if 'udid' in locals():
+        predicate = '(process == "SpringBoard" OR process == "runningboardd" OR process == "amfid") AND (eventMessage CONTAINS "app.muwa.nasheeds" OR eventMessage CONTAINS "Muwa.app")'
+        try:
+            diagnostic = run('xcrun', 'simctl', 'spawn', udid, 'log', 'show',
+                             '--style', 'compact', '--last', '3m', '--predicate', predicate,
+                             timeout=30)
+            (out / 'launch-diagnostic.log').write_text(diagnostic)
+        except Exception as diagnostic_error:
+            status['diagnostic_error'] = str(diagnostic_error)
 finally:
     (out / 'status.json').write_text(json.dumps(status, ensure_ascii=False, indent=2))
     print(json.dumps(status, ensure_ascii=False), flush=True)

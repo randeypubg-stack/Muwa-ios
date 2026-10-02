@@ -31,7 +31,11 @@ struct HomeView: View {
               .font(MuwaTypography.detail)
               .foregroundStyle(MuwaPalette.secondary)
 
-            HomeCollections(tracks: Track.catalog)
+            HomeCollections(
+              tracks: Track.catalog,
+              contentWidth: min(layout.viewportWidth, layout.contentMaxWidth)
+                - 2 * (layout.isPhone ? MuwaSpacing.screen : layout.horizontalPadding)
+            )
 
             if layout.isWide {
               recommendationsGrid(layout: layout)
@@ -308,4 +312,3 @@ struct HomeView: View {
     return String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60)
   }
 }
-

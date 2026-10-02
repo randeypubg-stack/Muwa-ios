@@ -89,6 +89,9 @@ jobs:
           api-level: 35
           arch: x86_64
           profile: pixel_6
+          # Use GLES for the headless screenrecord fixture. The emulator in the
+          # preceding run went offline after its recording surface was released.
+          emulator-options: -no-window -gpu swiftshader_indirect -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
             adb shell wm size ${{ matrix.screen.size }}
@@ -96,9 +99,10 @@ jobs:
             adb shell input keyevent KEYCODE_WAKEUP
             adb shell wm dismiss-keyguard
             gradle -p android :app:connectedDebugAndroidTest --stacktrace
+            gradle -p android --stop
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-            MUWA_ANDROID_OUTPUT=build/android-previews/${{ matrix.screen.name }} python3 tests/capture_launch_android.py
             MUWA_ANDROID_OUTPUT=build/android-previews/${{ matrix.screen.name }} python3 tests/capture_android.py
+            MUWA_ANDROID_OUTPUT=build/android-previews/${{ matrix.screen.name }} python3 tests/capture_launch_android.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

@@ -30,15 +30,6 @@ s=s.replace(needle, '''    .task {
       player.currentTime = 0
       print("PASS: 100 playback ticks produced zero PlayerManager notifications")
       let args = ProcessInfo.processInfo.arguments
-      if let url = Track.catalog[0].artworkURL {
-        let cover = await ArtworkImageStore.shared.image(for: url)
-        let backdrop = await ArtworkImageStore.shared.image(for: url, backdrop: true)
-        let report = "cover=\\(cover != nil); backdrop=\\(backdrop != nil); size=\\(backdrop?.size ?? .zero)"
-        try? report.write(to: URL.documentsDirectory.appendingPathComponent("artwork-check.txt"), atomically: true, encoding: .utf8)
-        if let data = backdrop?.pngData() {
-          try? data.write(to: URL.documentsDirectory.appendingPathComponent("cached-backdrop.png"))
-        }
-      }
       if args.contains("--audit-player") {
         player.play(Track.catalog[0], autoplay: false)
         playerExpansion = 1
@@ -57,6 +48,17 @@ s=s.replace(needle, '''    .task {
         try? await Task.sleep(for: .seconds(1))
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
           scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+        }
+      }
+      try? String(ProcessInfo.processInfo.processIdentifier).write(to: URL.documentsDirectory.appendingPathComponent("preview-ready.txt"), atomically: true, encoding: .utf8)
+      // A cover download must not postpone selection of the screen under review.
+      if let url = Track.catalog[0].artworkURL {
+        let cover = await ArtworkImageStore.shared.image(for: url)
+        let backdrop = await ArtworkImageStore.shared.image(for: url, backdrop: true)
+        let report = "cover=\\(cover != nil); backdrop=\\(backdrop != nil); size=\\(backdrop?.size ?? .zero)"
+        try? report.write(to: URL.documentsDirectory.appendingPathComponent("artwork-check.txt"), atomically: true, encoding: .utf8)
+        if let data = backdrop?.pngData() {
+          try? data.write(to: URL.documentsDirectory.appendingPathComponent("cached-backdrop.png"))
         }
       }
     }
@@ -104,4 +106,17 @@ manager.write_text(s)
 # Exercise the real player actions in Simulator without entitlement bypass fixtures.
 p=root/'Sources/Views/Player/FullPlayerView.swift'
 s=p.read_text().replace('    .onChange(of: expansion)', '    .task { if ProcessInfo.processInfo.arguments.contains("--audit-queue") { queuePresented = true } }\n    .onChange(of: expansion)',1)
+p.write_text(s)
+
+# Confirm queue presentation, rather than accepting a still-visible Home screen.
+p=root/'Sources/Views/Player/QueueView.swift'
+s=p.read_text()
+needle='    .presentationDetents([.medium, .large])'
+assert needle in s
+s=s.replace(needle, '''    .onAppear {
+      if ProcessInfo.processInfo.arguments.contains("--audit-queue") {
+        try? String(ProcessInfo.processInfo.processIdentifier).write(to: URL.documentsDirectory.appendingPathComponent("queue-ready.txt"), atomically: true, encoding: .utf8)
+      }
+    }
+'''+needle,1)
 p.write_text(s)
