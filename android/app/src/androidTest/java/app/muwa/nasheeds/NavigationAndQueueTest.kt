@@ -30,12 +30,17 @@ class NavigationAndQueueTest {
 
     @Test
     fun queueControlsReorderAndRemovePersistedItems() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val library = Library(context)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        // Other screen fixtures can leave a paused Media3 session. Use the real
+        // shared library and start this interaction check with an empty player.
+        context.stopService(Intent(context, PlaybackService::class.java))
+        instrumentation.waitForIdleSync()
+        val library = AppGraph.library
         val saved = library.queue
         val tracks = library.catalog.take(3)
         val ids = tracks.map { it.id }
-        library.replaceQueue(ids)
+        instrumentation.runOnMainSync { library.replaceQueue(ids) }
         try {
             ActivityScenario.launch<MainActivity>(
                     Intent(context, MainActivity::class.java).putExtra("review.route", "queue")
@@ -53,7 +58,7 @@ class NavigationAndQueueTest {
                     assertEquals(listOf(ids[1], ids[2]), Library(context).queue)
                 }
         } finally {
-            Library(context).replaceQueue(saved)
+            instrumentation.runOnMainSync { library.replaceQueue(saved) }
         }
     }
 }
