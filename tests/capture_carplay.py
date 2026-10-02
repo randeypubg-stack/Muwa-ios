@@ -86,7 +86,17 @@ try:
     time.sleep(3)
     # Launch the phone scene before enabling the automotive display. SpringBoard
     # may reject a new foreground phone launch while the CarPlay display is active.
-    run('xcrun', 'simctl', 'launch', '--terminate-running-process', udid, 'app.muwa.nasheeds', '--audit-player')
+    # A cold hosted SpringBoard can still be registering the newly installed
+    # bundle after installd/get_app_container return. Retry only a command
+    # timeout; signing denials and other explicit launch failures remain errors.
+    try:
+        run('xcrun', 'simctl', 'launch', '--terminate-running-process', udid,
+            'app.muwa.nasheeds', '--audit-player', timeout=300)
+    except subprocess.TimeoutExpired:
+        status['cold_launch_retry'] = True
+        save_status()
+        run('xcrun', 'simctl', 'launch', '--terminate-running-process', udid,
+            'app.muwa.nasheeds', '--audit-player', timeout=180)
     time.sleep(5)
     script = '''tell application "System Events"
       tell process "Simulator"
