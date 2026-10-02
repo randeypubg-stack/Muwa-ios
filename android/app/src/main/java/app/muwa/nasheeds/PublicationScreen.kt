@@ -57,7 +57,7 @@ import java.util.UUID
                         val meta=AppGraph.backend.request("publicationUpload",JSONObject().put("draftId",id).put("part","submission").put("originalName","submission.json").put("contentType","application/json").put("sizeBytes",file.length()),true)
                         AppGraph.backend.put(meta.getString("presignedUrl"),file,"application/json")
                         status="Отправлено на модерацию";save()
-                    } finally {withContext(Dispatchers.IO) {temp.deleteRecursively()}}
+                    } finally {withContext(NonCancellable + Dispatchers.IO) {temp.deleteRecursively()}}
                 } catch(e: CancellationException) {throw e} catch(e: Throwable) {Diagnostics.record("publication",e);model.error=e.message;status="Не удалось отправить. Черновик сохранён.";save()}
                 finally {sending=false}
             }

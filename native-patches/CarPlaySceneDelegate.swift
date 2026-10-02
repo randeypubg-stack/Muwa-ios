@@ -15,7 +15,9 @@ final class CarPlayCoordinator {
 
 /// System audio templates share the actual iPhone playback session and library.
 @MainActor
-final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate, CPNowPlayingTemplateObserver {
+// CarPlay's Objective-C delegate callbacks run on the main thread, but its SDK
+// protocols do not yet declare actor isolation. Keep UI state on MainActor.
+final class CarPlaySceneDelegate: UIResponder, @preconcurrency CPTemplateApplicationSceneDelegate, @preconcurrency CPNowPlayingTemplateObserver {
   private var controller: CPInterfaceController?
   private var subscriptions = Set<AnyCancellable>()
   private var catalog: CPListTemplate?
@@ -65,7 +67,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
       .store(in: &subscriptions)
   }
 
-  func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene, didDisconnect interfaceController: CPInterfaceController) {
+  @objc func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene, didDisconnect interfaceController: CPInterfaceController) {
     guard controller === interfaceController else { return }
     disconnect()
   }
