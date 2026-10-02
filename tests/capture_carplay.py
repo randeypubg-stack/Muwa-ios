@@ -165,6 +165,10 @@ try:
         status['launcher_selection'] = {'label': target['label'], 'confidence': target['confidence'],
                                         'nativeTarget': target, 'windowBounds': [wx, wy, ww, wh]}
         save_status()
+        # AXRaise orders the window but does not guarantee it is the key window.
+        # Focus its title bar first; otherwise Simulator may consume the icon
+        # click just to activate the external-display window.
+        run('cliclick', f'c:{round(wx + ww / 2)},{round(wy + 14)}')
         time.sleep(0.2)
         run('cliclick', f'c:{x},{y}')
     deadline = time.monotonic() + 30
@@ -184,7 +188,7 @@ except Exception as error:
     # Preserve the native launch denial so signing/runtime failures can be
     # distinguished from a missing external display or an app scene failure.
     if status.get('booted'):
-        predicate = '(process == "SpringBoard" OR process == "runningboardd" OR process == "amfid") AND (eventMessage CONTAINS "app.muwa.nasheeds" OR eventMessage CONTAINS "Muwa.app")'
+        predicate = 'process == "Muwa" OR process CONTAINS "CarPlay" OR subsystem CONTAINS[c] "carplay" OR ((process == "SpringBoard" OR process == "runningboardd" OR process == "amfid") AND (eventMessage CONTAINS "app.muwa.nasheeds" OR eventMessage CONTAINS "Muwa.app"))'
         try:
             diagnostic = run('xcrun', 'simctl', 'spawn', udid, 'log', 'show',
                              '--style', 'compact', '--last', '3m', '--predicate', predicate,
