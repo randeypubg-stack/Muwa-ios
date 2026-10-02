@@ -15,9 +15,7 @@ final class CarPlayCoordinator {
 
 /// System audio templates share the actual iPhone playback session and library.
 @MainActor
-// CarPlay's Objective-C delegate callbacks run on the main thread, but its SDK
-// protocols do not yet declare actor isolation. Keep UI state on MainActor.
-final class CarPlaySceneDelegate: UIResponder, @preconcurrency CPTemplateApplicationSceneDelegate, @preconcurrency CPNowPlayingTemplateObserver {
+final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate, CPNowPlayingTemplateObserver {
   private var controller: CPInterfaceController?
   private var subscriptions = Set<AnyCancellable>()
   private var catalog: CPListTemplate?
@@ -29,7 +27,13 @@ final class CarPlaySceneDelegate: UIResponder, @preconcurrency CPTemplateApplica
   private var playlistDetail: (id: UUID, template: CPListTemplate)?
   private var lastError: String?
 
-  func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene, didConnect interfaceController: CPInterfaceController) {
+  // CarPlay delivers these UI callbacks on the main thread. Its Objective-C
+  // protocols do not declare actor isolation; bridge synchronously at entry.
+  nonisolated func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene, didConnect interfaceController: CPInterfaceController) {
+    MainActor.assumeIsolated { connect(interfaceController) }
+  }
+
+  private func connect(_ interfaceController: CPInterfaceController) {
     disconnect()
     controller = interfaceController
     catalog = makeList("Muwa", symbol: "music.note.list")
@@ -67,9 +71,11 @@ final class CarPlaySceneDelegate: UIResponder, @preconcurrency CPTemplateApplica
       .store(in: &subscriptions)
   }
 
-  @objc func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene, didDisconnect interfaceController: CPInterfaceController) {
-    guard controller === interfaceController else { return }
-    disconnect()
+  nonisolated func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene, didDisconnectInterfaceController interfaceController: CPInterfaceController) {
+    MainActor.assumeIsolated {
+      guard controller === interfaceController else { return }
+      disconnect()
+    }
   }
 
   private func disconnect() {
@@ -170,10 +176,12 @@ final class CarPlaySceneDelegate: UIResponder, @preconcurrency CPTemplateApplica
     CPNowPlayingTemplate.shared.updateNowPlayingButtons(buttons)
   }
 
-  func nowPlayingTemplateUpNextButtonTapped(_ nowPlayingTemplate: CPNowPlayingTemplate) {
-    guard let queue, controller?.topTemplate !== queue else { return }
-    update(queue, tracks: CarPlayCoordinator.shared.library?.queueTracks ?? [])
-    controller?.pushTemplate(queue, animated: true, completion: nil)
+  nonisolated func nowPlayingTemplateUpNextButtonTapped(_ nowPlayingTemplate: CPNowPlayingTemplate) {
+    MainActor.assumeIsolated {
+      guard let queue, controller?.topTemplate !== queue else { return }
+      update(queue, tracks: CarPlayCoordinator.shared.library?.queueTracks ?? [])
+      controller?.pushTemplate(queue, animated: true, completion: nil)
+    }
   }
 
   private func showPlaybackError(_ error: String?) {
