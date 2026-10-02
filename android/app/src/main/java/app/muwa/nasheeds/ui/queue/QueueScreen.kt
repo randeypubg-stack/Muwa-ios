@@ -230,7 +230,7 @@ fun QueueScreen(model: MuwaModel, play: (Track) -> Unit) {
                                             )
                                     }
                             MuwaIconButton(
-                                Icons.Default.DragHandle,
+                                Icons.Default.Menu,
                                 "Порядок ${track.title}",
                                 { menu = true },
                                 reorder,

@@ -195,19 +195,12 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf build/full-source
-          mkdir -p build/full-source/BuildInfrastructure/.github/workflows
+          mkdir -p build/full-source/Repository
 
           ditto "$SOURCE_ROOT" build/full-source/MuwaNasheedsNative
-          ditto native-patches build/full-source/BuildInfrastructure/native-patches
-          ditto tests build/full-source/BuildInfrastructure/tests
-          ditto scripts build/full-source/BuildInfrastructure/scripts
-          ditto source-base build/full-source/BuildInfrastructure/source-base
-          ditto branding build/full-source/BuildInfrastructure/branding
-          ditto docs build/full-source/Docs
-          ditto backend build/full-source/BackendSubtitlesV2
-          ditto admin-panel build/full-source/AdminPanel
-          cp .github/workflows/build-native-swiftui-ipa.yml \
-            build/full-source/BuildInfrastructure/.github/workflows/build-native-swiftui-ipa.yml
+          # Preserve the complete tracked repository, including Android and all
+          # workflows, without accidentally packaging credentials or build caches.
+          git archive HEAD | tar -x -C build/full-source/Repository
 
           cat > build/full-source/README-SOURCE.txt <<EOF
           Muwa — Full Source Archive
@@ -217,16 +210,22 @@ jobs:
 
           Contents:
           - MuwaNasheedsNative/ — complete assembled Xcode project
-          - BuildInfrastructure/native-patches/ — current patch sources used by CI
-          - BuildInfrastructure/tests/ — regression and screenshot tooling
-          - BuildInfrastructure/.github/workflows/ — GitHub Actions build workflow
+          - Repository/ — complete tracked repository at the commit above
+          - Repository/android/ — native Kotlin/Compose/Media3 application
+          - Repository/native-patches/ — replacements used to assemble the iOS project
+          - Repository/backend/ and Repository/admin-panel/ — server and remote panel source
+          - Repository/tests/ and Repository/.github/workflows/ — checks and build tooling
+          - Repository/docs/ — architecture, deployment status and device limitations
 
           Open:
           MuwaNasheedsNative/MuwaNasheeds.xcodeproj
+          Android: Repository/android/ (JDK 17, Gradle 8.10.2, Android SDK 35)
 
           Notes:
           - This archive contains source code and project resources, not only the IPA.
           - The project is the same assembled source tree used for the build-40 IPA.
+          - Existing backend accounts and application identity are preserved.
+          - Server hardening still requires deployment; consult Repository/docs/SECURITY-HARDENING-BUILD39.md.
           - Audio tracks and remote artwork remain CDN-backed and are not bundled as local media.
           EOF
 
