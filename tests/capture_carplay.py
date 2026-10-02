@@ -45,20 +45,33 @@ try:
     # Re-signing only the app here would discard Xcode's platform/debug grants.
     # The ordinary device IPA remains unsigned.
     run('codesign', '--verify', '--deep', '--strict', '--verbose=2', str(app))
-    # Verify the signed app carries the entitlement, rather than only checking
-    # that the source file exists. This concerns the Simulator fixture alone.
+    # Device entitlements live in the signature. Xcode instead embeds Simulator
+    # grants in the Mach-O __TEXT.__entitlements section; its signature may be {}.
+    # Verify the actual executable against Xcode's generated simulated grants,
+    # rather than accepting the requested source entitlement file as evidence.
     signed = run('codesign', '--display', '--entitlements', ':-', str(app))
     start = signed.find('<?xml')
     end = signed.find('</plist>', start)
     if start < 0 or end < 0:
         raise RuntimeError('Could not read the signed Simulator entitlements')
     entitlements = plistlib.loads(signed[start:end + len('</plist>')].encode())
-    if entitlements.get('com.apple.developer.carplay-audio') is not True:
-        raise RuntimeError('Signed Simulator fixture lacks CarPlay Audio entitlement')
+    if entitlements.get('com.apple.developer.carplay-audio') is True:
+        status['entitlement_location'] = 'code signature'
+    else:
+        simulated = next(Path('build/PreviewDerivedData/Build/Intermediates.noindex')
+                         .rglob('Muwa.app-Simulated.xcent'))
+        embedded = simulated.read_bytes()
+        entitlements = plistlib.loads(embedded)
+        executable = plistlib.loads((app / 'Info.plist').read_bytes())['CFBundleExecutable']
+        if (entitlements.get('com.apple.developer.carplay-audio') is not True
+                or embedded not in (app / executable).read_bytes()):
+            raise RuntimeError('Executable lacks the generated Simulator CarPlay Audio grants')
+        status['entitlement_location'] = 'Xcode Simulator Mach-O section'
     status['codesign_verified'] = True
     if phone['state'] != 'Booted':
         run('xcrun', 'simctl', 'boot', udid)
     run('xcrun', 'simctl', 'bootstatus', udid, '-b', timeout=240)
+    status['booted'] = True
     # A fresh hosted runner can finish bootstatus before installd is responsive.
     # The previous 45-second cap failed before any CarPlay UI could be inspected.
     run('xcrun', 'simctl', 'install', udid, str(app), timeout=180)
@@ -99,7 +112,7 @@ except Exception as error:
     status['reason'] = str(error)
     # Preserve the native launch denial so signing/runtime failures can be
     # distinguished from a missing external display or an app scene failure.
-    if 'udid' in locals():
+    if status.get('booted'):
         predicate = '(process == "SpringBoard" OR process == "runningboardd" OR process == "amfid") AND (eventMessage CONTAINS "app.muwa.nasheeds" OR eventMessage CONTAINS "Muwa.app")'
         try:
             diagnostic = run('xcrun', 'simctl', 'spawn', udid, 'log', 'show',

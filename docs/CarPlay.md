@@ -27,7 +27,9 @@ sideloading profile may not include the CarPlay entitlement.
 CI builds a separate Simulator fixture using Xcode signing with the CarPlay
 entitlement; the phone review and unsigned device IPA are unaffected. The signing
 identity is local ad-hoc (`-`), not an Apple-approved distribution identity.
-`tests/capture_carplay.py` verifies the signature and embedded entitlement, tries to open
+`tests/capture_carplay.py` verifies the signature and the actual entitlement in the
+executable. Xcode stores Simulator grants in a Mach-O section, so an empty code-signature
+entitlement dictionary does not mean those grants are missing. The script tries to open
 Simulator's CarPlay external display, and captures that display only after Muwa's
 CarPlay scene reports a connection. If the runner cannot expose or connect the
 external display, `build/previews/carplay/status.json` records the reason. A missing
