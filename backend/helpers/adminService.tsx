@@ -14,29 +14,27 @@ import {
   type UploadFile,
   type Caption,
 } from "./adminValidation";
-class AdminError extends Error {
-  constructor(
-    message: string,
-    readonly status = 400,
-  ) {
-    super(message);
-  }
-}
+import {
+  guardMutation,
+  readJSONLimited,
+  secureJSON,
+  SecurityError,
+} from "./requestSecurity";
+import {
+  reserveCatalog,
+  takeRateLimit,
+  validPublicationKey,
+} from "./uploadSecurity";
+import { cleanupExpiredUploads } from "./uploadCleanup";
+import {
+  inspectStoredMedia,
+  catalogueMediaURL,
+  type MediaFingerprint,
+} from "./mediaSecurity";
 function fail(message: string, status = 400): never {
-  throw new AdminError(message, status);
+  throw new SecurityError(message, status);
 }
-const json = (body: unknown, status = 200) =>
-  Response.json(body, {
-    status,
-    headers: {
-      "Cache-Control": "no-store",
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
-const origins = [
-  "https://muwa-app.floot.app",
-  "https://20d2f317-3710-4331-80ee-ea6072056928.sandbox.floot.app",
-];
+const json = secureJSON;
 async function audit(
   tx: Transaction<DB>,
   actorId: number,
@@ -96,6 +94,7 @@ async function prepare(
     contentType: string;
     sizeBytes: number;
     sourceUrl?: string;
+    sourceSha256?: string;
   }[],
   trackId?: string,
   submissionId?: string,
@@ -103,47 +102,44 @@ async function prepare(
   if (new Set(files.map((f) => f.part)).size !== files.length)
     fail("Один файл на каждое назначение.");
   const id = randomUUID();
+  const saved = files.map(({ part, contentType, sizeBytes, sourceSha256 }) => ({
+    part,
+    contentType,
+    sizeBytes,
+    filename: `catalog/${id}/${part}.${ext[contentType]}`,
+    url: "",
+    visibility: "private" as const,
+    ...(sourceSha256 ? { sourceSha256 } : {}),
+  }));
+  // Reserve aggregate capacity under the account lock before issuing any PUT.
+  await reserveCatalog(
+    userId,
+    id,
+    saved,
+    files.reduce((sum, f) => sum + f.sizeBytes, 0),
+    trackId,
+    submissionId,
+  );
   const prepared: UploadFile[] = [];
-  for (const file of files) {
-    const filename = `catalog/${id}/${file.part}.${ext[file.contentType]}`;
+  for (let i = 0; i < saved.length; i++) {
+    const file = saved[i];
     const result = await upload({
-      visibility: "public",
-      filename,
+      visibility: "private",
+      filename: file.filename,
       contentType: file.contentType,
       sizeBytes: file.sizeBytes,
       ifAbsent: true,
+      expiresInSeconds: 900,
     });
     if (!result.ok)
       fail("Не удалось подготовить хранилище. Повторите позже.", 503);
     prepared.push({
       ...file,
-      filename,
-      url: result.url,
+      sourceUrl: files[i].sourceUrl,
       presignedUrl: result.presignedUrl,
       headers: result.headers,
     });
   }
-  // Never persist PUT credentials or private GET credentials; they expire and are returned only to this admin.
-  const saved = prepared.map(
-    ({ part, filename, url, contentType, sizeBytes }) => ({
-      part,
-      filename,
-      url,
-      contentType,
-      sizeBytes,
-    }),
-  );
-  await db
-    .insertInto("catalogUploads")
-    .values({
-      id,
-      userId,
-      trackId: trackId ?? null,
-      submissionId: submissionId ?? null,
-      files: saved,
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-    })
-    .execute();
   return { ok: true, uploadId: id, files: prepared };
 }
 async function verifiedPlan(
@@ -168,12 +164,15 @@ async function verifiedPlan(
     fail("Загрузка устарела. Подготовьте файлы заново.", 409);
   const files = row.files as unknown as UploadFile[];
   for (const file of files) {
-    const info = await getInfo({
-      visibility: "public",
-      filename: file.filename,
-    });
-    if (!info.ok || !info.exists || info.sizeBytes !== file.sizeBytes)
-      fail("Файл ещё не загружен полностью. Повторите загрузку.");
+    const checked = await inspectStoredMedia(
+      file.visibility ?? "public",
+      file.filename,
+      file.part,
+      file.sizeBytes,
+      file.contentType,
+    );
+    if (file.sourceSha256 && checked.fingerprint.sha256 !== file.sourceSha256)
+      fail("Скопированный файл отличается от проверенной публикации.", 409);
   }
   return files;
 }
@@ -193,40 +192,47 @@ async function privateFile(
   key: string | null,
   id: string,
   part: "audio" | "cover",
+  snapshot?: MediaFingerprint,
 ) {
   if (!key) return null;
-  if (!new RegExp(`^publications/${id}/${part}\\.[a-z0-9]{1,8}$`).test(key))
+  if (!validPublicationKey(key, id, part))
     fail("Некорректный путь публикации.");
-  const info = await getInfo({ visibility: "private", filename: key });
-  if (
-    !info.ok ||
-    !info.exists ||
-    info.sizeBytes <= 0 ||
-    info.sizeBytes > (part === "audio" ? 100 : 10) * 1024 * 1024
-  )
-    fail("Файл публикации недоступен.");
-  const source = await getUrl({
-    visibility: "private",
-    filename: key,
-    expiresInSeconds: 900,
-  });
-  if (!source.ok) fail("Файл публикации недоступен.");
   const extension = key.split(".").pop();
   const mime = Object.entries(ext).find(([, v]) => v === extension)?.[0];
   if (!mime || !mime.startsWith(part === "audio" ? "audio/" : "image/"))
     fail("Формат публикации не поддерживается.");
+  const checked = await inspectStoredMedia(
+    "private",
+    key,
+    part,
+    snapshot?.sizeBytes,
+    mime,
+  );
+  if (
+    snapshot &&
+    (snapshot.etag !== checked.fingerprint.etag ||
+      snapshot.sha256 !== checked.fingerprint.sha256)
+  )
+    fail("Файл изменён после отправки на проверку.", 409);
+  const source = await getUrl({
+    visibility: "private",
+    filename: key,
+    expiresInSeconds: 300,
+  });
+  if (!source.ok) fail("Файл публикации недоступен.");
   return {
     part,
     contentType: mime,
-    sizeBytes: info.sizeBytes,
+    sizeBytes: checked.fingerprint.sizeBytes,
     sourceUrl: source.url,
+    sourceSha256: checked.fingerprint.sha256,
+    fingerprint: checked.fingerprint,
   };
 }
 async function refresh(
   userId: number,
   cursor?: { token?: string; offset: number },
 ) {
-  // Scan ready markers; never publish presigned drafts or trust client-supplied account IDs.
   const listing = await listFolder({
     visibility: "private",
     key: "publications/",
@@ -235,8 +241,7 @@ async function refresh(
   if (!listing.ok) fail("Не удалось прочитать публикации.", 503);
   let refreshed = 0;
   const offset = cursor?.offset ?? 0;
-  const folders = listing.folders.slice(offset, offset + 25);
-  for (const folder of folders) {
+  for (const folder of listing.folders.slice(offset, offset + 25)) {
     const id = folder
       .replace(/^private\//, "")
       .replace(/\/$/, "")
@@ -245,93 +250,120 @@ async function refresh(
     if (!/^[0-9a-f-]{36}$/i.test(id)) continue;
     const existing = await db
       .selectFrom("publicationDrafts")
-      .select(["status"])
+      .selectAll()
       .where("id", "=", id)
       .executeTakeFirst();
-    if (existing && existing.status !== "uploading") continue;
+    // A ready marker alone must never create an ownerless/moderatable submission.
+    if (!existing || !existing.userId || existing.status !== "uploading")
+      continue;
     const filename = `publications/${id}/submission.json`;
     const info = await getInfo({ visibility: "private", filename });
-    if (!info.ok || !info.exists || info.sizeBytes > 256 * 1024) continue;
-    const url = await getUrl({ visibility: "private", filename });
-    if (!url.ok) continue;
-    const response = await fetch(url.url, {
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!response.ok) continue;
-    const data: unknown = await response.json().catch(() => null);
-    if (!data || typeof data !== "object") continue;
-    const value = data as Record<string, unknown>;
-    if (
-      typeof value.title !== "string" ||
-      !value.title.trim() ||
-      value.title.length > 180 ||
-      typeof value.artist !== "string" ||
-      !value.artist.trim() ||
-      value.artist.length > 180 ||
-      typeof value.audioStorageKey !== "string"
-    )
-      continue;
-    const audioKey = value.audioStorageKey,
-      coverKey =
-        typeof value.coverStorageKey === "string"
-          ? value.coverStorageKey
-          : null;
-    if (
-      !new RegExp(`^publications/${id}/audio\\.[a-z0-9]{1,8}$`).test(
-        audioKey,
-      ) ||
-      (coverKey &&
-        !new RegExp(`^publications/${id}/cover\\.[a-z0-9]{1,8}$`).test(
-          coverKey,
-        ))
-    )
-      continue;
-    const audioInfo = await getInfo({
-      visibility: "private",
-      filename: audioKey,
-    });
-    if (!audioInfo.ok || !audioInfo.exists || audioInfo.sizeBytes <= 0)
-      continue;
-    await db.transaction().execute(async (tx) => {
-      const result = await tx
-        .insertInto("publicationDrafts")
-        .values({
-          id,
-          status: "pending",
-          title: value.title as string,
-          artist: value.artist as string,
-          language:
-            typeof value.language === "string"
-              ? value.language.slice(0, 10)
-              : "ar",
-          audioKey,
-          coverKey,
-        })
-        .onConflict((oc) =>
-          oc
-            .column("id")
-            .doUpdateSet({
-              status: "pending",
-              title: value.title as string,
-              artist: value.artist as string,
-              language:
-                typeof value.language === "string"
-                  ? value.language.slice(0, 10)
-                  : "ar",
-              audioKey,
-              coverKey,
-              updatedAt: new Date(),
-              revision: sql`publication_drafts.revision+1`,
-            })
-            .where("publicationDrafts.status", "=", "uploading"),
+    if (!info.ok || !info.exists) continue;
+    try {
+      const checked = await inspectStoredMedia(
+        "private",
+        filename,
+        "submission",
+        undefined,
+        "application/json",
+      );
+      const data = checked.json;
+      if (!data || typeof data !== "object") continue;
+      const value = data as Record<string, unknown>;
+      if (
+        typeof value.title !== "string" ||
+        !value.title.trim() ||
+        value.title.length > 180 ||
+        typeof value.artist !== "string" ||
+        !value.artist.trim() ||
+        value.artist.length > 180 ||
+        typeof value.audioStorageKey !== "string"
+      )
+        continue;
+      const audioKey = value.audioStorageKey,
+        coverKey =
+          typeof value.coverStorageKey === "string"
+            ? value.coverStorageKey
+            : null;
+      if (
+        audioKey !== existing.audioKey ||
+        (coverKey !== null && coverKey !== existing.coverKey)
+      )
+        continue;
+      const leases = await sql<{
+        filename: string;
+        expectedSha256: string | null;
+        sizeBytes: string;
+      }>`select filename,expected_sha256,size_bytes from publication_uploads where draft_id=${id} and user_id=${existing.userId} and deleted_at is null`.execute(
+        db,
+      );
+      const audio = await privateFile(audioKey, id, "audio"),
+        cover = await privateFile(coverKey, id, "cover");
+      if (!audio) continue;
+      const fingerprints: Record<string, MediaFingerprint> = {
+        [filename]: checked.fingerprint,
+        [audioKey]: audio.fingerprint,
+        ...(cover && coverKey ? { [coverKey]: cover.fingerprint } : {}),
+      };
+      if (
+        leases.rows.some(
+          (lease) =>
+            fingerprints[lease.filename] &&
+            (Number(lease.sizeBytes) !==
+              fingerprints[lease.filename].sizeBytes ||
+              (lease.expectedSha256 &&
+                lease.expectedSha256 !== fingerprints[lease.filename].sha256)),
         )
-        .returning("id")
-        .executeTakeFirst();
-      if (result) {
-        await audit(tx, userId, "submission.received", id);
-        refreshed++;
-      }
-    });
+      )
+        continue;
+      // Newly versioned keys require a reservation owned by this account.
+      if (
+        Object.keys(fingerprints).some(
+          (key) =>
+            /\/(audio|cover)-/.test(key) &&
+            !leases.rows.some((l) => l.filename === key),
+        )
+      )
+        continue;
+      await db.transaction().execute(async (tx) => {
+        await tx
+          .selectFrom("users")
+          .select("id")
+          .where("id", "=", existing.userId!)
+          .forUpdate()
+          .executeTakeFirstOrThrow();
+        const result = await tx
+          .updateTable("publicationDrafts")
+          .set({
+            status: "pending",
+            audioKey,
+            coverKey,
+            title: value.title as string,
+            artist: value.artist as string,
+            language:
+              typeof value.language === "string"
+                ? value.language.slice(0, 10)
+                : "ar",
+            updatedAt: new Date(),
+            revision: sql`publication_drafts.revision+1`,
+          })
+          .where("id", "=", id)
+          .where("status", "=", "uploading")
+          .where("revision", "=", existing.revision)
+          .returning("id")
+          .executeTakeFirst();
+        if (result) {
+          await sql`update publication_drafts set media_snapshot=${fingerprints} where id=${id}`.execute(
+            tx,
+          );
+          await audit(tx, userId, "submission.received", id);
+          refreshed++;
+        }
+      });
+    } catch (error) {
+      if (!(error instanceof SecurityError))
+        throw error; /* Invalid upload remains private; other submissions can still be reviewed. */
+    }
   }
   const nextCursor =
     offset + 25 < listing.folders.length
@@ -345,6 +377,7 @@ async function execute(
   input: AdminAction,
   userId: number,
 ): Promise<AdminResult> {
+  if (input.action === "cleanup-uploads") return cleanupExpiredUploads(userId);
   if (input.action === "refresh-submissions")
     return refresh(userId, input.cursor);
   if (input.action === "prepare-upload") {
@@ -369,8 +402,25 @@ async function execute(
       (row.status !== "pending" || row.revision !== input.revision)
     )
       fail("Публикация уже обработана или изменена.", 409);
-    const audio = await privateFile(row.audioKey, row.id, "audio");
-    const cover = await privateFile(row.coverKey, row.id, "cover");
+    const snapshot = (
+      await sql<{
+        mediaSnapshot: Record<string, MediaFingerprint> | null;
+      }>`select media_snapshot from publication_drafts where id=${row.id}`.execute(
+        db,
+      )
+    ).rows[0]?.mediaSnapshot;
+    const audio = await privateFile(
+      row.audioKey,
+      row.id,
+      "audio",
+      row.audioKey ? snapshot?.[row.audioKey] : undefined,
+    );
+    const cover = await privateFile(
+      row.coverKey,
+      row.id,
+      "cover",
+      row.coverKey ? snapshot?.[row.coverKey] : undefined,
+    );
     if (!audio) fail("Аудио отсутствует.");
     if (input.action === "open-submission")
       return {
@@ -403,9 +453,17 @@ async function execute(
         language: input.language,
         duration: input.duration,
         status: input.status,
-        audioUrl: audio?.url ?? current?.audioUrl ?? null,
+        audioUrl: audio
+          ? audio.visibility === "private"
+            ? catalogueMediaURL(id, "audio", audio.filename)
+            : audio.url
+          : (current?.audioUrl ?? null),
         audioFilename: audio?.filename ?? current?.audioFilename ?? null,
-        artworkUrl: cover?.url ?? current?.artworkUrl ?? null,
+        artworkUrl: cover
+          ? cover.visibility === "private"
+            ? catalogueMediaURL(id, "cover", cover.filename)
+            : cover.url
+          : (current?.artworkUrl ?? null),
         coverFilename: cover?.filename ?? current?.coverFilename ?? null,
         updatedAt: new Date(),
       };
@@ -518,9 +576,16 @@ async function execute(
           language: input.language,
           duration: input.duration,
           status: "published",
-          audioUrl: audio.url,
+          audioUrl:
+            audio.visibility === "private"
+              ? catalogueMediaURL(id, "audio", audio.filename)
+              : audio.url,
           audioFilename: audio.filename,
-          artworkUrl: cover?.url ?? null,
+          artworkUrl: cover
+            ? cover.visibility === "private"
+              ? catalogueMediaURL(id, "cover", cover.filename)
+              : cover.url
+            : null,
           coverFilename: cover?.filename ?? null,
           sourceSubmissionId: row.id,
           createdBy: userId,
@@ -653,6 +718,34 @@ async function state(input: AdminQuery): Promise<AdminState> {
       ...r,
       updatedAt: r.updatedAt.toISOString(),
     }));
+  } else if (input.section === "errors") {
+    const result = await sql<{
+      id: string;
+      platform: string;
+      version: string;
+      build: string;
+      area: string;
+      errorType: string;
+      errorCode: number;
+      occurredAt: Date;
+    }>`
+      select id,platform,version,build,area,error_type,error_code,occurred_at from muwa_diagnostics
+      where received_at>now()-interval '14 days' order by received_at desc,id desc offset ${offset} limit 20`.execute(
+      db,
+    );
+    base.total = Number(
+      (
+        await sql<{
+          count: string;
+        }>`select count(*)::text as count from muwa_diagnostics where received_at>now()-interval '14 days'`.execute(
+          db,
+        )
+      ).rows[0].count,
+    );
+    base.errors = result.rows.map((row) => ({
+      ...row,
+      occurredAt: row.occurredAt.toISOString(),
+    }));
   } else {
     base.total = Number(
       (
@@ -686,22 +779,15 @@ async function state(input: AdminQuery): Promise<AdminState> {
 }
 async function handle(request: Request, method: "GET" | "POST") {
   try {
-    if (method === "POST") {
-      if (!request.headers.get("content-type")?.includes("application/json"))
-        fail("Нужен JSON-запрос.", 415);
-      const origin = request.headers.get("origin");
-      if (origin && !origins.includes(origin))
-        fail("Недопустимый источник запроса.", 403);
-      if (request.headers.get("sec-fetch-site") === "cross-site")
-        fail("Недопустимый источник запроса.", 403);
-    }
+    if (method === "POST") guardMutation(request);
     const { user, session } = await getServerUserSession(request);
     if (user.role !== "admin") fail("Доступ только администраторам Muwa.", 403);
     let output: AdminResult | AdminState;
     if (method === "POST") {
-      const body = await request.text();
-      if (body.length > 2 * 1024 * 1024) fail("Запрос слишком большой.", 413);
-      const parsed = adminValidation.action.safeParse(JSON.parse(body));
+      await takeRateLimit(`admin-action:${user.id}`, 60, 60);
+      const parsed = adminValidation.action.safeParse(
+        await readJSONLimited(request, 2 * 1024 * 1024),
+      );
       if (!parsed.success)
         fail(parsed.error.issues[0]?.message ?? "Проверьте данные.");
       output = await execute(parsed.data, user.id);
@@ -721,7 +807,7 @@ async function handle(request: Request, method: "GET" | "POST") {
   } catch (error) {
     if (error instanceof NotAuthenticatedError)
       return json({ error: "Войдите в аккаунт Muwa." }, 401);
-    if (error instanceof AdminError)
+    if (error instanceof SecurityError)
       return json({ error: error.message }, error.status);
     if (error instanceof SyntaxError)
       return json({ error: "Некорректный JSON." }, 400);

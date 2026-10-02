@@ -64,6 +64,7 @@ const metadata = {
   duration: z.number().finite().positive().max(86400),
 };
 const action = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("cleanup-uploads") }),
   z.object({
     action: z.literal("prepare-upload"),
     trackId: id.optional(),
@@ -118,7 +119,9 @@ const action = z.discriminatedUnion("action", [
   }),
 ]);
 const query = z.object({
-  section: z.enum(["catalog", "submissions", "history"]).default("catalog"),
+  section: z
+    .enum(["catalog", "submissions", "history", "errors"])
+    .default("catalog"),
   search: z.string().max(100).default(""),
   status: z
     .enum([
@@ -172,6 +175,16 @@ export type AdminState = {
   tracks: TrackRecord[];
   submissions: SubmissionRecord[];
   events: AuditRecord[];
+  errors?: {
+    id: string;
+    platform: string;
+    version: string;
+    build: string;
+    area: string;
+    errorType: string;
+    errorCode: number;
+    occurredAt: string;
+  }[];
   total: number;
   page: number;
   stats: { published: number; drafts: number; pending: number };
@@ -186,6 +199,8 @@ export type UploadFile = {
   presignedUrl: string;
   headers: Record<string, string>;
   sourceUrl?: string;
+  visibility?: "private" | "public";
+  sourceSha256?: string;
 };
 export type AdminResult = {
   ok: true;
@@ -195,6 +210,7 @@ export type AdminResult = {
   audioUrl?: string;
   artworkUrl?: string;
   refreshed?: number;
+  removed?: number;
   nextCursor?: { token?: string; offset: number };
 };
 export const adminValidation = { action, query, captions, id };

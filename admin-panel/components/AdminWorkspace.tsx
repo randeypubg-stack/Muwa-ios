@@ -5,6 +5,7 @@ import {
   Upload,
   Inbox,
   History,
+  Activity,
   LogOut,
   RefreshCw,
   Search,
@@ -157,6 +158,21 @@ function Choice({
 }
 export const AdminWorkspace = () => {
   const { authState, logout } = useAuth();
+  // Defense in depth while the hosting-level frame-ancestors header is configured.
+  // Do not render login or authenticated controls inside any iframe.
+  if (typeof window !== "undefined" && window.self !== window.top)
+    return (
+      <main className={styles.gate}>
+        <p>Откройте панель Muwa в отдельном окне.</p>
+        <a
+          href="https://muwa-app.floot.app/admin"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Открыть панель
+        </a>
+      </main>
+    );
   if (authState.type === "loading")
     return (
       <main className={styles.gate} aria-busy="true">
@@ -310,6 +326,7 @@ export const AdminConsole = ({
               ["catalog", Library, "Каталог"],
               ["submissions", Inbox, "Публикации"],
               ["history", History, "Журнал"],
+              ["errors", Activity, "Ошибки приложения"],
             ] as const
           ).map(([id, Icon, title]) => (
             <Button
@@ -371,14 +388,18 @@ export const AdminConsole = ({
                   ? "Каталог нашидов"
                   : section === "submissions"
                     ? "Публикации"
-                    : "Журнал действий"}
+                    : section === "errors"
+                      ? "Ошибки приложения"
+                      : "Журнал действий"}
               </h1>
               <p>
                 {section === "catalog"
                   ? "Загружайте, редактируйте и публикуйте нашиды."
                   : section === "submissions"
                     ? "Прослушайте и проверьте материалы перед публикацией."
-                    : "История изменений каталога и решений модерации."}
+                    : section === "errors"
+                      ? "Обезличенные категории ошибок за 14 дней. Отправка включается в приложении."
+                      : "История изменений каталога и решений модерации."}
               </p>
             </div>
             <div className={styles.headingActions}>
@@ -397,6 +418,25 @@ export const AdminConsole = ({
                 <RefreshCw size={16} />
                 Обновить
               </Button>
+              {section === "submissions" && (
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        "Удалить незавершённые загрузки старше 48 часов? Материалы на проверке и опубликованные нашиды сохранятся.",
+                      )
+                    )
+                      void run(
+                        { action: "cleanup-uploads" },
+                        "Просроченные загрузки очищены.",
+                      ).catch(() => {});
+                  }}
+                >
+                  Очистить незавершённые загрузки
+                </Button>
+              )}
               {section === "catalog" && (
                 <Button disabled={busy} onClick={() => setEditor(null)}>
                   <Plus size={17} />
@@ -452,10 +492,12 @@ export const AdminConsole = ({
                   ? "Все нашиды"
                   : section === "submissions"
                     ? "Входящие материалы"
-                    : "Последние изменения"}{" "}
+                    : section === "errors"
+                      ? "Последние ошибки"
+                      : "Последние изменения"}{" "}
                 <span>{data?.total ?? "—"}</span>
               </h2>
-              {section !== "history" && (
+              {(section === "catalog" || section === "submissions") && (
                 <div className={styles.filterControls}>
                   <div className={styles.search}>
                     <Search size={16} />
@@ -639,6 +681,23 @@ export const AdminConsole = ({
                       Проверить <ArrowUpRight size={14} />
                     </Button>
                   )}
+                </article>
+              ))
+            ) : section === "errors" ? (
+              (data.errors ?? []).map((e) => (
+                <article key={e.id} className={styles.event}>
+                  <span className={styles.eventIcon}>
+                    <Activity size={16} />
+                  </span>
+                  <div>
+                    <h3>
+                      {e.area} · {e.errorType} · {e.errorCode}
+                    </h3>
+                    <p>
+                      {e.platform} {e.version} · build {e.build}
+                    </p>
+                  </div>
+                  <time dateTime={e.occurredAt}>{date(e.occurredAt)}</time>
                 </article>
               ))
             ) : (

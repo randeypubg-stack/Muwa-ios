@@ -60,10 +60,10 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
             val revision = accountRevision
             try {
                 val restored = backend.request("auth/session").optJSONObject("user")
-                if (revision == accountRevision) { user = restored; refreshPremium() }
+                if (revision == accountRevision) { user = restored; Diagnostics.setAccount(restored?.optInt("id")); refreshPremium() }
             }
             catch (e: CancellationException) { throw e }
-            catch (e: ApiException) { if (revision == accountRevision && e.status != 401) report("session", e) }
+            catch (e: ApiException) { if (revision == accountRevision && e.status == 401) Diagnostics.setAccount(null); if (revision == accountRevision && e.status != 401) report("session", e) }
             catch (e: Throwable) { if (revision == accountRevision) report("session", e) }
         }
     }
@@ -132,14 +132,14 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
         val body = JSONObject().put("email",email.trim().lowercase()).put("password",password)
         if (name != null) body.put("displayName",name.trim())
         val result = backend.request(if(name == null) "auth/login_with_password" else "auth/register_with_password",body,true)
-        user = result.getJSONObject("user"); premium = null; codes = emptyList(); createdCode = null
+        user = result.getJSONObject("user"); Diagnostics.setAccount(user?.optInt("id")); premium = null; codes = emptyList(); createdCode = null
         message = "Вы вошли в Muwa."
         try { refreshPremium() }
         catch (e: CancellationException) { throw e }
         catch (e: Throwable) { Diagnostics.record("premium", e); message = "Вы вошли в Muwa. Статус Premium временно недоступен." }
     }
     fun logout() = action("logout") {
-        accountRevision++; sessionRestoreJob?.cancel(); user = null; premium = null; codes = emptyList(); createdCode = null
+        accountRevision++; sessionRestoreJob?.cancel(); user = null; Diagnostics.setAccount(null); premium = null; codes = emptyList(); createdCode = null
         try { backend.request("auth/logout",JSONObject(),true) } finally { backend.clearSession() }
     }
     suspend fun refreshPremium() {

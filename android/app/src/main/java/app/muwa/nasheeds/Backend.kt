@@ -87,9 +87,11 @@ class Backend(context: Context) {
         }
     }
     fun clearSession() { cookies.clear() }
-    suspend fun put(url: String, file: File, mime: String) = withContext(Dispatchers.IO) {
+    suspend fun put(url: String, file: File, mime: String, headers: JSONObject? = null) = withContext(Dispatchers.IO) {
         require(url.startsWith("https://"))
-        uploads.newCall(Request.Builder().url(url).put(object : RequestBody() {
+        val request = Request.Builder().url(url)
+        headers?.keys()?.forEach { name -> request.header(name, headers.getString(name)) }
+        uploads.newCall(request.put(object : RequestBody() {
             override fun contentType() = mime.toMediaType()
             override fun contentLength() = file.length()
             override fun writeTo(sink: okio.BufferedSink) { file.inputStream().use { input -> val bytes = ByteArray(64 * 1024); var count: Int; while (input.read(bytes).also { count = it } != -1) sink.write(bytes, 0, count) } }

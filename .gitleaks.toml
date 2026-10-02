@@ -1,0 +1,11 @@
+[extend]
+useDefault = true
+
+# SQL column assignments are not credentials. Scope this exception to the exact
+# expression and file; keep every secret rule active for all other matches.
+[[allowlists]]
+description = "PostgreSQL EXCLUDED lease column assignment"
+condition = "AND"
+regexTarget = "match"
+paths = ['''backend/helpers/subtitleV2Service\.tsx$''']
+regexes = ['''excluded\.lease_token,lease_until=excluded\.lease_until''']

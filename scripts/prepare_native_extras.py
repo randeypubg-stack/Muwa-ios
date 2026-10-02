@@ -23,6 +23,8 @@ files = {
     'DownloadManager.swift': 'Services',
     'AuthManager.swift': 'Services',
     'AuthService.swift': 'Services',
+    'BackendConfig.swift': 'Services',
+    'PublicationUploadService.swift': 'Services',
     'SearchView.swift': 'Views/Search',
 }
 for name, directory in files.items():

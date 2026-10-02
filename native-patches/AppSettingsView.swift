@@ -20,6 +20,8 @@ struct AppSettingsView: View {
           LabeledContent("Ошибки", value: "\(diagnostics.events.count)")
           LabeledContent("Системные отчёты", value: "\(diagnostics.systemReportCount)")
           Text("Ошибки сохраняются на устройстве. Apple передаёт отчёты о сбоях и зависаниях с задержкой. Пароли, промокоды и содержимое запросов не записываются.").font(.caption).foregroundStyle(.secondary)
+          Toggle("Отправлять категории ошибок в Muwa", isOn: $diagnostics.remoteEnabled)
+          Text("После входа в аккаунт отправляются только категория, код ошибки и версия приложения. Полные системные отчёты остаются на устройстве. Хранение на сервере — 14 дней.").font(.caption).foregroundStyle(.secondary)
           Button("Подготовить отчёт") {
             do { exportURL = try diagnostics.export() } catch { self.error = error.localizedDescription }
           }

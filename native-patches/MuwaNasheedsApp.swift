@@ -42,11 +42,14 @@ struct MuwaNasheedsApp: App {
         .preferredColorScheme(.dark)
         .task { await auth.restore() }
         .task { await CatalogStore.shared.refresh() }
-        .onChange(of: auth.user?.id, initial: true) { _, id in premium.setAccount(id) }
+         .onChange(of: auth.state, initial: true) { _, state in
+          premium.setAccount(auth.user?.id)
+          if state != .checking { Diagnostics.shared.setAccount(auth.user?.id) }
+        }
         .task { await premium.load() }
         .onChange(of: scenePhase) { _, phase in
           player.handleScenePhase(phase)
-          if phase == .active { Task { await premium.refreshEntitlements() }; Task { await CatalogStore.shared.refresh() } }
+          if phase == .active { Diagnostics.shared.flush(); Task { await premium.refreshEntitlements() }; Task { await CatalogStore.shared.refresh() } }
         }
     }
   }

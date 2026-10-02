@@ -30,8 +30,17 @@ async function main() {
       "subtitleV2Validation.spec.tsx",
       "adminValidation.tsx",
       "adminValidation.spec.tsx",
+      "requestSecurity.tsx",
+      "requestSecurity.spec.tsx",
     ];
-    if (databaseTests) names.push("premiumService.tsx", "adminService.tsx");
+    if (databaseTests)
+      names.push(
+        "premiumService.tsx",
+        "adminService.tsx",
+        "uploadSecurity.tsx",
+        "mediaSecurity.tsx",
+        "uploadCleanup.tsx",
+      );
     for (const name of names) {
       const output = ts.transpileModule(
         fs.readFileSync(path.join(root, "helpers", name), "utf8"),
@@ -50,14 +59,50 @@ async function main() {
         )
       )
         throw new Error(`Invalid TypeScript: ${name}`);
-      const code =
-        name === "adminService.tsx"
-          ? output.outputText.replace(
-              'require("@floot/storage")',
-              'require("./testStorage")',
-            )
-          : output.outputText;
+      const code = output.outputText.includes('require("@floot/storage")')
+        ? output.outputText.replace(
+            'require("@floot/storage")',
+            'require("./testStorage")',
+          )
+        : output.outputText;
       fs.writeFileSync(path.join(helpers, name.replace(/\.tsx$/, ".js")), code);
+    }
+    if (databaseTests) {
+      for (const name of [
+        "publicationUpload_POST.ts",
+        "publicationUpload_POST.schema.ts",
+        "catalog/media_GET.ts",
+        "catalog/media_GET.schema.ts",
+        "diagnostics/events_POST.ts",
+        "diagnostics/events_POST.schema.ts",
+      ]) {
+        const output = ts
+          .transpileModule(
+            fs.readFileSync(path.join(root, "endpoints", name), "utf8"),
+            {
+              fileName: name,
+              compilerOptions: {
+                target: ts.ScriptTarget.ES2022,
+                module: ts.ModuleKind.CommonJS,
+              },
+            },
+          )
+          .outputText.replace(
+            'require("@floot/storage")',
+            `require(${JSON.stringify(path.join(helpers, "testStorage.js"))})`,
+          );
+        const destination = path.join(
+          folder,
+          "endpoints",
+          name.replace(/\.ts$/, ".js"),
+        );
+        fs.mkdirSync(path.dirname(destination), { recursive: true });
+        fs.writeFileSync(destination, output);
+      }
+      fs.copyFileSync(
+        path.join(__dirname, "security-service.spec.cjs"),
+        path.join(helpers, "security-service.spec.js"),
+      );
     }
     if (databaseTests) {
       fs.copyFileSync(
@@ -67,11 +112,20 @@ async function main() {
       fs.writeFileSync(
         path.join(helpers, "testStorage.js"),
         `
-        const files = exports.files = new Map();
-        exports.upload = async o => ({ok:true,presignedUrl:'https://storage.invalid/put',url:'https://muwa-app.floot.app/_cdn/public/'+o.filename,headers:{'Content-Type':o.contentType}});
-        exports.getInfo = async o => files.has(o.filename) ? {ok:true,exists:true,...files.get(o.filename)} : {ok:true,exists:false};
+        const {createHash}=require('node:crypto');
+        const files = exports.files = new Map(), puts = exports.puts = [];
+        function bytes(f) {if(f.bytes)return Buffer.from(f.bytes);const b=Buffer.alloc(f.sizeBytes);if(b.length>=4)Buffer.from([255,251,144,0]).copy(b);return b;}
+        exports.upload = async o => { puts.push(o); return {ok:true,presignedUrl:'https://storage.invalid/put/'+o.filename,url:'https://storage.invalid/'+o.filename,headers:{'Content-Type':o.contentType,'Content-Length':String(o.sizeBytes),'If-None-Match':'*'}}; };
+        exports.getInfo = async o => { const f=files.get(o.filename); return f?{ok:true,exists:true,sizeBytes:f.sizeBytes,etag:f.etag||'"'+createHash('sha256').update(bytes(f)).digest('hex')+'"'}:{ok:true,exists:false}; };
         exports.getUrl = async o => ({ok:true,url:'https://storage.invalid/'+o.filename});
-        exports.listFolder = async () => ({ok:true,folders:[],files:[]});
+        exports.remove = async o => {files.delete(o.filename);return {ok:true};};
+        exports.listFolder = async o => ({ok:true,folders:[...new Set([...files.keys()].filter(k=>k.startsWith(o.key)).map(k=>k.split('/').slice(0,2).join('/')+'/'))],files:[]});
+        exports.installFetch = () => {const original=global.fetch;global.fetch=async (url,options)=>{
+          if(new URL(url).hostname!=='storage.invalid')return original(url,options);
+          const key=new URL(url).pathname.slice(1),f=files.get(key);if(!f)return new Response(null,{status:404});
+          const info=await exports.getInfo({filename:key});if(options?.headers?.['If-Match']&&options.headers['If-Match']!==info.etag)return new Response(null,{status:412});
+          return new Response(bytes(f),{headers:{'Content-Length':String(f.sizeBytes)}});
+        };return ()=>{global.fetch=original};};
       `,
       );
       fs.copyFileSync(

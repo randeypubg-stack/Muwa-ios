@@ -22,6 +22,27 @@ private final class OfflineProtocol: URLProtocol {
   override func stopLoading() {}
 }
 
+private final class AuthRequestLog: @unchecked Sendable {
+  private let lock = NSLock()
+  private var requests: [URL] = []
+  func append(_ url: URL) { lock.lock(); defer { lock.unlock() }; requests.append(url) }
+  var urls: [URL] { lock.lock(); defer { lock.unlock() }; return requests }
+}
+private final class FailedServerProtocol: URLProtocol {
+  static let log = AuthRequestLog()
+  override class func canInit(with request: URLRequest) -> Bool { true }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+  override func startLoading() {
+    guard let url = request.url else { return }
+    Self.log.append(url)
+    let response = HTTPURLResponse(url: url, statusCode: 503, httpVersion: "HTTP/1.1", headerFields: ["Content-Type":"application/json"])!
+    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+    client?.urlProtocol(self, didLoad: Data("{\"error\":\"Unavailable\"}".utf8))
+    client?.urlProtocolDidFinishLoading(self)
+  }
+  override func stopLoading() {}
+}
+
 @main
 struct AuthChecks {
   static func user(_ id: Int) -> AuthUser {
@@ -65,11 +86,22 @@ struct AuthChecks {
     let session = URLSession(configuration: configuration)
     defer { session.invalidateAndCancel() }
     let base = BackendConfig.productionAPIBaseURL
+    let legacyCookie = HTTPCookie(properties: [.domain: BackendConfig.sessionCleanupHosts.last!, .path: "/", .name: "muwa-audit-legacy", .value: "fixture-only", .secure: "TRUE"])!
+    HTTPCookieStorage.shared.setCookie(legacyCookie)
     let cookie = HTTPCookie(properties: [.domain: base.host!, .path: "/", .name: "muwa-audit-session", .value: "fixture-only", .secure: "TRUE"])!
     HTTPCookieStorage.shared.setCookie(cookie)
     do { try await AuthService(session: session).logout(); preconditionFailure("Offline logout unexpectedly reached a server") }
     catch {}
     precondition(!(HTTPCookieStorage.shared.cookies ?? []).contains { $0.name == cookie.name }, "Offline logout left reusable local credentials")
-    print("PASS: one restoration, stale account/guest response rejection, offline cookie cleanup")
+    precondition(!(HTTPCookieStorage.shared.cookies ?? []).contains { $0.name == legacyCookie.name }, "Legacy sandbox credentials survived logout")
+    let failedConfiguration = URLSessionConfiguration.ephemeral
+    failedConfiguration.protocolClasses = [FailedServerProtocol.self]
+    failedConfiguration.httpCookieStorage = nil
+    let failedSession = URLSession(configuration: failedConfiguration)
+    defer { failedSession.invalidateAndCancel() }
+    do { _ = try await AuthService(session: failedSession).login(email: "fixture@example.invalid", password: "fixture-only"); preconditionFailure("503 login succeeded") } catch {}
+    precondition(FailedServerProtocol.log.urls.count == 1, "Login retried credentials on another backend")
+    precondition(FailedServerProtocol.log.urls.first?.host == BackendConfig.productionAPIBaseURL.host, "Credentials sent outside production")
+    print("PASS: restoration isolation, stale response rejection, cookie cleanup, no credential fallback on HTTP 503")
   }
 }

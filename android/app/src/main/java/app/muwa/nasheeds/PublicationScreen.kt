@@ -16,6 +16,7 @@ import org.json.JSONObject
 import java.io.File
 import java.time.Instant
 import java.util.UUID
+import java.security.MessageDigest
 
 @Composable fun PublicationScreen(model: MuwaModel) {
     val context=LocalContext.current;val scope=rememberCoroutineScope()
@@ -48,14 +49,17 @@ import java.util.UUID
                         suspend fun upload(uri: Uri,part: String): String {
                             val local=withContext(Dispatchers.IO) {copyPart(context,uri,File(temp,part))}
                             val mime=context.contentResolver.getType(uri) ?: if(part=="audio") "audio/mpeg" else "image/jpeg"
-                            val value=AppGraph.backend.request("publicationUpload",JSONObject().put("draftId",id).put("part",part).put("originalName",if(part=="audio") "audio.mp3" else "cover.jpg").put("contentType",mime).put("sizeBytes",local.length()),true)
-                            AppGraph.backend.put(value.getString("presignedUrl"),local,mime);return value.getString("storageKey")
+                            check(local.length() <= (if(part=="cover") 10L else 100L)*1024*1024) {"Файл слишком большой."}
+                            val digest=withContext(Dispatchers.IO) {checksum(local)}
+                            val value=AppGraph.backend.request("publicationUpload",JSONObject().put("draftId",id).put("part",part).put("originalName",if(part=="audio") "audio.mp3" else "cover.jpg").put("contentType",mime).put("sizeBytes",local.length()).put("sha256",digest),true)
+                            if(!value.optBoolean("alreadyUploaded")) AppGraph.backend.put(value.getString("presignedUrl"),local,mime,value.optJSONObject("headers"));return value.getString("storageKey")
                         }
                         val audioKey=upload(audio!!,"audio");val coverKey=cover?.let {upload(it,"cover")}
                         val document=JSONObject().put("id",id).put("title",title.trim()).put("artist",artist.trim()).put("language",language.trim()).put("audioStorageKey",audioKey).put("coverStorageKey",coverKey ?: JSONObject.NULL).put("submittedAt",Instant.now().toString()).put("client","Muwa Native Android")
                         val file=withContext(Dispatchers.IO) {File(temp,"submission.json").apply {writeText(document.toString())}}
-                        val meta=AppGraph.backend.request("publicationUpload",JSONObject().put("draftId",id).put("part","submission").put("originalName","submission.json").put("contentType","application/json").put("sizeBytes",file.length()),true)
-                        AppGraph.backend.put(meta.getString("presignedUrl"),file,"application/json")
+                        val digest=withContext(Dispatchers.IO) {checksum(file)}
+                        val meta=AppGraph.backend.request("publicationUpload",JSONObject().put("draftId",id).put("part","submission").put("originalName","submission.json").put("contentType","application/json").put("sizeBytes",file.length()).put("sha256",digest),true)
+                        if(!meta.optBoolean("alreadyUploaded")) AppGraph.backend.put(meta.getString("presignedUrl"),file,"application/json",meta.optJSONObject("headers"))
                         status="Отправлено на модерацию";save()
                     } finally {withContext(NonCancellable + Dispatchers.IO) {temp.deleteRecursively()}}
                 } catch(e: CancellationException) {throw e} catch(e: Throwable) {Diagnostics.record("publication",e);model.error=e.message;status="Не удалось отправить. Черновик сохранён.";save()}
@@ -68,4 +72,9 @@ import java.util.UUID
 private fun copyPart(context: Context,uri: Uri,to: File): File {
     context.contentResolver.openInputStream(uri).use {input -> requireNotNull(input);to.outputStream().use {out -> val bytes=ByteArray(64*1024);var size=0L;while(true) {val count=input.read(bytes);if(count<0) break;size+=count;check(size<=100*1024*1024) {"Файл должен быть меньше 100 МБ."};out.write(bytes,0,count)};check(size>0) {"Файл пуст."}} }
     return to
+}
+private fun checksum(file: File): String {
+    val digest=MessageDigest.getInstance("SHA-256")
+    file.inputStream().use {input -> val bytes=ByteArray(64*1024);while(true) {val n=input.read(bytes);if(n<0) break;digest.update(bytes,0,n)}}
+    return digest.digest().joinToString("") {"%02x".format(it.toInt() and 255)}
 }

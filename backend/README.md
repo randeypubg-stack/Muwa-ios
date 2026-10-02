@@ -19,4 +19,19 @@ Integration checks: unauthorized/ordinary account denial, admin creation, simult
 App Store review: custom unlock codes may conflict with Apple guideline 3.1.1. Current IPA implements the owner's explicit in-app gift request; do not represent it as approved for App Store. Apple subscriptions remain StoreKit-based. The user does not yet have Apple Developer.
 
 ## AI remains deferred
+Owner decision, 2 October 2026: defer subtitle improvements while preparing a
+closed beta. Automatic original-text recognition after upload remains a future
+requirement; the implementation must permit changing ASR providers or using a
+local recognizer. Existing manual/cached captions continue to work. Recognition
+errors must not prevent uploading or publishing audio. Hosting and migration
+requirements are recorded in [the closed beta plan](../docs/CLOSED-BETA-HOSTING.md).
+
 Original provider adapter: server-only OpenAI Whisper 1 timestamps + GPT-4.1-mini translation into RU/EN/TR/UZ/KK/FR. Real ASR previously failed due exhausted provider credit. Owner chose a rented worker, then deferred it for lack of budget. New automatic generation is therefore explicitly paused in subtitleV2Service; existing cached documents are still readable, subtitles are free. No paid AI calls/provisioning were made in this change. Provider and document unit specs pass but are not evidence of real recognition quality.
+
+## Security hardening staged for build 39
+
+See [implementation and deployment status](../docs/SECURITY-HARDENING-BUILD39.md).
+Apply `security-migration.sql` after `admin-migration.sql`, regenerate the Floot
+schema and update every upload consumer to pass SDK headers before deploying.
+The changes are local and not yet deployed. Authentication contracts and account
+identity remain unchanged. Do not apply the test runner to a real database.

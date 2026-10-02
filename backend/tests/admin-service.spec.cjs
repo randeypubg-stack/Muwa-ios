@@ -47,7 +47,9 @@ async function create() {
   return (await r.json()).trackId;
 }
 describe("Muwa admin transactions in disposable PostgreSQL", () => {
+  let restoreFetch;
   beforeAll(async () => {
+    restoreFetch = storage.installFetch();
     await testPool.query(
       "CREATE TABLE IF NOT EXISTS users (id integer PRIMARY KEY); ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name text; INSERT INTO users(id) VALUES(1),(2),(3) ON CONFLICT DO NOTHING",
     );
@@ -57,10 +59,17 @@ describe("Muwa admin transactions in disposable PostgreSQL", () => {
     await testPool.query(
       fs.readFileSync(path.join(root, "admin-migration.sql"), "utf8"),
     );
+    await testPool.query(
+      fs.readFileSync(path.join(root, "security-migration.sql"), "utf8"),
+    );
+    await testPool.query(
+      fs.readFileSync(path.join(root, "security-migration.sql"), "utf8"),
+    );
   });
+  afterAll(() => restoreFetch());
   beforeEach(async () => {
     await testPool.query(
-      "TRUNCATE admin_audit_events,publication_drafts,catalog_uploads,catalog_tracks CASCADE",
+      "TRUNCATE admin_audit_events,publication_drafts,catalog_uploads,catalog_tracks,muwa_request_limits CASCADE",
     );
     storage.files.clear();
   });

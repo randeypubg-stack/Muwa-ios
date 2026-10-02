@@ -7,14 +7,18 @@ android {
         applicationId = "app.muwa.nasheeds"
         minSdk = 26
         targetSdk = 35
-        versionCode = 38
+        versionCode = 39
         versionName = "1.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
-    buildTypes { release { isMinifyEnabled = false } }
+    buildTypes { release {
+        isMinifyEnabled = true
+        isShrinkResources = true
+        proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+    } }
 }
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))

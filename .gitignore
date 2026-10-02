@@ -14,3 +14,18 @@ __pycache__/
 android/.kotlin/
 backend/node_modules/
 backend/.test-run-*/
+
+# Server secrets, signing material and local review data never belong in source.
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.pem
+*.key
+*.keystore
+*.jks
+credentials*.json
+secrets*.json
+artifacts/
+security-reports/

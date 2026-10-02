@@ -3,7 +3,16 @@ name: Build Native SwiftUI IPA
 on:
   push:
     branches: [main, codex/muwa-build30-ai-subtitles, feat/muwa-native-build35]
-    paths: ['native-patches/**', 'branding/**', 'backend/**', 'scripts/**', 'tests/**', '.github/workflows/build-native-swiftui-ipa.yml']
+    paths:
+      [
+        "source-base/**",
+        "native-patches/**",
+        "branding/**",
+        "backend/**",
+        "scripts/**",
+        "tests/**",
+        ".github/workflows/build-native-swiftui-ipa.yml",
+      ]
   workflow_dispatch:
 
 permissions:
@@ -14,7 +23,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  source-security:
+    uses: ./.github/workflows/security.yml
   backend:
+    needs: source-security
     name: Check backend contracts and PostgreSQL transactions
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -24,13 +36,15 @@ jobs:
         env:
           POSTGRES_DB: muwa_audit
           POSTGRES_PASSWORD: muwa-fixture-only
-        ports: ['5432:5432']
+        ports: ["5432:5432"]
         options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          node-version: '24'
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci && npm test
@@ -39,13 +53,16 @@ jobs:
           MUWA_TEST_DATABASE_URL: postgres://postgres:muwa-fixture-only@localhost:5432/muwa_audit
 
   build:
+    needs: [backend, source-security]
     name: Build native SwiftUI unsigned IPA
     runs-on: macos-15
     timeout-minutes: 60
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Prepare native source
         shell: bash
@@ -54,13 +71,13 @@ jobs:
           rm -rf build-src build
           mkdir -p build-src build
 
-          SOURCE_URL="https://muwa-app.floot.app/_cdn/static/72ba7504-6be6-45bc-a691-02a771940d19-muwa-native-source-v8-icon-synced-xcode-rc.zip"
-          SOURCE_ZIP="$PWD/build/muwa-native-source.zip"
+          SOURCE_ZIP="$PWD/source-base/MuwaNativeBase.zip"
           EXPECTED_SOURCE_SHA="f07bce80d5b9b39583a8bce19f3e3b71caed205332649f13ccb45a8b28997f84"
           EXPECTED_ICON_SHA="7d6e3af660633d8b76112b33813762570531a212f62a6af4650a1cf11ea295ba"
           EXPECTED_MARK_SHA="50913b3364be9430bc8efc535f6c1bc03bdf056576092e929a6b48cc28e86aec"
 
-          curl --fail --location --retry 3 --retry-delay 2 "$SOURCE_URL" -o "$SOURCE_ZIP"
+          # Use the verified source committed to this repository for reproducible builds.
+          test -f "$SOURCE_ZIP"
           echo "$EXPECTED_SOURCE_SHA  $SOURCE_ZIP" | shasum -a 256 -c -
           unzip -q "$SOURCE_ZIP" -d build-src
 
@@ -170,7 +187,7 @@ jobs:
           test "$WIDTH" = "1024"
           test "$HEIGHT" = "1024"
 
-          sed -i '' 's/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = 38;/g' "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
+          sed -i '' 's/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = 39;/g' "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
           echo "SOURCE_ROOT=$ROOT" >> "$GITHUB_ENV"
 
       - name: Package full source archive
@@ -184,6 +201,7 @@ jobs:
           ditto native-patches build/full-source/BuildInfrastructure/native-patches
           ditto tests build/full-source/BuildInfrastructure/tests
           ditto scripts build/full-source/BuildInfrastructure/scripts
+          ditto source-base build/full-source/BuildInfrastructure/source-base
           ditto branding build/full-source/BuildInfrastructure/branding
           ditto docs build/full-source/Docs
           ditto backend build/full-source/BackendSubtitlesV2
@@ -194,7 +212,7 @@ jobs:
           cat > build/full-source/README-SOURCE.txt <<EOF
           Muwa — Full Source Archive
           Version: 1.4.0
-          Build: 38
+          Build: 39
           Commit: ${GITHUB_SHA}
 
           Contents:
@@ -208,25 +226,25 @@ jobs:
 
           Notes:
           - This archive contains source code and project resources, not only the IPA.
-          - The project is the same assembled source tree used for the build-38 IPA.
+          - The project is the same assembled source tree used for the build-39 IPA.
           - Audio tracks and remote artwork remain CDN-backed and are not bundled as local media.
           EOF
 
           find build/full-source -name '.DS_Store' -delete
           (
             cd build/full-source
-            /usr/bin/zip -qry -y ../Muwa-v1.4.0-build38-FULL-SOURCE.zip .
+            /usr/bin/zip -qry -y ../Muwa-v1.4.0-build39-FULL-SOURCE.zip .
           )
-          shasum -a 256 build/Muwa-v1.4.0-build38-FULL-SOURCE.zip \
-            | tee build/Muwa-v1.4.0-build38-FULL-SOURCE.zip.sha256
+          shasum -a 256 build/Muwa-v1.4.0-build39-FULL-SOURCE.zip \
+            | tee build/Muwa-v1.4.0-build39-FULL-SOURCE.zip.sha256
 
       - name: Upload full source archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Muwa-Full-Source-${{ github.run_number }}
           path: |
-            build/Muwa-v1.4.0-build38-FULL-SOURCE.zip
-            build/Muwa-v1.4.0-build38-FULL-SOURCE.zip.sha256
+            build/Muwa-v1.4.0-build39-FULL-SOURCE.zip
+            build/Muwa-v1.4.0-build39-FULL-SOURCE.zip.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 90
@@ -245,7 +263,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
-          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='38'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='39'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
         shell: bash
@@ -262,7 +280,7 @@ jobs:
 
           test "$BUNDLE_ID" = "app.muwa.nasheeds"
           test "$VERSION" = "1.4.0"
-          test "$BUILD_NO" = "38"
+          test "$BUILD_NO" = "39"
           test -x "$APP_PATH/$EXECUTABLE"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist")" = "true"
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIColorName' "$APP_PATH/Info.plist")" = "LaunchBackground"
@@ -278,10 +296,10 @@ jobs:
 
           (
             cd build/package
-            /usr/bin/zip -qry -y ../Muwa-v1.4.0-build38-native-unsigned.ipa Payload
+            /usr/bin/zip -qry -y ../Muwa-v1.4.0-build39-native-unsigned.ipa Payload
           )
 
-          shasum -a 256 build/Muwa-v1.4.0-build38-native-unsigned.ipa | tee build/Muwa-v1.4.0-build38-native-unsigned.ipa.sha256
+          shasum -a 256 build/Muwa-v1.4.0-build39-native-unsigned.ipa | tee build/Muwa-v1.4.0-build39-native-unsigned.ipa.sha256
 
           cat > build/build-info.json <<EOF
           {
@@ -301,12 +319,12 @@ jobs:
           EOF
 
       - name: Upload IPA
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Muwa-Native-IPA-${{ github.run_number }}
           path: |
-            build/Muwa-v1.4.0-build38-native-unsigned.ipa
-            build/Muwa-v1.4.0-build38-native-unsigned.ipa.sha256
+            build/Muwa-v1.4.0-build39-native-unsigned.ipa
+            build/Muwa-v1.4.0-build39-native-unsigned.ipa.sha256
             build/build-info.json
           if-no-files-found: error
           compression-level: 0
@@ -321,15 +339,15 @@ jobs:
       - name: Package simulator app for independent review jobs
         run: tar -czf build/muwa-review-app.tar.gz -C build/PreviewDerivedData/Build/Products/Debug-iphonesimulator .
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Muwa-build38-simulator-${{ github.run_id }}
+          name: Muwa-build39-simulator-${{ github.run_id }}
           path: build/muwa-review-app.tar.gz
           if-no-files-found: error
 
       - name: Upload Xcode log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Muwa-build-log-${{ github.run_number }}
           path: |
@@ -349,10 +367,12 @@ jobs:
       matrix:
         device: [phone, large-phone, tablet, small-tablet]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          name: Muwa-build38-simulator-${{ github.run_id }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: Muwa-build39-simulator-${{ github.run_id }}
           path: build
       - name: Unpack simulator app
         run: |
@@ -365,10 +385,10 @@ jobs:
       - name: Record native launch animation
         if: matrix.device == 'phone'
         run: python3 tests/capture_launch_ios.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build38-${{ matrix.device }}-screenshots
+          name: Muwa-build39-${{ matrix.device }}-screenshots
           path: build/previews
           if-no-files-found: warn
 
@@ -378,10 +398,12 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          name: Muwa-build38-simulator-${{ github.run_id }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: Muwa-build39-simulator-${{ github.run_id }}
           path: build
       - name: Unpack simulator app
         run: |
@@ -389,9 +411,9 @@ jobs:
           tar -xzf build/muwa-review-app.tar.gz -C build/PreviewDerivedData/Build/Products/Debug-iphonesimulator
       - name: Capture real external display when supported
         run: python3 tests/capture_carplay.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build38-CarPlay-review
+          name: Muwa-build39-CarPlay-review
           path: build/previews/carplay
           if-no-files-found: warn

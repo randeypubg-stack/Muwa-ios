@@ -41,52 +41,19 @@ actor AuthService: AuthServing {
   }
 
   func restoreSession() async throws -> AuthUser? {
-    let bases = orderedBaseURLs()
-    var lastTransportError: Error?
-
-    for (index, baseURL) in bases.enumerated() {
-      var request = URLRequest(url: endpoint("_api/auth/session", baseURL: baseURL))
-      request.httpMethod = "GET"
-      request.httpShouldHandleCookies = true
-      request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-      let data: Data
-      let response: URLResponse
-      do {
-        (data, response) = try await session.data(for: request)
-      } catch {
-        lastTransportError = error
-        if index < bases.count - 1 { continue }
-        throw error
-      }
-
-      guard let http = response as? HTTPURLResponse else {
-        let error = URLError(.badServerResponse)
-        if index < bases.count - 1 {
-          lastTransportError = error
-          continue
-        }
-        throw error
-      }
-
-      if http.statusCode == 401 {
-        // A 401 from the preferred/authoritative backend means the user is signed out.
-        return nil
-      }
-      if BackendConfig.shouldTryFallback(statusCode: http.statusCode), index < bases.count - 1 {
-        continue
-      }
-      guard (200..<300).contains(http.statusCode) else {
-        throw authError(
-          data: data, status: http.statusCode, fallback: "Не удалось проверить сессию.")
-      }
-
-      remember(baseURL)
-      return try decode(UserResponse.self, from: data).user
+    let baseURL = BackendConfig.apiBaseURL
+    var request = URLRequest(url: endpoint("_api/auth/session", baseURL: baseURL))
+    request.httpMethod = "GET"
+    request.httpShouldHandleCookies = true
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    let (data, response) = try await session.data(for: request)
+    guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+    if http.statusCode == 401 { return nil }
+    guard (200..<300).contains(http.statusCode) else {
+      throw authError(data: data, status: http.statusCode, fallback: "Не удалось проверить сессию.")
     }
-
-    if let lastTransportError { throw lastTransportError }
-    throw URLError(.badServerResponse)
+    remember(baseURL)
+    return try decode(UserResponse.self, from: data).user
   }
 
   func login(email: String, password: String) async throws -> AuthUser {
@@ -108,59 +75,25 @@ actor AuthService: AuthServing {
   }
 
   func logout() async throws {
-    // Drop local credentials even if every server is offline. Clear after all
-    // responses, which can otherwise recreate cookies during logout.
+    // Clear current and legacy local cookies even if production is unavailable.
     defer { clearLocalSession() }
-    let body = try JSONEncoder().encode(Envelope(json: EmptyBody()))
-    let bases = orderedBaseURLs()
-    var firstError: Error?
-    var clearedAtLeastOneBackend = false
-
-    // Clear every known backend host. This prevents an old production/sandbox
-    // cookie from reviving a session after a temporary backend fallback.
-    for baseURL in bases {
-      var request = URLRequest(url: endpoint("_api/auth/logout", baseURL: baseURL))
-      request.httpMethod = "POST"
-      request.httpShouldHandleCookies = true
-      request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-      request.httpBody = body
-
-      let data: Data
-      let response: URLResponse
-      do {
-        (data, response) = try await session.data(for: request)
-      } catch {
-        if firstError == nil { firstError = error }
-        continue
-      }
-
-      guard let http = response as? HTTPURLResponse else {
-        if firstError == nil { firstError = URLError(.badServerResponse) }
-        continue
-      }
-
-      if (200..<300).contains(http.statusCode) || http.statusCode == 401 {
-        clearedAtLeastOneBackend = true
-        continue
-      }
-      if BackendConfig.shouldTryFallback(statusCode: http.statusCode) {
-        continue
-      }
-      if firstError == nil {
-        firstError = authError(
-          data: data, status: http.statusCode, fallback: "Не удалось выйти из аккаунта.")
-      }
+    var request = URLRequest(url: endpoint("_api/auth/logout", baseURL: BackendConfig.apiBaseURL))
+    request.httpMethod = "POST"
+    request.httpShouldHandleCookies = true
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.httpBody = try JSONEncoder().encode(Envelope(json: EmptyBody()))
+    let (data, response) = try await session.data(for: request)
+    guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+    if !(200..<300).contains(http.statusCode) && http.statusCode != 401 {
+      throw authError(data: data, status: http.statusCode, fallback: "Не удалось выйти из аккаунта.")
     }
-
-    if !clearedAtLeastOneBackend, let firstError { throw firstError }
   }
 
   private func clearLocalSession() {
     let storage = HTTPCookieStorage.shared
     for cookie in storage.cookies ?? [] {
       let domain = cookie.domain.trimmingCharacters(in: CharacterSet(charactersIn: "."))
-      if BackendConfig.candidateAPIBaseURLs.contains(where: {
-        guard let host = $0.host else { return false }
+      if BackendConfig.sessionCleanupHosts.contains(where: { host in
         return host == domain || host.hasSuffix("." + domain)
       }) { storage.deleteCookie(cookie) }
     }
@@ -168,69 +101,24 @@ actor AuthService: AuthServing {
   }
 
   private func post<Body: Codable>(path: String, body: Body) async throws -> UserResponse {
-    let encoded = try JSONEncoder().encode(Envelope(json: body))
-    let bases = orderedBaseURLs()
-    var lastTransportError: Error?
-
-    for (index, baseURL) in bases.enumerated() {
-      var request = URLRequest(url: endpoint(path, baseURL: baseURL))
-      request.httpMethod = "POST"
-      request.httpShouldHandleCookies = true
-      request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-      request.setValue("application/json", forHTTPHeaderField: "Accept")
-      request.httpBody = encoded
-
-      let data: Data
-      let response: URLResponse
-      do {
-        (data, response) = try await session.data(for: request)
-      } catch {
-        lastTransportError = error
-        if index < bases.count - 1 { continue }
-        throw error
-      }
-
-      guard let http = response as? HTTPURLResponse else {
-        let error = URLError(.badServerResponse)
-        if index < bases.count - 1 {
-          lastTransportError = error
-          continue
-        }
-        throw error
-      }
-
-      if BackendConfig.shouldTryFallback(statusCode: http.statusCode), index < bases.count - 1 {
-        continue
-      }
-      guard (200..<300).contains(http.statusCode) else {
-        let fallback =
-          http.statusCode == 409
-          ? "Аккаунт с такой почтой уже существует."
-          : http.statusCode == 401
-            ? "Неверная почта или пароль."
-            : http.statusCode == 429
-              ? "Слишком много попыток. Попробуйте позже."
-              : "Не удалось выполнить вход."
-        throw authError(data: data, status: http.statusCode, fallback: fallback)
-      }
-
-      remember(baseURL)
-      return try decode(UserResponse.self, from: data)
+    let baseURL = BackendConfig.apiBaseURL
+    var request = URLRequest(url: endpoint(path, baseURL: baseURL))
+    request.httpMethod = "POST"
+    request.httpShouldHandleCookies = true
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    request.httpBody = try JSONEncoder().encode(Envelope(json: body))
+    let (data, response) = try await session.data(for: request)
+    guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+    guard (200..<300).contains(http.statusCode) else {
+      let fallback = http.statusCode == 409 ? "Аккаунт с такой почтой уже существует."
+        : http.statusCode == 401 ? "Неверная почта или пароль."
+        : http.statusCode == 429 ? "Слишком много попыток. Попробуйте позже."
+        : "Не удалось выполнить вход."
+      throw authError(data: data, status: http.statusCode, fallback: fallback)
     }
-
-    if let lastTransportError { throw lastTransportError }
-    throw URLError(.badServerResponse)
-  }
-
-  private func orderedBaseURLs() -> [URL] {
-    let candidates = BackendConfig.candidateAPIBaseURLs
-    guard let stored = UserDefaults.standard.string(forKey: preferredBackendKey),
-      let preferred = URL(string: stored),
-      candidates.contains(where: { $0.absoluteString == preferred.absoluteString })
-    else {
-      return candidates
-    }
-    return [preferred] + candidates.filter { $0.absoluteString != preferred.absoluteString }
+    remember(baseURL)
+    return try decode(UserResponse.self, from: data)
   }
 
   private func remember(_ baseURL: URL) {
