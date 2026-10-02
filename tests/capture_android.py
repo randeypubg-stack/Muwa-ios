@@ -65,4 +65,21 @@ for rotation, orientation in [(0, 'portrait'), (1, 'landscape')]:
         manifest['screens'].append({'route': route, 'orientation': orientation, 'width': width, 'height': height, 'orientationRetries': retries, 'file': str(path.relative_to(out))})
         (out / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
 assert len(manifest['screens']) == len(ROUTES) * 2
+try:
+    lock_rotation(0)
+    adb('shell', 'settings', 'put', 'system', 'font_scale', '1.45')
+    for route in ['home', 'queue']:
+        adb('shell', 'am', 'force-stop', PACKAGE)
+        result = adb('shell', 'am', 'start', '-W', '-n', f'{PACKAGE}/.MainActivity', '--es', 'review.route', route)
+        assert 'Error:' not in result, result
+        time.sleep(3)
+        path = out / 'large-text' / f'{route}.png'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        screenshot, width, height, retries = capture_oriented(0, out / 'diagnostics' / f'{route}-large-text.png')
+        path.write_bytes(screenshot)
+        manifest['screens'].append({'route': route, 'orientation': 'portrait', 'fontScale': 1.45,
+            'width': width, 'height': height, 'orientationRetries': retries, 'file': str(path.relative_to(out))})
+finally:
+    adb('shell', 'settings', 'put', 'system', 'font_scale', '1.0')
+(out / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
 print(f'Captured {len(manifest["screens"])} native Android screens', flush=True)

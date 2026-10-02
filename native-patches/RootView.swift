@@ -132,7 +132,13 @@ struct RootView: View {
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .coordinateSpace(name: "playerContainer")
-      .background(AppBackground().ignoresSafeArea())
+      .background {
+        if selection == .profile {
+          AppBackground().ignoresSafeArea()
+        } else {
+          MuwaPalette.background.ignoresSafeArea()
+        }
+      }
     }
   }
 
@@ -212,4 +218,3 @@ private struct LaunchGateView: View {
 enum AppTab: Hashable {
   case home, library, profile
 }
-

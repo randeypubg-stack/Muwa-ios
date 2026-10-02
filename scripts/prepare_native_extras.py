@@ -26,6 +26,14 @@ files = {
     'BackendConfig.swift': 'Services',
     'PublicationUploadService.swift': 'Services',
     'SearchView.swift': 'Views/Search',
+    'AppBackground.swift': 'Theme',
+    'DesignTokens.swift': 'Theme',
+    'Typography.swift': 'Theme',
+    'DisplayText.swift': 'Views/Components',
+    'Motion.swift': 'Theme',
+    'ScreenHeader.swift': 'Views/Components',
+    'HomeCollectionViews.swift': 'Views/Home',
+    'QueueTrackRow.swift': 'Views/Player',
 }
 for name, directory in files.items():
     path = root / 'Sources' / directory / name

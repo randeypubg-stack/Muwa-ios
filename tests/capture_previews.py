@@ -50,6 +50,16 @@ for i,d in enumerate(selected):
             assert 'cover=true; backdrop=true' in report, report
             (out/f'{i}-artwork-check.txt').write_text(report)
             shutil.copy2(data/'Documents/cached-backdrop.png', out/f'{i}-cached-backdrop.png')
+    # Capture actual large-text layouts after the ordinary states, then restore
+    # the simulator setting before launch/motion review.
+    try:
+        run('xcrun','simctl','ui',udid,'content_size','accessibility-large')
+        for label,args in [('home-large-text',[]),('queue-large-text',['--audit-player','--audit-queue'])]:
+            run('xcrun','simctl','launch','--terminate-running-process',udid,'app.muwa.nasheeds',*args)
+            time.sleep(4)
+            run('xcrun','simctl','io',udid,'screenshot',str(out/f'{i}-{label}.png'))
+    finally:
+        run('xcrun','simctl','ui',udid,'content_size','large')
     # The phone review immediately records launch motion with the same installed
     # app. Keep its Simulator warm; every other matrix job closes its own device.
     if kind != 'phone': run('xcrun','simctl','shutdown',udid)

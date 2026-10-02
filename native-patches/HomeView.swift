@@ -27,7 +27,11 @@ struct HomeView: View {
               )
             }
 
-            discoverySections
+            Text("Нашиды без музыки")
+              .font(MuwaTypography.detail)
+              .foregroundStyle(MuwaPalette.secondary)
+
+            HomeCollections(tracks: Track.catalog)
 
             if layout.isWide {
               recommendationsGrid(layout: layout)
@@ -37,13 +41,14 @@ struct HomeView: View {
               popularList
             }
           }
-          .padding(.horizontal, layout.horizontalPadding)
+          .padding(.horizontal, layout.isPhone ? MuwaSpacing.screen : layout.horizontalPadding)
           .padding(.top, layout.isCompactLandscapePhone ? 4 : 8)
           .padding(.bottom, layout.isCompactLandscapePhone ? 132 : 170)
           .adaptiveFrame(maxWidth: layout.contentMaxWidth)
         }
         .scrollContentBackground(.hidden)
       }
+      .background(AppBackground().ignoresSafeArea())
       .navigationTitle("Главная")
       .navigationBarTitleDisplayMode(.large)
       .toolbar {
@@ -67,46 +72,6 @@ struct HomeView: View {
       }
       .toolbarBackground(.hidden, for: .navigationBar)
       .toolbarColorScheme(.dark, for: .navigationBar)
-    }
-  }
-
-  private var discoverySections: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      Text("Подборки").font(.title2.bold())
-      VStack(spacing: 10) {
-        collectionLink("На несколько минут", subtitle: "До 3 минут", icon: "clock", tracks: Track.catalog.filter { $0.duration <= 180 })
-        collectionLink("Слушать подольше", subtitle: "Больше 3 минут", icon: "headphones", tracks: Track.catalog.filter { $0.duration > 180 })
-        collectionLink("Вся коллекция", subtitle: "Все нашиды Muwa", icon: "square.stack", tracks: Track.catalog)
-      }
-      // Artist and release sections await verified names and dates; do not fill the home with placeholders.
-    }
-  }
-
-  @ViewBuilder
-  private func collectionLink(_ title: String, subtitle: String, icon: String, tracks: [Track]) -> some View {
-    if !tracks.isEmpty {
-      NavigationLink {
-        ScrollView {
-          LazyVStack(spacing: 12) { ForEach(tracks) { track in popularRow(track) } }
-            .padding(.horizontal, 20).padding(.bottom, 170)
-        }
-        .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-      } label: {
-        HStack(spacing: 14) {
-          Image(systemName: icon).font(.title2).foregroundStyle(Color(red: 0.72, green: 0.82, blue: 0.98))
-            .frame(width: 40, height: 44)
-          VStack(alignment: .leading, spacing: 5) {
-            Text(title).font(.headline).fixedSize(horizontal: false, vertical: true)
-            Text(subtitle).font(.caption).foregroundStyle(.secondary)
-          }
-          Spacer(minLength: 8)
-          Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
-        }
-        .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 20))
-        .contentShape(Rectangle())
-      }.buttonStyle(.plain)
     }
   }
 
@@ -236,13 +201,13 @@ struct HomeView: View {
 
   private var recommendationsCarousel: some View {
     VStack(alignment: .leading, spacing: 14) {
-      Text("Рекомендации")
-        .font(.title2.bold())
+      Text("Откройте для себя")
+        .font(MuwaTypography.section)
 
       ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 14) {
-          ForEach(Track.catalog) { track in
-            recommendationCard(track, width: 154)
+        LazyHStack(spacing: 14) {
+          ForEach(Array(Track.catalog.prefix(12))) { track in
+            recommendationCard(track, width: 160)
           }
         }
       }
@@ -252,7 +217,7 @@ struct HomeView: View {
 
   private func recommendationsGrid(layout: AdaptiveLayout) -> some View {
     VStack(alignment: .leading, spacing: 14) {
-      Text("Рекомендации").font(.title2.bold())
+      Text("Откройте для себя").font(MuwaTypography.section)
 
       LazyVGrid(
         columns: Array(
@@ -261,7 +226,7 @@ struct HomeView: View {
         ),
         spacing: 18
       ) {
-        ForEach(Track.catalog) { track in
+        ForEach(Array(Track.catalog.prefix(12))) { track in
           recommendationCard(track, width: nil)
         }
       }
@@ -287,12 +252,12 @@ struct HomeView: View {
       }
       .frame(width: width, alignment: .leading)
     }
-    .buttonStyle(.plain)
+    .buttonStyle(MuwaPressStyle())
   }
 
   private var popularList: some View {
     VStack(alignment: .leading, spacing: 10) {
-      Text("Популярное").font(.title2.bold())
+      Text("Популярное").font(MuwaTypography.section)
 
       ForEach(Track.catalog.prefix(5)) { track in
         popularRow(track)
@@ -306,7 +271,7 @@ struct HomeView: View {
 
   private func popularGrid(layout: AdaptiveLayout) -> some View {
     VStack(alignment: .leading, spacing: 12) {
-      Text("Популярное").font(.title2.bold())
+      Text("Популярное").font(MuwaTypography.section)
 
       LazyVGrid(
         columns: Array(repeating: GridItem(.flexible(), spacing: 20), count: layout.listColumns),
