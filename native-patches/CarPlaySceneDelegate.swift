@@ -69,6 +69,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     coordinator.player?.$playbackError.receive(on: RunLoop.main)
       .sink { [weak self] error in Task { @MainActor in self?.showPlaybackError(error) } }
       .store(in: &subscriptions)
+    // A CarPlay-only launch may never mount the phone's WindowGroup tasks.
+    // Refresh the same catalogue owner; its existing guard coalesces phone work.
+    Task { await CatalogStore.shared.refresh() }
   }
 
   nonisolated func templateApplicationScene(_ templateApplicationScene: CPTemplateApplicationScene, didDisconnectInterfaceController interfaceController: CPInterfaceController) {

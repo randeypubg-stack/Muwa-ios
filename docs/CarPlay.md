@@ -9,6 +9,8 @@ favorite, shuffle and repeat actions; its Up Next button opens the shared queue.
 System playback, seek, next and previous buttons use the existing remote commands.
 Playback errors offer Retry. List updates preserve the selected tab and navigation.
 Disconnecting and reconnecting release observers without stopping iPhone playback.
+Connecting also refreshes the shared catalog directly, so a CarPlay-only launch
+does not depend on the phone window appearing to fetch newly published tracks.
 
 The existing scene manifest selects `CPTemplateApplicationScene` and its delegate
 for the CarPlay role. Phone scenes remain owned by the existing SwiftUI app.
