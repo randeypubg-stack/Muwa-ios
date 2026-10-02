@@ -29,6 +29,9 @@ import kotlin.math.abs
     var slider by remember { mutableStateOf<Float?>(null) }
     var menu by remember {mutableStateOf(false)}
     Dialog(onDismissRequest=onClose,properties=DialogProperties(usePlatformDefaultWidth=false,decorFitsSystemWindows=false)) {
+        // This dialog has a custom background rather than a Material Surface;
+        // provide its foreground explicitly instead of inheriting default black.
+        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
         BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF080D16)).systemBarsPadding().padding(16.dp)) {
             val wide = maxWidth > maxHeight || maxWidth > 700.dp
             val artworkSize = if(wide) minOf(maxHeight - 130.dp,maxWidth * .4f) else minOf(maxWidth - 48.dp,maxHeight * .39f)
@@ -66,6 +69,7 @@ import kotlin.math.abs
                 if(wide) Row(Modifier.weight(1f),verticalAlignment=Alignment.CenterVertically) { Box(Modifier.weight(1f),contentAlignment=Alignment.Center) {SwipeCover(model,artworkSize,onClose)}; Box(Modifier.weight(1f)) {controls()} }
                 else Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.SpaceEvenly) {SwipeCover(model,artworkSize,onClose); Spacer(Modifier.height(12.dp));controls()}
             }
+        }
         }
     }
 }
