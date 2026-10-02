@@ -2,12 +2,13 @@
 
 Run after installing the debug APK on an emulator. The normal review screenshots
 disable animations; this capture restores them temporarily and always puts the
-emulator settings back. All frames come from Android's screenrecord/screencap.
+emulator settings back. All frames come from Emulator screenrecord/adb screencap.
 """
 import json
 import os
 from pathlib import Path
 import re
+import shutil
 import struct
 import subprocess
 import time
@@ -26,12 +27,26 @@ def check_foreground():
                for line in activities.splitlines()), "Muwa is not the foreground activity"
 
 
-def screenrecord_pids():
-    result = subprocess.run(["adb", "shell", "pidof", "screenrecord"], capture_output=True, text=True, timeout=10)
-    assert result.returncode in (0, 1), f"Cannot inspect Android recorder: {result.stderr}"
-    values = result.stdout.split()
-    assert all(value.isdigit() for value in values), "Invalid screenrecord process ID"
-    return set(values)
+def emulator_recording(*args):
+    result = adb("emu", "screenrecord", *args)
+    assert "KO:" not in result, f"Emulator recording command failed: {result}"
+    return result.strip()
+
+
+def recorded_file(name):
+    # Current emulator releases write console recordings inside the AVD. Some
+    # older releases write to its root or the caller's working directory.
+    roots = {Path(os.environ.get("ANDROID_AVD_HOME", str(Path.home() / ".android/avd")))}
+    if os.environ.get("ANDROID_USER_HOME"):
+        roots.add(Path(os.environ["ANDROID_USER_HOME"]) / "avd")
+    candidates = [Path.cwd() / name]
+    for root in roots:
+        candidates.extend(root.glob(f"*.avd/console_out/{name}"))
+        candidates.extend(root.glob(f"*.avd/{name}"))
+    matches = [p for p in candidates if p.is_file() and p.stat().st_size > 0]
+    if not matches:
+        raise FileNotFoundError("Emulator console did not produce the requested native WebM")
+    return matches[0]
 
 
 def set_animation_scale(value):
@@ -104,7 +119,12 @@ def assert_home(remote_xml, out):
     hierarchy = ""
     while time.monotonic() < deadline:
         check_foreground()
-        adb("shell", "uiautomator", "dump", remote_xml, timeout=30)
+        # Never accept the first launch's stale XML on the reduced-motion launch.
+        adb("shell", "rm", "-f", remote_xml)
+        result = adb("shell", "uiautomator", "dump", "--compressed", remote_xml, timeout=30)
+        if "ERROR:" in result:
+            time.sleep(0.4)
+            continue
         hierarchy = adb("shell", "cat", remote_xml, timeout=15)
         if 'text="Главная"' in hierarchy and 'text="Нашиды без музыки"' in hierarchy:
             (out / "home-hierarchy.xml").write_text(hierarchy)
@@ -119,7 +139,7 @@ def main():
     out = Path(os.environ.get("MUWA_ANDROID_OUTPUT", "build/android-previews")) / "launch"
     out.mkdir(parents=True, exist_ok=True)
     unique = f"{os.getpid()}-{int(time.time())}"
-    remote_video = f"/sdcard/Download/muwa-launch-{unique}.mp4"
+    recording_name = f"muwa-launch-{unique}.webm"
     remote_xml = f"/sdcard/Download/muwa-launch-{unique}.xml"
     setting_keys = [("global", key) for key in ANIMATION_KEYS] + [
         ("system", "accelerometer_rotation"), ("system", "user_rotation")]
@@ -136,14 +156,12 @@ def main():
         "files": [], "cleanupErrors": []
     }
     width, height = map(int, re.findall(r"(\d+)x(\d+)", manifest["size"])[-1])
-    # Keep original screenshots at the device resolution. Downscale only the
-    # native encoder output, so a software-rendered tablet does not starve the
-    # accessibility service while recording its 1600x2560 framebuffer.
+    # Keep original PNG/WebM frames at device resolution. Scale only the MP4
+    # transport copy after recording, without creating a guest virtual display.
     recording_width = min(width, 720)
     recording_height = round(height * recording_width / width / 2) * 2
     manifest["videoResolution"] = f"{recording_width}x{recording_height}"
-    recorder = None
-    recorder_pids = set()
+    recording = False
     try:
         adb("shell", "input", "keyevent", "KEYCODE_WAKEUP")
         adb("shell", "wm", "dismiss-keyguard")
@@ -153,21 +171,12 @@ def main():
         manifest["confirmedRecordingScales"] = set_animation_scale(1)
         time.sleep(1)
         adb("shell", "am", "force-stop", PACKAGE)
-        # Refuse to interfere with any other recording already on the emulator.
-        assert not screenrecord_pids(), "Another Android screen recording is already running"
-        recorder = subprocess.Popen(
-            ["adb", "shell", "screenrecord", "--time-limit", "45", "--bit-rate", "4000000",
-             "--size", manifest["videoResolution"], remote_video],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        # Verify the recorder is running before asking Android to launch Muwa.
-        for _ in range(20):
-            assert recorder.poll() is None, "Android screenrecord exited before launch"
-            found = screenrecord_pids()
-            if found:
-                recorder_pids = found
-                break
-            time.sleep(0.1)
-        assert recorder_pids, "Android screenrecord did not start"
+        # The guest MediaCodec recorder caused hosted GLES emulators to go
+        # offline. Record their actual display through the emulator console,
+        # which avoids an extra Android virtual-display/encoder surface.
+        manifest["recordingBackend"] = "Android Emulator console screenrecord"
+        manifest["recordingStart"] = emulator_recording("start", recording_name)
+        recording = True
         print("Record actual Android launch: review.route=launch", flush=True)
         manifest["launchResult"] = start_launch()
         time.sleep(0.25)
@@ -178,18 +187,35 @@ def main():
         manifest["nativeHomeVerifiedBeforeStop"] = True
         time.sleep(3)
         check_foreground()
-        for pid in recorder_pids:
-            adb("shell", "kill", "-2", pid, timeout=10)
-        stdout, stderr = recorder.communicate(timeout=15)
-        assert recorder.returncode == 0, f"Android screenrecord failed: {stdout} {stderr}"
-        recorder_pids.clear()
+        manifest["recordingStop"] = emulator_recording("stop")
+        recording = False
+        original = recorded_file(recording_name)
+        raw_path = out / "launch.webm"
+        shutil.copy2(original, raw_path)
+        original.unlink()
         path = out / "launch.mp4"
-        adb("pull", remote_video, str(path), timeout=30)
+        probe = json.loads(subprocess.check_output(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+             "stream=width,height", "-of", "json", str(raw_path)], text=True, timeout=15))
+        video_width, video_height = (int(probe['streams'][0][key]) for key in ['width', 'height'])
+        assert 0 < video_width < video_height, "Console recording is not a native portrait video"
+        recording_width = min(video_width, 720)
+        recording_height = round(video_height * recording_width / video_width / 2) * 2
+        manifest["originalVideoResolution"] = f"{video_width}x{video_height}"
+        manifest["videoResolution"] = f"{recording_width}x{recording_height}"
+        subprocess.run(["ffmpeg", "-nostdin", "-y", "-hide_banner", "-loglevel", "error",
+                        "-i", str(raw_path), "-vf", f"scale={recording_width}:{recording_height}",
+                        "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+                        "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(path)],
+                       check=True, timeout=120)
         manifest["durationSeconds"] = video_duration(path)
-        manifest["files"].append({"file": path.name, "bytes": path.stat().st_size, "source": "adb screenrecord"})
+        manifest["files"].append({"file": raw_path.name, "bytes": raw_path.stat().st_size,
+                                  "source": "original Emulator console recording"})
+        manifest["files"].append({"file": path.name, "bytes": path.stat().st_size,
+                                  "source": "Emulator recording converted to MP4"})
         # Home was verified while the recording was still running. Avoid a
-        # second short-lived UiAutomation connection immediately after releasing
-        # the encoder surface; capture the actual foreground frame instead.
+        # second short-lived UiAutomation connection; capture the actual
+        # foreground frame instead.
         manifest["files"].append(screenshot(out / "launch-home.png"))
         manifest["captureStatus"] = "recorded"
         # A real second cold start proves that disabling motion reveals usable home.
@@ -214,20 +240,11 @@ def main():
             manifest["diagnosticError"] = str(diagnostic_error)
         raise
     finally:
-        for pid in recorder_pids:
+        if recording:
             try:
-                adb("shell", "kill", "-2", pid, timeout=10)
+                emulator_recording("stop")
             except Exception as error:
                 manifest["cleanupErrors"].append(str(error))
-        if recorder is not None and recorder.poll() is None:
-            try:
-                recorder.communicate(timeout=10)
-            except subprocess.TimeoutExpired:
-                try:
-                    recorder.terminate()
-                    recorder.communicate(timeout=5)
-                except Exception as error:
-                    manifest["cleanupErrors"].append(f"Stop adb recorder: {error}")
         for (namespace, key), value in previous.items():
             try:
                 if value == "null":
@@ -237,7 +254,7 @@ def main():
             except Exception as error:
                 manifest["cleanupErrors"].append(f"Restore {namespace}.{key}: {error}")
         try:
-            adb("shell", "rm", "-f", remote_video, remote_xml, timeout=10)
+            adb("shell", "rm", "-f", remote_xml, timeout=10)
         except Exception as error:
             manifest["cleanupErrors"].append(str(error))
         (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
