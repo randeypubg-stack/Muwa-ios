@@ -10,9 +10,8 @@ System playback, seek, next and previous buttons use the existing remote command
 Playback errors offer Retry. List updates preserve the selected tab and navigation.
 Disconnecting and reconnecting release observers without stopping iPhone playback.
 
-The SwiftUI app uses `MuwaApplicationDelegate` to select `CPTemplateApplicationScene`
-and its existing scene delegate for the CarPlay role. Other roles return the
-configuration already selected for the phone; they do not create a second player.
+The existing scene manifest selects `CPTemplateApplicationScene` and its delegate
+for the CarPlay role. Phone scenes remain owned by the existing SwiftUI app.
 
 `MuwaCarPlay.entitlements` requests `com.apple.developer.carplay-audio`, and the
 source preparation script provides an opt-in signing setting in both Xcode configurations. It also adds

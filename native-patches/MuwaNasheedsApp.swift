@@ -2,7 +2,6 @@ import SwiftUI
 
 @main
 struct MuwaNasheedsApp: App {
-  @UIApplicationDelegateAdaptor(MuwaApplicationDelegate.self) private var applicationDelegate
   @Environment(\.scenePhase) private var scenePhase
 
   @StateObject private var launch: LaunchPresentation

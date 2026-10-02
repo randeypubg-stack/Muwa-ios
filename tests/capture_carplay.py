@@ -96,6 +96,12 @@ try:
       end tell
     end tell'''
     status['menu'] = run('osascript', '-e', script)
+    # The external display becomes available after the first phone launch.
+    # Reconnect the process with that display already attached so UIKit can
+    # request its CarPlay role from the existing scene manifest.
+    time.sleep(3)
+    run('xcrun', 'simctl', 'launch', '--terminate-running-process', udid,
+        'app.muwa.nasheeds', '--audit-player')
     status['displays'] = run('xcrun', 'simctl', 'io', udid, 'enumerate')
     # Prove that the screenshot is from a connected CarPlay scene, not an empty display.
     data = Path(run('xcrun', 'simctl', 'get_app_container', udid, 'app.muwa.nasheeds', 'data').strip())

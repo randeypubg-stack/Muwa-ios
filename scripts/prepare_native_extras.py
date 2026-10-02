@@ -19,7 +19,6 @@ files = {
     'Diagnostics.swift': 'Services',
     'AppSettingsView.swift': 'Views/Profile',
     'CarPlaySceneDelegate.swift': 'App',
-    'MuwaApplicationDelegate.swift': 'App',
     'LaunchExperience.swift': 'App',
     'DownloadManager.swift': 'Services',
     'AuthManager.swift': 'Services',
