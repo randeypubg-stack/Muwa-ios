@@ -96,16 +96,20 @@ try:
       end tell
     end tell'''
     status['menu'] = run('osascript', '-e', script)
-    time.sleep(5)
     status['displays'] = run('xcrun', 'simctl', 'io', udid, 'enumerate')
-    run('xcrun', 'simctl', 'io', udid, 'screenshot', '--display=external', str(out / 'carplay.png'))
     # Prove that the screenshot is from a connected CarPlay scene, not an empty display.
     data = Path(run('xcrun', 'simctl', 'get_app_container', udid, 'app.muwa.nasheeds', 'data').strip())
     proof = data / 'Documents/carplay-connected.txt'
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline and not proof.exists():
+        time.sleep(0.5)
     status['scene_connected'] = proof.exists() and proof.read_text() == 'Muwa CarPlay connected'
     if not status['scene_connected']:
-        (out / 'carplay.png').unlink(missing_ok=True)
+        run('xcrun', 'simctl', 'io', udid, 'screenshot', '--display=external',
+            str(out / 'external-display-unconnected.png'))
         raise RuntimeError('External display exists but Muwa CarPlay scene did not connect')
+    time.sleep(2)
+    run('xcrun', 'simctl', 'io', udid, 'screenshot', '--display=external', str(out / 'carplay.png'))
     status['captured'] = True
     status['device'] = phone['name']
 except Exception as error:

@@ -10,6 +10,10 @@ System playback, seek, next and previous buttons use the existing remote command
 Playback errors offer Retry. List updates preserve the selected tab and navigation.
 Disconnecting and reconnecting release observers without stopping iPhone playback.
 
+The SwiftUI app uses `MuwaApplicationDelegate` to select `CPTemplateApplicationScene`
+and its existing scene delegate for the CarPlay role. Other roles return the
+configuration already selected for the phone; they do not create a second player.
+
 `MuwaCarPlay.entitlements` requests `com.apple.developer.carplay-audio`, and the
 source preparation script provides an opt-in signing setting in both Xcode configurations. It also adds
 the CarPlay scene while preserving any existing phone scene configurations.
@@ -34,6 +38,8 @@ Simulator's CarPlay external display, and captures that display only after Muwa'
 CarPlay scene reports a connection. If the runner cannot expose or connect the
 external display, `build/previews/carplay/status.json` records the reason. A missing
 capture is never replaced by a mockup or a phone screenshot.
+An unconnected external display is retained as a diagnostic image only; it is
+never marked as a successful Muwa CarPlay screenshot.
 
 Before distribution, test track selection from each tab, offline playback with the
 network disabled, queue advancement, favorites updated on either screen, interruption
