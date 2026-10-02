@@ -165,6 +165,7 @@ try:
         status['launcher_selection'] = {'label': target['label'], 'confidence': target['confidence'],
                                         'nativeTarget': target, 'windowBounds': [wx, wy, ww, wh]}
         save_status()
+        run('screencapture', '-x', str(out / 'desktop-before-input.png'))
         # AXRaise orders the window but does not guarantee it is the key window.
         # Focus its title bar first; otherwise Simulator may consume the icon
         # click just to activate the external-display window.
@@ -183,6 +184,7 @@ try:
             # first tile on its second row. CarPlay also supports directional
             # controls, so exercise that input route when pointer input stalls.
             run('osascript', '-e', 'tell application "System Events" to tell process "Simulator"\nkey code 125\ndelay 0.2\nkey code 36\nend tell')
+        run('screencapture', '-x', str(out / 'desktop-after-input.png'))
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline and not proof.exists():
         time.sleep(0.5)
