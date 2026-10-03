@@ -124,10 +124,20 @@ def main():
             except ProcessLookupError:
                 # The process can finish between poll() and delivery.
                 pass
+            except PermissionError:
+                # Hosted macOS can elevate simctl after exec. The caller then
+                # cannot interrupt it, even though we created its private group.
+                # Signal only that owned group; never stop unrelated simulators.
+                status["recorder_privileged_signal"] = True
+                run("sudo", "-n", "/bin/kill", "-s",
+                    signal.Signals(value).name.removeprefix("SIG"), "--",
+                    str(-recorder.pid), timeout=10)
         if recorder.poll() is None:
-            # Match Simulator's documented Ctrl-C stop through its controlling
-            # terminal. Do not kill the encoder before it finalizes the MP4.
-            os.write(recorder_input, b"\x03")
+            status["recorder_process"] = run("ps", "-o", "pid=,pgid=,uid=,comm=",
+                                            "-p", str(recorder.pid), timeout=10)
+            # SIGINT is the documented Ctrl-C stop. A terminal-generated signal
+            # alone cannot stop an elevated simctl on the hosted macOS runner.
+            signal_group(signal.SIGINT)
             try:
                 # Hosted Simulator encoders may need longer than the recording
                 # itself to flush frames and write the MP4's final moov atom.
@@ -191,7 +201,7 @@ def main():
         recording_command = [simctl, "io", udid, "recordVideo", "--codec=h264", str(video)]
         status["parent_sigint_ignored"] = signal.getsignal(signal.SIGINT) == signal.SIG_IGN
         recorder, recorder_input = start_recording(recording_command, recorder_log)
-        status["recording_stop_method"] = "controlling-terminal Ctrl-C"
+        status["recording_stop_method"] = "SIGINT to the owned recorder group"
         status["recording_command"] = recording_command
         # Launch only once simctl confirms that the screen recording is active.
         ready_deadline = time.monotonic() + 10
