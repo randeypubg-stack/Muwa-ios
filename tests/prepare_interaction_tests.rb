@@ -13,6 +13,8 @@ FileUtils.cp(File.join(__dir__, 'NativeInteractionTests.swift'), File.join(root,
 test.add_file_references([group.new_file('NativeInteractionTests.swift')])
 test.build_configurations.each do |config|
   config.build_settings.merge!({
+    'PRODUCT_NAME' => '$(TARGET_NAME)',
+    'SWIFT_OPTIMIZATION_LEVEL' => '-Onone',
     'PRODUCT_BUNDLE_IDENTIFIER' => 'app.muwa.nasheeds.InteractionTests',
     'GENERATE_INFOPLIST_FILE' => 'YES', 'SWIFT_VERSION' => '5.0',
     'TEST_TARGET_NAME' => app.name, 'CODE_SIGNING_ALLOWED' => 'NO',
