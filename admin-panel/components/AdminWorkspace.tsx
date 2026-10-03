@@ -68,6 +68,8 @@ const eventLabels: Record<string, string> = {
   "submission.received": "Поступила публикация",
   "submission.rejected": "Публикация отклонена",
   "submission.published": "Публикация одобрена",
+  "telegram.imported": "Нашид импортирован из Telegram",
+  "telegram.linked": "Повтор из Telegram связан с существующим нашидом",
 };
 const minutes = (n: number) =>
   `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, "0")}`;

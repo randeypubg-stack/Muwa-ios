@@ -1,5 +1,44 @@
 import { adminValidation } from "./adminValidation";
 describe("Muwa control panel input boundaries", () => {
+  it("keeps Telegram imports as drafts with bounded stable source IDs and SHA-256", () => {
+    const input = {
+      action: "import-telegram-track",
+      uploadId: "9234fbc1-c4e5-4554-a728-48ca6e0a5a97",
+      title: "نص",
+      artist: "Muwa",
+      language: "ar",
+      duration: 12,
+      status: "draft",
+      source: {
+        channelId: "-1001234567890",
+        messageId: 5,
+        audioSha256: "a".repeat(64),
+      },
+    };
+    expect(adminValidation.action.safeParse(input).success).toBeTrue();
+    expect(
+      adminValidation.action.safeParse({ ...input, status: "published" })
+        .success,
+    ).toBeFalse();
+    expect(
+      adminValidation.action.safeParse({
+        ...input,
+        source: { ...input.source, channelId: "https://example.com" },
+      }).success,
+    ).toBeFalse();
+    expect(
+      adminValidation.action.safeParse({
+        ...input,
+        source: { ...input.source, messageId: 2147483648 },
+      }).success,
+    ).toBeFalse();
+    expect(
+      adminValidation.action.safeParse({
+        ...input,
+        source: { ...input.source, audioSha256: "bad" },
+      }).success,
+    ).toBeFalse();
+  });
   it("rejects intersecting or reversed captions and accepts touching boundaries", () => {
     const row = { start: 0, end: 2, ar: "نص", ru: "", en: "" };
     expect(

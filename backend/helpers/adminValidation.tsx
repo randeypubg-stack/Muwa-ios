@@ -63,7 +63,28 @@ const metadata = {
   language: z.string().trim().min(2).max(10),
   duration: z.number().finite().positive().max(86400),
 };
+const telegramSource = z.object({
+  channelId: z.string().regex(/^-[0-9]{13,16}$/),
+  messageId: z.number().int().positive().max(2147483647),
+  audioSha256: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
+});
 const action = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("lookup-telegram-import"),
+    source: telegramSource,
+  }),
+  z.object({
+    action: z.literal("import-telegram-track"),
+    source: telegramSource.extend({
+      audioSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    }),
+    uploadId: z.string().uuid(),
+    ...metadata,
+    status: z.literal("draft"),
+  }),
   z.object({ action: z.literal("cleanup-uploads") }),
   z.object({
     action: z.literal("prepare-upload"),
@@ -204,6 +225,7 @@ export type UploadFile = {
 };
 export type AdminResult = {
   ok: true;
+  importStatus?: "missing" | "existing" | "duplicate" | "created";
   trackId?: string;
   uploadId?: string;
   files?: UploadFile[];

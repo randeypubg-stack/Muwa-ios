@@ -40,6 +40,7 @@ async function main() {
         "uploadSecurity.tsx",
         "mediaSecurity.tsx",
         "uploadCleanup.tsx",
+        "telegramImport.tsx",
       );
     for (const name of names) {
       const output = ts.transpileModule(
@@ -108,6 +109,10 @@ async function main() {
       fs.copyFileSync(
         path.join(__dirname, "admin-service.spec.cjs"),
         path.join(helpers, "admin-service.spec.js"),
+      );
+      fs.copyFileSync(
+        path.join(__dirname, "telegram-import.spec.cjs"),
+        path.join(helpers, "telegram-import.spec.js"),
       );
       fs.writeFileSync(
         path.join(helpers, "testStorage.js"),

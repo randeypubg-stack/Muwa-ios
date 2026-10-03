@@ -1,5 +1,17 @@
 # Muwa Premium and subtitles
 
+## Telegram catalogue import (3 October 2026)
+
+The existing admin handler now supports `lookup-telegram-import` and
+`import-telegram-track`. Imports create drafts, preserve existing accounts and
+use the same private upload/verification path. Apply
+`telegram-import-migration.sql` after admin/security migrations **before**
+deploying the handler: normal saves/approvals also record verified fingerprints.
+No new auth mechanism, Telegram credentials or ASR provider is added to clients.
+See [the importer and deployment instructions](../tools/telegram-import/README.md).
+The code is prepared/tested locally; no live channel import, migration or server
+deployment has occurred. Current Floot unavailability remains a separate blocker.
+
 ## Reproducible checks
 Run `npm ci && npm test` in this directory for provider/document tests without
 paid API calls. Setting `MUWA_TEST_DATABASE_URL` additionally runs transaction

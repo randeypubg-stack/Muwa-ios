@@ -27,6 +27,14 @@ import {
 } from "./uploadSecurity";
 import { cleanupExpiredUploads } from "./uploadCleanup";
 import {
+  findTelegramSource,
+  findAudioDuplicate,
+  lockAudio,
+  lockTelegramSource,
+  rememberAudio,
+  rememberTelegramSource,
+} from "./telegramImport";
+import {
   inspectStoredMedia,
   catalogueMediaURL,
   type MediaFingerprint,
@@ -163,6 +171,7 @@ async function verifiedPlan(
   )
     fail("Загрузка устарела. Подготовьте файлы заново.", 409);
   const files = row.files as unknown as UploadFile[];
+  const verified: (UploadFile & { fingerprint: MediaFingerprint })[] = [];
   for (const file of files) {
     const checked = await inspectStoredMedia(
       file.visibility ?? "public",
@@ -173,8 +182,9 @@ async function verifiedPlan(
     );
     if (file.sourceSha256 && checked.fingerprint.sha256 !== file.sourceSha256)
       fail("Скопированный файл отличается от проверенной публикации.", 409);
+    verified.push({ ...file, fingerprint: checked.fingerprint });
   }
-  return files;
+  return verified;
 }
 async function consume(tx: Transaction<DB>, id: string, userId: number) {
   const result = await tx
@@ -377,6 +387,14 @@ async function execute(
   input: AdminAction,
   userId: number,
 ): Promise<AdminResult> {
+  if (input.action === "lookup-telegram-import") {
+    const id = await findTelegramSource(input.source);
+    return {
+      ok: true,
+      ...(id ? { trackId: id } : {}),
+      importStatus: id ? "existing" : "missing",
+    };
+  }
   if (input.action === "cleanup-uploads") return cleanupExpiredUploads(userId);
   if (input.action === "refresh-submissions")
     return refresh(userId, input.cursor);
@@ -435,16 +453,50 @@ async function execute(
       row.id,
     );
   }
-  if (input.action === "save-track") {
+  if (
+    input.action === "save-track" ||
+    input.action === "import-telegram-track"
+  ) {
+    const source =
+      input.action === "import-telegram-track" ? input.source : null;
+    const trackId = input.action === "save-track" ? input.trackId : undefined;
+    const revision = input.action === "save-track" ? input.revision : undefined;
+    // Recover a lost response even when the old upload lease was consumed or
+    // expired. Only the same stored source and verified audio hash can match.
+    if (source) {
+      const existing = await findTelegramSource(source);
+      if (existing)
+        return { ok: true, trackId: existing, importStatus: "existing" };
+    }
     const files = input.uploadId
-      ? await verifiedPlan(input.uploadId, userId, input.trackId)
+      ? await verifiedPlan(input.uploadId, userId, trackId)
       : [];
-    return db.transaction().execute(async (tx) => {
-      const current = input.trackId
-        ? await track(tx, input.trackId, input.revision)
-        : null;
-      const audio = files.find((f) => f.part === "audio"),
-        cover = files.find((f) => f.part === "cover");
+    const audio = files.find((f) => f.part === "audio"),
+      cover = files.find((f) => f.part === "cover");
+    if (source && (!audio || audio.fingerprint.sha256 !== source.audioSha256))
+      fail(
+        "Контрольная сумма импортируемого аудио не совпадает с загруженным файлом.",
+        409,
+      );
+    return db.transaction().execute<AdminResult>(async (tx) => {
+      if (source) await lockTelegramSource(tx, source);
+      if (audio) await lockAudio(tx, audio.fingerprint.sha256);
+      if (source) {
+        const existing = await findTelegramSource(source, tx);
+        if (existing)
+          return { ok: true, trackId: existing, importStatus: "existing" };
+        const duplicate = await findAudioDuplicate(tx, source.audioSha256);
+        if (duplicate) {
+          await rememberTelegramSource(tx, source, duplicate, userId);
+          // The unused private lease stays unconsumed for normal cleanup.
+          await audit(tx, userId, "telegram.linked", duplicate, {
+            channelId: source.channelId,
+            messageId: source.messageId,
+          });
+          return { ok: true, trackId: duplicate, importStatus: "duplicate" };
+        }
+      }
+      const current = trackId ? await track(tx, trackId, revision) : null;
       if (!current && !audio) fail("Сначала загрузите аудио.");
       const id = current?.id ?? `muwa-${randomUUID()}`;
       const values = {
@@ -489,12 +541,23 @@ async function execute(
           .insertInto("catalogTracks")
           .values({ ...values, id, createdBy: userId })
           .execute();
+      if (audio) await rememberAudio(tx, id, audio.fingerprint.sha256);
+      if (source) await rememberTelegramSource(tx, source, id, userId);
       await audit(tx, userId, current ? "track.updated" : "track.created", id, {
         title: input.title,
         status: input.status,
         audioReplaced: !!audio,
       });
-      return { ok: true, trackId: id };
+      if (source)
+        await audit(tx, userId, "telegram.imported", id, {
+          channelId: source.channelId,
+          messageId: source.messageId,
+        });
+      return {
+        ok: true,
+        trackId: id,
+        ...(source ? { importStatus: "created" as const } : {}),
+      };
     });
   }
   if (input.action === "set-status" || input.action === "save-captions")
@@ -564,6 +627,7 @@ async function execute(
       cover = files.find((f) => f.part === "cover");
     if (!audio) fail("Аудио не загружено.");
     return db.transaction().execute(async (tx) => {
+      await lockAudio(tx, audio.fingerprint.sha256);
       const row = await submission(tx, input.submissionId, input.revision);
       await consume(tx, input.uploadId, userId);
       const id = `muwa-${row.id}`;
@@ -591,6 +655,7 @@ async function execute(
           createdBy: userId,
         })
         .execute();
+      await rememberAudio(tx, id, audio.fingerprint.sha256);
       await tx
         .updateTable("publicationDrafts")
         .set({

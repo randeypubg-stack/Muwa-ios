@@ -63,6 +63,9 @@ describe("Muwa admin transactions in disposable PostgreSQL", () => {
       fs.readFileSync(path.join(root, "security-migration.sql"), "utf8"),
     );
     await testPool.query(
+      fs.readFileSync(path.join(root, "telegram-import-migration.sql"), "utf8"),
+    );
+    await testPool.query(
       fs.readFileSync(path.join(root, "security-migration.sql"), "utf8"),
     );
   });
