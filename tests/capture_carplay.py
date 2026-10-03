@@ -166,13 +166,10 @@ try:
                                         'nativeTarget': target, 'windowBounds': [wx, wy, ww, wh]}
         save_status()
         run('screencapture', '-x', str(out / 'desktop-before-input.png'))
-        # AXRaise orders the window but does not guarantee it is the key window.
-        # Focus its title bar first; otherwise Simulator may consume the icon
-        # click just to activate the external-display window.
-        run('cliclick', f'c:{round(wx + ww / 2)},{round(wy + 14)}')
-        time.sleep(0.2)
-        run('cliclick', f'c:{x},{y}')
-        status['mouse_position'] = run('cliclick', 'p').strip()
+        # Use the same trusted Simulator accessibility process as its display
+        # menu. Pointer events from a CLI can move the cursor without reaching
+        # the CarPlay host; System Events delivered the real scene activation.
+        run('osascript', '-e', f'tell application "System Events" to tell process "Simulator"\nclick at {{{round(wx + ww / 2)}, {round(wy + 14)}}}\ndelay 0.2\nclick at {{{x}, {y}}}\nend tell')
         run('screencapture', '-x', str(out / 'desktop-after-input.png'))
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline and not proof.exists():
