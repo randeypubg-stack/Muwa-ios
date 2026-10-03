@@ -1,4 +1,5 @@
 """Exercise actual terminal signals, including an ignored signal from the host."""
+import json
 import os
 from pathlib import Path
 import signal
@@ -7,7 +8,7 @@ import sys
 import tempfile
 import time
 
-from capture_launch_ios import start_recording
+from capture_launch_ios import parse_home_proof, start_recording
 
 
 with tempfile.TemporaryDirectory() as folder:
@@ -47,3 +48,16 @@ while True: time.sleep(0.05)
             process.wait(timeout=5)
         if terminal is not None:
             os.close(terminal)
+
+# Observed hosted Vision driver output must not corrupt a valid native proof.
+frame = {"homeVisible": True, "width": 1206, "height": 2622, "lines": ["Главная", "Нашиды без музыки"]}
+output = "IOServiceMatchingfailed for: AppleM2ScalerParavirtDriver\n" + json.dumps(frame) + "\n"
+assert parse_home_proof(output) == frame
+for invalid in ["driver diagnostic only", json.dumps({**frame, "homeVisible": False}), json.dumps(frame) + "\n" + json.dumps(frame)]:
+    try:
+        parse_home_proof(invalid)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("Missing/false/ambiguous Home proof was accepted")
+print("PASS: noisy Vision driver output, missing/false/ambiguous native proof rejection")

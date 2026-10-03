@@ -14,12 +14,12 @@ on:
       source_run_id:
         description: Verified native build run ID
         type: string
-        default: "37080911175"
+        default: "37116765105"
         required: true
       source_artifact_name:
         description: Full-source artifact from that build
         type: string
-        default: Muwa-Full-Source-97
+        default: Muwa-Full-Source-100
         required: true
   push:
     branches: [feat/muwa-native-build35]
@@ -27,7 +27,6 @@ on:
       - tests/capture_carplay.py
       - tests/locate_carplay_app.swift
       - tests/verify_native_snapshot.py
-      - .github/workflows/review-carplay.yml
 
 permissions:
   contents: read
@@ -47,8 +46,8 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ${{ inputs.source_artifact_name || 'Muwa-Full-Source-97' }}
-          run-id: ${{ inputs.source_run_id || '37080911175' }}
+          name: ${{ inputs.source_artifact_name || 'Muwa-Full-Source-100' }}
+          run-id: ${{ inputs.source_run_id || '37116765105' }}
           github-token: ${{ github.token }}
           path: build/carplay-source
       - name: Build CarPlay review with Xcode simulator signing
@@ -68,7 +67,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build40-CarPlay-review
+          name: Muwa-CarPlay-review
           path: |
             build/previews/carplay
             build/carplay-xcodebuild.log

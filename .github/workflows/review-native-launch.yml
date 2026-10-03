@@ -5,18 +5,24 @@ on:
     inputs:
       source_run_id:
         type: string
-        default: "37080911175"
+        default: "37116765105"
         required: true
       source_artifact_name:
         type: string
-        default: Muwa-Full-Source-97
+        default: Muwa-Full-Source-100
         required: true
       simulator_artifact_name:
         type: string
-        default: Muwa-build40-simulator-37080911175
+        default: Muwa-build41-simulator-37116765105
         required: true
-  # Normal builds already review startup with their own freshly compiled app.
-  # Independent reviews are explicitly bound to a completed source/simulator run.
+  # Helper-only edits reuse this explicitly verified source/simulator pair;
+  # native changes are reviewed by the normal build with its own fresh app.
+  push:
+    branches: [feat/muwa-native-build35]
+    paths:
+      - tests/capture_launch_ios.py
+      - tests/RecorderSignalChecks.py
+      - tests/verify_native_snapshot.py
 
 permissions:
   contents: read
@@ -36,8 +42,8 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ${{ inputs.source_artifact_name || 'Muwa-Full-Source-97' }}
-          run-id: ${{ inputs.source_run_id || '37080911175' }}
+          name: ${{ inputs.source_artifact_name || 'Muwa-Full-Source-100' }}
+          run-id: ${{ inputs.source_run_id || '37116765105' }}
           github-token: ${{ github.token }}
           path: build/launch-source
       - name: Verify the compiled source snapshot
@@ -48,8 +54,8 @@ jobs:
           python3 tests/verify_native_snapshot.py build/launch-source/native/Repository
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ${{ inputs.simulator_artifact_name || 'Muwa-build40-simulator-37080911175' }}
-          run-id: ${{ inputs.source_run_id || '37080911175' }}
+          name: ${{ inputs.simulator_artifact_name || 'Muwa-build41-simulator-37116765105' }}
+          run-id: ${{ inputs.source_run_id || '37116765105' }}
           github-token: ${{ github.token }}
           path: build
       - name: Unpack the native Simulator app

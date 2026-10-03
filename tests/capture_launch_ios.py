@@ -94,6 +94,24 @@ def validate_video(path):
     return atoms
 
 
+
+def parse_home_proof(output):
+    # Vision's graphics driver can log to stdout before/after the JSON result.
+    # Preserve those logs but accept exactly one successful native frame proof.
+    proofs = []
+    for line in output.splitlines():
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict) and value.get("homeVisible") is True:
+            if value.get("width", 0) >= 100 and value.get("height", 0) >= 100:
+                proofs.append(value)
+    if len(proofs) != 1:
+        raise AssertionError("Expected exactly one successful native Home frame proof")
+    return proofs[0]
+
+
 def main():
     OUTPUT.mkdir(parents=True, exist_ok=True)
     status = {"captured": False, "package": PACKAGE, "commands": []}
@@ -242,7 +260,6 @@ def main():
         status["final_screen"] = validate_png(final)
         if (data_container / "Documents/launch-auth-finished.txt").exists():
             raise AssertionError("Auth finished before Home screenshot; pending-session proof is invalid")
-        status["home_frame_proof"] = json.loads(run("swift", "tests/verify_home_frame.swift", final))
         stop_recording()
         recorder_log.close()
         recorder_log = None
@@ -251,6 +268,9 @@ def main():
             raise AssertionError("Native launch video is empty or truncated")
         status["video_atoms"] = validate_video(video)
         status["video_bytes"] = video.stat().st_size
+        # Finish the encoder before starting expensive Vision/Swift work. The
+        # screenshot above was captured while the real session was still held.
+        status["home_frame_proof"] = parse_home_proof(run("swift", "tests/verify_home_frame.swift", final))
 
         # Extract real recorded frames only when ffmpeg is present on the runner.
         ffmpeg = shutil.which("ffmpeg")
