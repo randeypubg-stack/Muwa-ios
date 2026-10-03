@@ -22,15 +22,22 @@ struct LibraryDetailView: View {
           heading
           content(layout: layout)
         }
-        .padding(.horizontal, layout.horizontalPadding)
+        .padding(.horizontal, max(20, layout.horizontalPadding))
         .padding(.top, 10)
         .padding(.bottom, player.hasStartedPlaybackThisSession ? 170 : 90)
         .adaptiveFrame(maxWidth: min(layout.contentMaxWidth, 980))
       }
-      .background(Color.clear)
+      .background(AppBackground().ignoresSafeArea())
     }
-    .navigationBarTitleDisplayMode(.inline)
-    .toolbarBackground(.hidden, for: .navigationBar)
+    .libraryNavigation(title: title)
+    .toolbar {
+      if destination == .playlist && !library.playlists.isEmpty {
+        ToolbarItem(placement: .topBarTrailing) {
+          Button { createPlaylistPresented = true } label: { Image(systemName: "plus") }
+            .accessibilityLabel("Создать плейлист")
+        }
+      }
+    }
     .sheet(isPresented: $premiumPresented) {
       PremiumView()
     }
@@ -74,7 +81,7 @@ struct LibraryDetailView: View {
       )
 
     case .playlist:
-      playlistsContent
+      playlistsContent(layout: layout)
 
     case .publications:
       publicationList(
@@ -98,11 +105,11 @@ struct LibraryDetailView: View {
   private var heading: some View {
     VStack(alignment: .leading, spacing: 5) {
       Text(title)
-        .font(.system(size: 28, weight: .bold, design: .rounded))
+        .font(MuwaTypography.display)
 
       Text(subtitle)
-        .font(.caption)
-        .foregroundStyle(.secondary)
+        .font(MuwaTypography.detail)
+        .foregroundStyle(MuwaPalette.secondary)
     }
   }
 
@@ -110,7 +117,7 @@ struct LibraryDetailView: View {
     switch destination {
     case .favorites: return "Избранные"
     case .history: return "Недавно прослушано"
-    case .playlist: return "Мои плей-листы"
+    case .playlist: return "Плейлисты"
     case .publications: return "Мои публикации"
     case .drafts: return "Черновики публикаций"
     case .downloads: return "Загрузки"
@@ -121,126 +128,73 @@ struct LibraryDetailView: View {
     switch destination {
     case .favorites: return "Сохранённые любимые нашиды"
     case .history: return "Последние прослушивания"
-    case .playlist: return "Создавайте отдельные подборки и добавляйте в них нашиды"
+    case .playlist: return "Ваши нашиды, собранные по настроению"
     case .publications: return "Статусы отправленных публикаций"
     case .drafts: return "Незавершённые публикации"
     case .downloads: return "Нашиды, сохранённые для офлайн-прослушивания"
     }
   }
 
-  private var playlistsContent: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      Button {
-        createPlaylistPresented = true
-      } label: {
-        HStack(spacing: 10) {
-          Image(systemName: "plus")
-          Text("Создать плей-лист")
-          Spacer()
-          Image(systemName: "chevron.right")
-            .font(.caption.bold())
-            .foregroundStyle(.secondary)
-        }
-        .font(.system(size: 14, weight: .bold))
-        .padding(.horizontal, 16)
-        .frame(height: 52)
-        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 18))
-        .overlay(
-          RoundedRectangle(cornerRadius: 18)
-            .stroke(.white.opacity(0.10), lineWidth: 1)
-        )
-      }
-      .buttonStyle(.plain)
-
-      if library.playlists.isEmpty {
-        EmptyStateView(
-          icon: "music.note.list",
-          title: "Плей-листов пока нет",
-          message: "Создайте первый плей-лист, затем добавляйте в него нашиды из меню трека или большого плеера.",
-          actionTitle: "Создать плей-лист",
-          action: { createPlaylistPresented = true }
-        )
-      } else {
-        VStack(spacing: 10) {
-          ForEach(library.playlists) { playlist in
-            playlistCard(playlist)
-          }
-        }
+  @ViewBuilder
+  private func playlistsContent(layout: AdaptiveLayout) -> some View {
+    if library.playlists.isEmpty {
+      EmptyStateView(
+        icon: "rectangle.stack.fill",
+        title: "Соберите свою подборку",
+        message: "Для дороги, спокойного вечера или любимых нашидов — всё в одном плейлисте.",
+        actionTitle: "Создать плейлист",
+        action: { createPlaylistPresented = true }
+      )
+      .padding(.top, 18)
+    } else {
+      LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: layout.listColumns), spacing: 14) {
+        ForEach(library.playlists) { playlist in playlistCard(playlist) }
       }
     }
   }
 
   private func playlistCard(_ playlist: UserPlaylist) -> some View {
-    HStack(spacing: 10) {
+    let tracks = library.tracks(in: playlist.id)
+    return HStack(spacing: 4) {
       NavigationLink {
         PlaylistDetailView(playlistID: playlist.id)
       } label: {
-        HStack(spacing: 12) {
-          ZStack {
-            RoundedRectangle(cornerRadius: 14)
-              .fill(.white.opacity(0.06))
-
-            Image(systemName: "music.note.list")
-              .font(.system(size: 18, weight: .semibold))
+        HStack(spacing: 16) {
+          PlaylistArtwork(tracks: tracks).frame(width: 72, height: 72)
+          VStack(alignment: .leading, spacing: 6) {
+            Text(playlist.name).font(MuwaTypography.title).foregroundStyle(MuwaPalette.text).lineLimit(2)
+            Text(PlaylistSummary.text(for: tracks)).font(MuwaTypography.caption).foregroundStyle(MuwaPalette.secondary)
           }
-          .frame(width: 46, height: 46)
-
-          VStack(alignment: .leading, spacing: 4) {
-            Text(playlist.name)
-              .font(.subheadline.bold())
-              .lineLimit(1)
-
-            Text("\(playlist.trackIDs.count) нашид(ов)")
-              .font(.caption)
-              .foregroundStyle(.secondary)
-          }
-
-          Spacer()
+          Spacer(minLength: 0)
         }
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
       }
-      .buttonStyle(.plain)
-      .frame(maxWidth: .infinity)
-
+      .buttonStyle(MuwaPressStyle(scale: 0.99))
       Menu {
-        if let first = library.tracks(in: playlist.id).first {
+        if let first = tracks.first {
           Button {
+            library.replaceQueue(with: tracks)
             player.play(first)
-          } label: {
-            Label("Воспроизвести", systemImage: "play.fill")
-          }
+          } label: { Label("Воспроизвести", systemImage: "play.fill") }
+          Button {
+            for track in tracks { library.ensureQueueContains(track) }
+          } label: { Label("Добавить в очередь", systemImage: "text.badge.plus") }
+          Divider()
         }
-
-        Button {
-          for track in library.tracks(in: playlist.id) {
-            library.ensureQueueContains(track)
-          }
-        } label: {
-          Label("Добавить в очередь", systemImage: "text.badge.plus")
-        }
-
-        Divider()
-
-        Button(role: .destructive) {
-          library.deletePlaylist(playlist.id)
-        } label: {
-          Label("Удалить плей-лист", systemImage: "trash")
-        }
+        Button(role: .destructive) { library.deletePlaylist(playlist.id) }
+          label: { Label("Удалить плейлист", systemImage: "trash") }
       } label: {
-        Image(systemName: "ellipsis")
-          .rotationEffect(.degrees(90))
-          .font(.system(size: 17, weight: .semibold))
-          .frame(width: 40, height: 46)
-          .contentShape(Rectangle())
+        Image(systemName: "ellipsis").rotationEffect(.degrees(90))
+          .font(.system(.body).weight(.semibold)).foregroundStyle(MuwaPalette.secondary)
+          .frame(width: 44, height: 52).contentShape(Rectangle())
       }
-      .buttonStyle(.plain)
+      .accessibilityLabel("Действия с плейлистом \(playlist.name)")
     }
-    .padding(12)
-    .background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 20))
-    .overlay(
-      RoundedRectangle(cornerRadius: 20)
-        .stroke(.white.opacity(0.08), lineWidth: 1)
-    )
+    .padding(14)
+    .nativeCard(cornerRadius: MuwaRadius.card)
+    .overlay(RoundedRectangle(cornerRadius: MuwaRadius.card).strokeBorder(.white.opacity(0.08), lineWidth: 0.75))
   }
 
   @ViewBuilder
@@ -411,240 +365,4 @@ struct LibraryDetailView: View {
     }
   }
 }
-
-struct PlaylistDetailView: View {
-  let playlistID: UUID
-
-  @EnvironmentObject private var player: PlayerManager
-  @EnvironmentObject private var library: LibraryStore
-  @EnvironmentObject private var downloads: DownloadManager
-  @EnvironmentObject private var premium: PremiumManager
-
-  @State private var premiumPresented = false
-  @State private var actionError: String?
-
-  private var playlist: UserPlaylist? {
-    library.playlist(id: playlistID)
-  }
-
-  var body: some View {
-    GeometryReader { proxy in
-      let layout = AdaptiveLayout(size: proxy.size, safeArea: proxy.safeAreaInsets)
-
-      ScrollView(showsIndicators: false) {
-        VStack(alignment: .leading, spacing: 16) {
-          VStack(alignment: .leading, spacing: 4) {
-            Text(playlist?.name ?? "Плей-лист")
-              .font(.system(size: 27, weight: .bold, design: .rounded))
-
-            Text("\(playlist?.trackIDs.count ?? 0) нашид(ов)")
-              .font(.caption)
-              .foregroundStyle(.secondary)
-          }
-
-          if let playlist, playlist.trackIDs.isEmpty {
-            EmptyStateView(
-              icon: "music.note.list",
-              title: "Плей-лист пуст",
-              message: "Добавляйте нашиды через вертикальное меню ⋮ или из большого плеера."
-            )
-          } else {
-            LazyVStack(spacing: 0) {
-              ForEach(library.tracks(in: playlistID)) { track in
-                playlistTrackRow(track)
-                Divider()
-                  .overlay(.white.opacity(0.05))
-                  .padding(.leading, 58)
-              }
-            }
-          }
-        }
-        .padding(.horizontal, layout.horizontalPadding)
-        .padding(.top, 10)
-        .padding(.bottom, player.hasStartedPlaybackThisSession ? 170 : 90)
-        .adaptiveFrame(maxWidth: min(layout.contentMaxWidth, 920))
-      }
-    }
-    .navigationBarTitleDisplayMode(.inline)
-    .toolbarBackground(.hidden, for: .navigationBar)
-    .sheet(isPresented: $premiumPresented) {
-      PremiumView()
-    }
-    .alert(
-      "Не удалось выполнить действие",
-      isPresented: Binding(
-        get: { actionError != nil },
-        set: { if !$0 { actionError = nil } }
-      )
-    ) {
-      Button("OK", role: .cancel) {}
-    } message: {
-      Text(actionError ?? "Неизвестная ошибка")
-    }
-  }
-
-  private func playlistTrackRow(_ track: Track) -> some View {
-    HStack(spacing: 8) {
-      Button {
-        player.play(track)
-      } label: {
-        HStack(spacing: 11) {
-          ArtworkView(
-            url: track.artworkURL,
-            cornerRadius: 12,
-            placeholderSystemImage: "music.note"
-          )
-          .frame(width: 44, height: 44)
-
-          VStack(alignment: .leading, spacing: 3) {
-            Text(track.title)
-              .font(.system(size: 14, weight: .semibold))
-              .lineLimit(1)
-
-            Text(track.artist)
-              .font(.system(size: 10))
-              .foregroundStyle(.secondary)
-              .lineLimit(1)
-          }
-
-          Spacer(minLength: 8)
-
-          if player.currentTrack?.id == track.id && player.isPlaying {
-            Image(systemName: "waveform")
-              .symbolEffect(.variableColor.iterative, options: .repeating)
-              .foregroundStyle(.yellow)
-          }
-        }
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-      .frame(maxWidth: .infinity)
-
-      Menu {
-        Button {
-          library.addNext(track, after: player.currentTrack)
-        } label: {
-          Label("Воспроизвести следующим", systemImage: "text.insert")
-        }
-
-        Button {
-          library.ensureQueueContains(track)
-        } label: {
-          Label("Добавить в очередь", systemImage: "text.badge.plus")
-        }
-
-        if downloads.isDownloaded(track) {
-          Button(role: .destructive) {
-            do {
-              try downloads.remove(track)
-            } catch {
-              actionError = error.localizedDescription
-            }
-          } label: {
-            Label("Удалить загрузку", systemImage: "trash")
-          }
-        } else {
-          Button {
-            guard FeatureAccess.allowsPremiumFeature(isPremium: premium.isPremium) else {
-              premiumPresented = true
-              return
-            }
-
-            Task {
-              do {
-                try await downloads.download(track)
-              } catch {
-                actionError = error.localizedDescription
-              }
-            }
-          } label: {
-            Label("Скачать", systemImage: "arrow.down.circle")
-          }
-        }
-
-        Divider()
-
-        Button(role: .destructive) {
-          library.removeTrack(track, from: playlistID)
-        } label: {
-          Label("Удалить из плей-листа", systemImage: "minus.circle")
-        }
-      } label: {
-        Image(systemName: "ellipsis")
-          .rotationEffect(.degrees(90))
-          .font(.system(size: 17, weight: .semibold))
-          .frame(width: 40, height: 44)
-          .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-      .accessibilityLabel("Действия с нашидом")
-    }
-    .padding(.vertical, 7)
-    .contentShape(Rectangle())
-  }
-}
-
-struct PlaylistCreateSheet: View {
-  @Environment(\.dismiss) private var dismiss
-  @State private var name = ""
-
-  let onCreate: (String) -> Void
-
-  var body: some View {
-    ZStack {
-      Color.black.ignoresSafeArea()
-
-      VStack(spacing: 18) {
-        HStack {
-          Text("Новый плей-лист")
-            .font(.title3.bold())
-
-          Spacer()
-
-          Button {
-            dismiss()
-          } label: {
-            Image(systemName: "xmark")
-              .frame(width: 38, height: 38)
-              .background(.white.opacity(0.07), in: Circle())
-          }
-          .buttonStyle(.plain)
-        }
-
-        TextField("Название", text: $name)
-          .textInputAutocapitalization(.sentences)
-          .padding(.horizontal, 14)
-          .frame(height: 48)
-          .background(
-            .white.opacity(0.06),
-            in: RoundedRectangle(cornerRadius: 15)
-          )
-
-        Button {
-          let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-          guard !trimmed.isEmpty else { return }
-          onCreate(trimmed)
-          dismiss()
-        } label: {
-          Text("Создать")
-            .font(.system(size: 15, weight: .bold))
-            .foregroundStyle(.black)
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
-            .background(.white, in: RoundedRectangle(cornerRadius: 16))
-        }
-        .buttonStyle(.plain)
-        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        .opacity(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.48 : 1)
-
-        Spacer()
-      }
-      .padding(20)
-    }
-    .presentationDetents([.height(260)])
-    .presentationDragIndicator(.hidden)
-  }
-}
-
 

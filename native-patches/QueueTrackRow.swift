@@ -4,7 +4,6 @@ struct QueueTrackRow: View {
   let track: Track
   let isCurrent: Bool
   let isPlaying: Bool
-  let isDropTarget: Bool
   let play: () -> Void
   let remove: () -> Void
   let move: (Int) -> Void
@@ -43,6 +42,7 @@ struct QueueTrackRow: View {
         .contentShape(Rectangle())
       }
       .buttonStyle(MuwaPressStyle(scale: 0.99))
+      .accessibilityIdentifier("queue-play-" + track.id)
       .accessibilityLabel("\(track.title), \(track.artist), \(track.durationText)")
       .accessibilityAddTraits(isCurrent ? .isSelected : [])
 
@@ -56,17 +56,10 @@ struct QueueTrackRow: View {
       .buttonStyle(MuwaPressStyle(scale: 0.90))
       .accessibilityLabel("Удалить \(track.title) из очереди")
 
-      Image(systemName: "line.3.horizontal")
-        .font(.system(.body, design: .rounded).weight(.medium))
-        .foregroundStyle(MuwaPalette.secondary.opacity(0.7))
-        .frame(width: 44, height: 44)
-        .contentShape(Rectangle())
-        .draggable(track.id)
-        .accessibilityLabel("Порядок: \(track.title)")
-        .accessibilityHint("Удерживайте, чтобы переместить нашид")
-        .accessibilityAction(named: Text("Переместить выше")) { move(-1) }
-        .accessibilityAction(named: Text("Переместить ниже")) { move(1) }
+
     }
+    .accessibilityAction(named: Text("Переместить выше")) { move(-1) }
+    .accessibilityAction(named: Text("Переместить ниже")) { move(1) }
     .padding(10)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background {
@@ -75,8 +68,7 @@ struct QueueTrackRow: View {
     }
     .overlay {
       RoundedRectangle(cornerRadius: 22, style: .continuous)
-        .strokeBorder(isDropTarget ? MuwaPalette.ice.opacity(0.55)
-                      : .white.opacity(isCurrent ? 0.12 : 0.055), lineWidth: 0.75)
+        .strokeBorder(.white.opacity(isCurrent ? 0.12 : 0.055), lineWidth: 0.75)
     }
   }
 }

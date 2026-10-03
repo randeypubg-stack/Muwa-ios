@@ -170,8 +170,16 @@ final class LibraryStore: ObservableObject {
     persistQueue()
   }
 
+  // List offsets refer to visible tracks, not unavailable saved catalogue IDs.
+  // Preserve those IDs and their slots when the catalogue is temporarily smaller.
   func moveQueue(fromOffsets source: IndexSet, toOffset destination: Int) {
-    queueIDs.move(fromOffsets: source, toOffset: destination)
+    var visible = queueTracks.map(\.id)
+    guard !source.isEmpty, source.allSatisfy({ visible.indices.contains($0) }),
+          (0...visible.count).contains(destination) else { return }
+    visible.move(fromOffsets: source, toOffset: destination)
+    let visibleIDs = Set(visible)
+    var next = visible.makeIterator()
+    queueIDs = queueIDs.map { visibleIDs.contains($0) ? next.next()! : $0 }
     persistQueue()
   }
 

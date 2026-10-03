@@ -20,7 +20,7 @@ with tempfile.TemporaryDirectory() as directory:
     subprocess.run([sys.executable, str(script), str(root)], check=True)
     assert first == (root / 'MuwaNasheeds.xcodeproj/project.pbxproj').read_bytes(), 'Registration is not idempotent'
     assert b'SubtitlePanel.swift' not in first and not (root / 'Sources/Views/Player/SubtitlePanel.swift').exists(), 'Retired subtitle UI is still compiled'
-    for name in ['AuthService.swift', 'AuthManager.swift', 'DownloadManager.swift', 'LaunchExperience.swift', 'CatalogStore.swift', 'Track.swift', 'BackendConfig.swift', 'PublicationUploadService.swift', 'AppBackground.swift', 'DesignTokens.swift', 'Typography.swift', 'Motion.swift', 'ScreenHeader.swift', 'HomeCollectionViews.swift', 'QueueTrackRow.swift', 'DisplayText.swift']:
+    for name in ['AuthService.swift', 'AuthManager.swift', 'DownloadManager.swift', 'LaunchExperience.swift', 'CatalogStore.swift', 'Track.swift', 'BackendConfig.swift', 'PublicationUploadService.swift', 'AppBackground.swift', 'DesignTokens.swift', 'Typography.swift', 'Motion.swift', 'ScreenHeader.swift', 'HomeCollectionViews.swift', 'QueueTrackRow.swift', 'DisplayText.swift', 'LibraryComponents.swift', 'PlaylistDetailView.swift', 'PlaylistCreateSheet.swift', 'PlaylistTrackPicker.swift', 'EmptyStateView.swift']:
         assert first.count(f'/* {name} in Sources */ ='.encode()) == 1, f'Duplicate compiled implementation: {name}'
         assert first.count(f'/* {name} */ ='.encode()) == 1, f'Duplicate source reference: {name}'
     scenes = plistlib.loads(info.read_bytes())['UIApplicationSceneManifest']['UISceneConfigurations']

@@ -34,6 +34,11 @@ files = {
     'ScreenHeader.swift': 'Views/Components',
     'HomeCollectionViews.swift': 'Views/Home',
     'QueueTrackRow.swift': 'Views/Player',
+    'LibraryComponents.swift': 'Views/Library',
+    'PlaylistDetailView.swift': 'Views/Library',
+    'PlaylistCreateSheet.swift': 'Views/Library',
+    'PlaylistTrackPicker.swift': 'Views/Library',
+    'EmptyStateView.swift': 'Views/Components',
 }
 for name, directory in files.items():
     path = root / 'Sources' / directory / name

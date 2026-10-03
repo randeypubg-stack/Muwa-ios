@@ -5,7 +5,6 @@ struct QueueView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @EnvironmentObject private var player: PlayerManager
   @EnvironmentObject private var library: LibraryStore
-  @State private var dropTarget: String?
 
   var body: some View {
     ZStack {
@@ -17,36 +16,34 @@ struct QueueView: View {
                                  description: Text("Добавьте нашиды через меню ⋮."))
             .foregroundStyle(MuwaPalette.secondary)
         } else {
-          ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: 8) {
-              ForEach(library.queueTracks) { track in
-                QueueTrackRow(
-                  track: track,
-                  isCurrent: player.currentTrack?.id == track.id,
-                  isPlaying: player.isPlaying,
-                  isDropTarget: dropTarget == track.id,
-                  play: { player.play(track); dismiss() },
-                  remove: {
-                    withAnimation(reduceMotion ? nil : MuwaMotion.reorder) {
-                      library.removeFromQueue(track)
-                    }
-                  },
-                  move: { delta in moveBy(track.id, delta: delta) }
-                )
-                .dropDestination(for: String.self) { items, _ in
-                  guard let draggedID = items.first else { return false }
-                  return moveQueueItem(draggedID, to: track.id)
-                } isTargeted: { targeted in
-                  if targeted { dropTarget = track.id }
-                  else if dropTarget == track.id { dropTarget = nil }
-                }
-                .transition(.opacity.combined(with: .scale(scale: reduceMotion ? 1 : 0.98)))
+          List {
+            ForEach(library.queueTracks) { track in
+              QueueTrackRow(
+                track: track,
+                isCurrent: player.currentTrack?.id == track.id,
+                isPlaying: player.isPlaying,
+                play: { player.play(track); dismiss() },
+                remove: {
+                  withAnimation(reduceMotion ? nil : MuwaMotion.reorder) { library.removeFromQueue(track) }
+                },
+                move: { delta in moveBy(track.id, delta: delta) }
+              )
+              .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 12))
+              .listRowSeparator(.hidden)
+              .listRowBackground(Color.clear)
+              .accessibilityIdentifier("queue-row-" + track.id)
+            }
+            .onMove { source, destination in
+              withAnimation(reduceMotion ? nil : MuwaMotion.reorder) {
+                library.moveQueue(fromOffsets: source, toOffset: destination)
               }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 30)
-            .animation(reduceMotion ? nil : MuwaMotion.reorder, value: library.queueIDs)
           }
+          .listStyle(.plain)
+          .scrollContentBackground(.hidden)
+          .environment(\.editMode, .constant(.active))
+          .safeAreaPadding(.bottom, 20)
+
         }
       }
     }
@@ -91,19 +88,8 @@ struct QueueView: View {
   private func moveBy(_ id: String, delta: Int) {
     let ids = library.queueTracks.map(\.id)
     guard let index = ids.firstIndex(of: id), ids.indices.contains(index + delta) else { return }
-    _ = moveQueueItem(id, to: ids[index + delta])
-  }
-
-  @discardableResult
-  private func moveQueueItem(_ draggedID: String, to targetID: String) -> Bool {
-    let ids = library.queueIDs
-    guard draggedID != targetID,
-          let sourceIndex = ids.firstIndex(of: draggedID),
-          let targetIndex = ids.firstIndex(of: targetID) else { return false }
     withAnimation(reduceMotion ? nil : MuwaMotion.reorder) {
-      library.moveQueue(fromOffsets: IndexSet(integer: sourceIndex),
-                        toOffset: sourceIndex < targetIndex ? targetIndex + 1 : targetIndex)
+      library.moveQueue(fromOffsets: IndexSet(integer: index), toOffset: delta > 0 ? index + 2 : index - 1)
     }
-    return true
   }
 }

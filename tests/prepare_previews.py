@@ -55,10 +55,12 @@ s=s.replace(needle, '''    .task {
         playerExpansion = 1
       }
       if args.contains("--audit-profile") { selection = .profile }; if args.contains("--audit-search") { searchPresented = true }
-      if args.contains("--audit-library") {
+      if args.contains("--audit-library") || args.contains("--audit-library-empty") || args.contains("--audit-playlist-create") {
         selection = .library
         requestedLibraryDestination = .playlist
-        if library.playlists.isEmpty {
+        if args.contains("--audit-library-empty") || args.contains("--audit-playlist-create") {
+          for playlist in library.playlists { library.deletePlaylist(playlist.id) }
+        } else if library.playlists.isEmpty {
           let id = library.createPlaylist(name: "Избранные нашиды")
           for track in Track.catalog { library.addTrack(track, to: id) }
           _ = library.createPlaylist(name: "Для дороги")
@@ -140,4 +142,10 @@ s=s.replace(needle, '''    .onAppear {
       }
     }
 '''+needle,1)
+s=s.replace('.presentationDetents([.medium, .large])', '.presentationDetents(ProcessInfo.processInfo.arguments.contains("--audit-interactions") ? [.large] : [.medium, .large])')
+p.write_text(s)
+
+# Open the actual existing create sheet for layout capture, never a stand-in.
+p=root/'Sources/Views/Library/LibraryDetailView.swift'
+s=p.read_text().replace('    .libraryNavigation(title: title)', '    .task { if ProcessInfo.processInfo.arguments.contains("--audit-playlist-create") { createPlaylistPresented = true } }\n    .libraryNavigation(title: title)',1)
 p.write_text(s)

@@ -133,6 +133,7 @@ struct LibraryView: View {
             .background(Color.clear)
           }
           .background(AppBackground().ignoresSafeArea())
+          .navigationTitle("Библиотека")
           .navigationBarHidden(true)
           .toolbarBackground(.hidden, for: .navigationBar)
           .navigationDestination(for: LibraryDestination.self) { destination in
