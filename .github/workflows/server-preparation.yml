@@ -22,7 +22,10 @@ jobs:
       - name: Bash syntax and ShellCheck
         run: |
           bash -n tools/server/bootstrap-ubuntu.sh
-          shellcheck tools/server/bootstrap-ubuntu.sh
+          bash -n tools/server/test-swap.sh
+          shellcheck tools/server/bootstrap-ubuntu.sh tools/server/test-swap.sh
+      - name: Real swap allocation and preservation checks
+        run: bash tools/server/test-swap.sh
       - name: Non-root execution must stop before mutations
         shell: bash
         run: |
@@ -34,3 +37,20 @@ jobs:
           [[ "$output" == *'Run in the server console as root.'* ]]
       - name: Read-only Ubuntu host preflight
         run: sudo bash tools/server/bootstrap-ubuntu.sh --check
+  ubuntu26-swap:
+    runs-on: ubuntu-24.04
+    container: ubuntu:26.04@sha256:3595d7fc4286a33fad0fd853a4063e654287a9c3787437d7937c94ca3f7a804e
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install formatting tools for an isolated fixture
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends util-linux
+      - name: Verify Ubuntu 26 coreutils and swap allocation
+        shell: bash
+        run: |
+          dd --version
+          bash tools/server/test-swap.sh

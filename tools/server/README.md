@@ -21,6 +21,7 @@ multiline script into the phone terminal. A downloaded script preserves newlines
 ```bash
 bash bootstrap-ubuntu.sh --check
 bash bootstrap-ubuntu.sh
+bash bootstrap-ubuntu.sh --finish
 ```
 
 `--check` only reads host state. Installation requires Ubuntu 22.04, 24.04 or
@@ -28,19 +29,27 @@ bash bootstrap-ubuntu.sh
 official Docker Ubuntu documentation and signed `resolute` release were checked
 on 3 October 2026. The installer validates Docker's primary signing fingerprint.
 
-The script installs Docker Engine/Compose v2, Python/venv, Git, jq and FFmpeg for
+`--finish` resumes after package installation: it requires healthy Docker/Compose
+and all prerequisite packages, then completes swap, log rotation and the host
+report without running APT or restarting Docker.
+
+The script installs Docker Engine/the Compose plugin, Python/venv, Git, jq and FFmpeg for
 the prepared Telegram importer. A new Docker daemon receives rotated JSON logs
 (10 MiB, three files per container). An existing healthy Docker/Compose install,
 configuration and running containers remain unchanged. Conflicting runtimes are
 reported rather than removed. No full system upgrade, reboot, SSH change or
 Tailscale installation is performed.
 
-If no swap is active, the script adds a 2 GiB file at `/var/lib/muwa/swapfile` and
-its own fstab entry. Existing active swap is preserved. An unrecognized file at
-that path causes a stop, never reformatting. A stopped run may be retried; existing
-data and differing managed configurations are not overwritten. A process lock
-prevents concurrent installation. An interrupted partial swap creation requires
-manual review; do not blindly delete an existing swap file.
+If no swap is active, the script prepares a 2 GiB file in a private temporary
+directory on the same filesystem, formats it, and publishes it with an exclusive
+hard link at `/var/lib/muwa/swapfile`. A failed allocation cannot publish a
+partial file at that path. Existing swap files, symlinks and directories are not
+replaced. Normal write/format/publish failures remove the temporary staging
+directory. SIGKILL/power loss can leave hidden staging directories requiring
+manual review. A valid but inactive swap file is reused; an unrecognized managed
+path causes a stop, never reformatting. The fstab entry is added once; conflicting
+or duplicate declarations are preserved for review. A process lock prevents
+concurrent installation. Existing active swap is preserved.
 
 Installation output is saved in `/var/log/muwa-bootstrap.log`, root-readable
 only, with a 2 MiB logrotate limit and three compressed generations. The final
@@ -66,7 +75,15 @@ off-host backups with a restoration check; `/var/backups/muwa` is only a local
 staging directory. Do not activate paid ASR. Telegram export/history access still
 needs the owner's channel confirmation and local credentials.
 
-Validation before delivery: Bash syntax, ShellCheck and root/OS preflight checks.
-The CI read-only check runs on Ubuntu 24.04. Package installation and swap on the
-owner's actual Ubuntu 26.04 host remain unverified until its command output is
-returned; do not report this script as already deployed.
+The owner's 3 October 2026 output confirms Docker Engine 29.8.2 and Compose
+5.6.0 installed successfully. The first installer stopped before swap creation:
+`excl` was incorrectly supplied as an output flag to `dd`; the corrected code
+uses `conv=excl`. Full host preparation on the real VPS still requires its final
+output; do not call the swap or application deployed prematurely.
+
+Validation: Bash syntax, ShellCheck, root/OS preflight, and real 4 MiB allocation
+and formatting using GNU coreutils and Ubuntu 26 coreutils. The file tests also
+verify preservation of files/symlinks/directories, a real write interruption via
+`ulimit`, staging cleanup, and idempotent/conflicting/duplicate fstab handling.
+They never activate swap or touch `/etc/fstab`. CI includes an isolated Ubuntu
+26.04 container in addition to the Ubuntu 24.04 read-only host preflight.
