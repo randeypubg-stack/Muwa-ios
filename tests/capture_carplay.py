@@ -173,17 +173,6 @@ try:
         time.sleep(0.2)
         run('cliclick', f'c:{x},{y}')
         status['mouse_position'] = run('cliclick', 'p').strip()
-        if not proof.exists():
-            # System Events already owns the Simulator accessibility session.
-            # Some hosted macOS sessions drop events from a newly installed
-            # command-line mouse tool even though it returns success.
-            run('osascript', '-e', f'tell application "System Events" to tell process "Simulator" to click at {{{x}, {y}}}')
-            time.sleep(2)
-        if not proof.exists():
-            # The native launcher starts with Messages focused; Muwa is the
-            # first tile on its second row. CarPlay also supports directional
-            # controls, so exercise that input route when pointer input stalls.
-            run('osascript', '-e', 'tell application "System Events" to tell process "Simulator"\nkey code 125\ndelay 0.2\nkey code 36\nend tell')
         run('screencapture', '-x', str(out / 'desktop-after-input.png'))
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline and not proof.exists():
@@ -213,3 +202,8 @@ except Exception as error:
 finally:
     save_status()
     print(json.dumps(status, ensure_ascii=False), flush=True)
+
+# Preserve diagnostics, but fail the check when no real Muwa scene was captured.
+# A successful signing/build or launcher image must not hide a runtime crash.
+if not status['captured']:
+    raise SystemExit(1)

@@ -14,12 +14,12 @@ on:
       source_run_id:
         description: Verified native build run ID
         type: string
-        default: "37073092321"
+        default: "37079680481"
         required: true
       source_artifact_name:
         description: Full-source artifact from that build
         type: string
-        default: Muwa-Full-Source-95
+        default: Muwa-Full-Source-96
         required: true
   push:
     branches: [feat/muwa-native-build35]
@@ -46,8 +46,8 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ${{ inputs.source_artifact_name || 'Muwa-Full-Source-95' }}
-          run-id: ${{ inputs.source_run_id || '37073092321' }}
+          name: ${{ inputs.source_artifact_name || 'Muwa-Full-Source-96' }}
+          run-id: ${{ inputs.source_run_id || '37079680481' }}
           github-token: ${{ github.token }}
           path: build/carplay-source
       - name: Build CarPlay review with Xcode simulator signing
@@ -73,7 +73,7 @@ jobs:
           python3 tests/prepare_previews.py "$CARPLAY_SOURCE"
           set -o pipefail
           xcodebuild -project "$CARPLAY_SOURCE/MuwaNasheeds.xcodeproj" -scheme MuwaNasheeds -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$PWD/build/PreviewDerivedData" CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= MUWA_CARPLAY_ENTITLEMENTS=MuwaCarPlay.entitlements build 2>&1 | tee build/carplay-xcodebuild.log
-      - name: Capture real external display when supported
+      - name: Require a connected Muwa CarPlay scene and native screenshot
         run: |
           if ! command -v cliclick >/dev/null; then brew install cliclick; fi
           python3 tests/capture_carplay.py
