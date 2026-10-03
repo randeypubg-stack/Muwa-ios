@@ -75,6 +75,7 @@ jobs:
           xcodebuild -project "$CARPLAY_SOURCE/MuwaNasheeds.xcodeproj" -scheme MuwaNasheeds -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$PWD/build/PreviewDerivedData" CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= MUWA_CARPLAY_ENTITLEMENTS=MuwaCarPlay.entitlements build 2>&1 | tee build/carplay-xcodebuild.log
       - name: Require a connected Muwa CarPlay scene and native screenshot
         run: |
+          if ! command -v cliclick >/dev/null; then brew install cliclick; fi
           python3 tests/capture_carplay.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()

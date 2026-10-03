@@ -5,7 +5,8 @@ import {
 } from "./requestSecurity";
 describe("Muwa bounded request parsing", () => {
   it("rejects oversized bodies with and without Content-Length", async () => {
-    for (const headers of [{}, { "Content-Length": "9999" }]) {
+    const cases: Record<string, string>[] = [{}, { "Content-Length": "9999" }];
+    for (const headers of cases) {
       const request = new Request("https://muwa-app.floot.app/", {
         method: "POST",
         headers,
@@ -21,14 +22,15 @@ describe("Muwa bounded request parsing", () => {
     }
   });
   it("checks MIME and origin before mutation, including cross-site requests without Origin", () => {
-    for (const headers of [
+    const cases: Record<string, string>[] = [
       { "Content-Type": "text/plain" },
       {
         "Content-Type": "application/json",
         Origin: "https://attacker.invalid",
       },
       { "Content-Type": "application/json", "Sec-Fetch-Site": "cross-site" },
-    ])
+    ];
+    for (const headers of cases)
       expect(() =>
         guardMutation(
           new Request("https://muwa-app.floot.app/", {

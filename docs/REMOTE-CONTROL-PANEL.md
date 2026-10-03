@@ -1,4 +1,4 @@
-# Muwa control panel — 2 October 2026
+# Muwa control panel — updated 3 October 2026
 
 Live: https://muwa-app.floot.app/admin
 Owner: the existing Muwa account explicitly selected by the owner (server role admin).
@@ -35,17 +35,22 @@ Verification:
 - Android CI 37005427223: SUCCESS (build/unit/lint + 3 device review jobs).
 - Local Android debug/release/unit/lint and Xcode registration idempotency passed.
 
-Remaining housekeeping:
-The provider hit its 100-actions/day tool limit during final QA cleanup. It resets
-3 October 2026 at 00:00 UTC. The production publish completed before this refusal.
-The QA track was archived through the live console API and is absent from the
-public catalogue (the 7 original tracks remain public). Known QA sessions were
-logged out. The temporary QA account (id 9), its journal/archived records and small
-storage files still require deletion after reset. Only the owner's real account
-should remain admin after this cleanup; do not grant Premium or change owner data.
-The exact scoped SQL and storage key list are in the private workspace review
-folder `/workspace/artifacts/Muwa-admin-review/`; that folder contains test
-credentials and MUST NOT be committed or included wholesale in downloadable ZIPs.
+Security update and cleanup completed 3 October 2026:
+The additive security migration and hardened upload/media/auth/diagnostics code
+are published. Real conditional private PUT, hash verification, idempotent retry,
+submission marker, moderation, publication, media SHA and HTTP 206 Range all pass.
+Diagnostics duplicate UUIDs produce one database event. Full Floot typecheck and
+four pure Jasmine suites pass; production authentication/security smoke has
+13 passing checks and HttpOnly/Secure/SameSite=Lax cookies.
+All temporary QA accounts (9–12), their sessions, tracks, drafts, diagnostics,
+audit entries and uploaded files were removed. The original seven catalogue
+tracks remain; owner id 1 is the only admin and was not modified. Private QA
+credentials and raw local test files MUST NOT be included in Git or delivery ZIPs.
+Native iOS run 97 (`37080911175`) passes all nine jobs including real CarPlay;
+Android run 25 (`37064003532`) passes build/unit/lint and three device reviews.
+Existing optional ASR paths are paused server-side; manual and saved subtitles
+remain available. Free-plan automatic cleanup scheduling and hosting anti-frame
+headers are still outstanding; see `SECURITY-HARDENING-BUILD39.md`.
 
 Screenshots ZIP includes PNGs and a description only. Native IPA is unsigned and
 must be signed using the user's existing identity. Android CI offers a debug APK

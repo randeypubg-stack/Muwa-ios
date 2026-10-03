@@ -3,8 +3,10 @@
 CarPlay uses Apple's audio templates and the same PlayerManager, LibraryStore,
 DownloadManager, queue and MPRemoteCommandCenter as iPhone. No web content is used.
 
-Five native tabs show the catalog, favorites, downloaded audio, playlists and recent
-listening. Selecting a track uses that list as the playback queue. Now Playing offers
+Four native tabs show the catalog, favorites, downloaded audio and playlists.
+The catalog's first row opens recent listening. Five tabs exceed Apple's limit
+and crash CPTemplateApplicationScene; the four-tab layout is verified in CI.
+Selecting a track uses that list as the playback queue. Now Playing offers
 favorite, shuffle and repeat actions; its Up Next button opens the shared queue.
 System playback, seek, next and previous buttons use the existing remote commands.
 Playback errors offer Retry. List updates preserve the selected tab and navigation.
@@ -44,6 +46,12 @@ text recognition and a Simulator mouse click; opening the display alone does
 not select an app. The original launcher frame is retained for diagnosis.
 An unconnected external display is retained as a diagnostic image only; it is
 never marked as a successful Muwa CarPlay screenshot.
+
+Run `37080911175` (native build run 97) passed every job and captured Muwa's
+connected scene at 800×480, including the recent-listening row. Root-template
+completion confirms successful setup before writing the DEBUG connection proof.
+The capture script exits nonzero if the scene or screenshot is missing. Both the
+normal iPhone/iPad reviews and the dedicated CarPlay fixture pass in that run.
 
 Before distribution, test track selection from each tab, offline playback with the
 network disabled, queue advancement, favorites updated on either screen, interruption
