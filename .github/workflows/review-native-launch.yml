@@ -5,15 +5,15 @@ on:
     inputs:
       source_run_id:
         type: string
-        default: "37116765105"
+        default: "37126355145"
         required: true
       source_artifact_name:
         type: string
-        default: Muwa-Full-Source-100
+        default: Muwa-Full-Source-104
         required: true
       simulator_artifact_name:
         type: string
-        default: Muwa-build41-simulator-37116765105
+        default: Muwa-build42-simulator-37126355145
         required: true
   # Helper-only edits reuse this explicitly verified source/simulator pair;
   # native changes are reviewed by the normal build with its own fresh app.
@@ -42,8 +42,8 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ${{ inputs.source_artifact_name || 'Muwa-Full-Source-100' }}
-          run-id: ${{ inputs.source_run_id || '37116765105' }}
+          name: ${{ inputs.source_artifact_name || 'Muwa-Full-Source-104' }}
+          run-id: ${{ inputs.source_run_id || '37126355145' }}
           github-token: ${{ github.token }}
           path: build/launch-source
       - name: Verify the compiled source snapshot
@@ -54,8 +54,8 @@ jobs:
           python3 tests/verify_native_snapshot.py build/launch-source/native/Repository
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ${{ inputs.simulator_artifact_name || 'Muwa-build41-simulator-37116765105' }}
-          run-id: ${{ inputs.source_run_id || '37116765105' }}
+          name: ${{ inputs.simulator_artifact_name || 'Muwa-build42-simulator-37126355145' }}
+          run-id: ${{ inputs.source_run_id || '37126355145' }}
           github-token: ${{ github.token }}
           path: build
       - name: Unpack the native Simulator app

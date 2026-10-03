@@ -171,7 +171,35 @@ try:
         # click just to activate the external-display window.
         run('cliclick', f'c:{round(wx + ww / 2)},{round(wy + 14)}')
         time.sleep(0.2)
-        run('cliclick', f'c:{x},{y}')
+        # A cold Simulator may consume the first input while activating its
+        # external display. Keep a real pointer press long enough to span a
+        # guest input frame, and retry only while the fresh framebuffer still
+        # positively identifies Muwa's launcher tile. Never click coordinates
+        # from the launcher once the app has opened.
+        status['launcher_attempts'] = []
+        for attempt in range(3):
+            if proof.exists():
+                break
+            if attempt:
+                retry_frame = out / f'launcher-retry-{attempt}.png'
+                run('xcrun', 'simctl', 'io', udid, 'screenshot',
+                    '--display=external', str(retry_frame))
+                try:
+                    retry_recognition = run('swift', 'tests/locate_carplay_app.swift', str(retry_frame))
+                    retry_target = json.loads(next(line for line in reversed(retry_recognition.splitlines())
+                                                   if line.strip().startswith('{') and line.strip().endswith('}')))
+                    if retry_target['label'].lower() != 'muwa' or retry_target['confidence'] < 0.5:
+                        break
+                    x = round(wx + retry_target['x'] * scale)
+                    y = round(wy + wh - retry_target['height'] * scale + retry_target['y'] * scale)
+                except (RuntimeError, StopIteration, ValueError):
+                    break
+            status['launcher_attempts'].append({'attempt': attempt + 1, 'x': x, 'y': y})
+            save_status()
+            run('cliclick', f'm:{x},{y}', 'w:300', f'dd:{x},{y}', 'w:150', f'du:{x},{y}')
+            input_deadline = time.monotonic() + 5
+            while time.monotonic() < input_deadline and not proof.exists():
+                time.sleep(0.2)
         status['mouse_position'] = run('cliclick', 'p').strip()
         run('screencapture', '-x', str(out / 'desktop-after-input.png'))
     deadline = time.monotonic() + 30
