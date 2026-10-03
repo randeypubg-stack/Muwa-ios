@@ -12,14 +12,15 @@ final class NativeInteractionTests: XCTestCase {
     add(attachment)
   }
 
-  private var queueButtons: [XCUIElement] {
-    app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "queue-play-")).allElementsBoundByIndex
+  private var queueQuery: XCUIElementQuery {
+    app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND NOT label BEGINSWITH %@", "queue-row-", "Удалить"))
   }
+  private var queueButtons: [XCUIElement] { queueQuery.allElementsBoundByIndex }
 
   func testWholeQueueRowMovePersistsAndKeepsCurrentTrack() {
     app.launchArguments = ["--audit-player", "--audit-queue", "--audit-interactions"]
     app.launch()
-    XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "queue-play-")).firstMatch.waitForExistence(timeout: 30))
+    XCTAssertTrue(queueQuery.firstMatch.waitForExistence(timeout: 30))
     let before = queueButtons.map(\.identifier)
     XCTAssertGreaterThanOrEqual(before.count, 3)
     // Move the row containing artwork, metadata and controls using the system
@@ -28,8 +29,10 @@ final class NativeInteractionTests: XCTestCase {
     let thirdCell = app.cells.containing(.button, identifier: before[2]).firstMatch
     XCTAssertTrue(firstCell.exists && thirdCell.exists)
     shot("queue-before-move")
-    let start = firstCell.coordinate(withNormalizedOffset: CGVector(dx: 0.96, dy: 0.5))
-    let end = thirdCell.coordinate(withNormalizedOffset: CGVector(dx: 0.96, dy: 0.9))
+    let handle = firstCell.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Reorder ")).firstMatch
+    XCTAssertTrue(handle.exists)
+    let start = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    let end = thirdCell.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.95))
     start.press(forDuration: 0.7, thenDragTo: end)
     let reordered = queueButtons.map(\.identifier)
     XCTAssertEqual(Array(reordered.prefix(3)), [before[1], before[2], before[0]])
@@ -37,7 +40,7 @@ final class NativeInteractionTests: XCTestCase {
     shot("queue-after-move")
     app.terminate()
     app.launch()
-    XCTAssertTrue(app.buttons[reordered[0]].waitForExistence(timeout: 30))
+    XCTAssertTrue(queueQuery.firstMatch.waitForExistence(timeout: 30))
     XCTAssertEqual(queueButtons.map(\.identifier), reordered, "Row order did not survive restart")
     shot("queue-after-restart")
   }
