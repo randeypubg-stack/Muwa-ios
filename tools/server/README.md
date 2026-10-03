@@ -2,8 +2,9 @@
 
 The owner rented a server on 3 October 2026 and connected using Termius. The
 screenshots identify Ubuntu 26.04.1 LTS, x86_64, 3.8 GiB RAM and a 38 GiB root
-filesystem with approximately 35 GiB free. CPU count, provider and region have
-not yet been verified. This is the owner's test host; capacity for 10,000 total
+filesystem with approximately 33 GiB free after preparation. The final output
+confirms 2 CPUs, Docker 29.8.2, Compose 5.6.0, 2 GiB active swap and HOST PREPARED.
+Provider and region have not yet been verified. This is the owner's test host; capacity for 10,000 total
 registered users still needs measurement and a separate media delivery plan.
 
 `bootstrap-ubuntu.sh` prepares the host; it does **not** create a replacement
@@ -61,12 +62,39 @@ listening TCP sockets for the subsequent firewall review.
 
 ## Next stage
 
+`secure-ubuntu.sh` is the next independent host-security stage. Run its pinned,
+checksum-verified version inside the owner's authenticated Termius SSH session.
+`--check` reads state without changing files/firewall rules. The script detects
+the actual SSH port and current client IP from `SSH_CONNECTION`, validates both,
+and refuses unknown public TCP services, existing unmanaged Fail2ban or firewall
+rules. It allows the SSH port, 80/TCP and 443/TCP for IPv4/IPv6 before enabling
+UFW with incoming-deny/outgoing-allow defaults. It does not change SSH keys,
+root/password authentication or restart SSH.
+
+Fail2ban uses the systemd journal, an explicitly installed Python systemd module,
+the UFW action, eight failures per ten minutes and a fifteen-minute ban. The
+current authenticated owner's IP is exempted to preserve access during setup.
+Unknown or differing managed configurations cause a stop rather than an
+overwrite. Partial runs with the matching Muwa jail can resume. If the owner's
+IP changes on a subsequent run, the changed configuration needs review.
+The completion marker is HOST SECURITY CONFIGURED, separate from HOST PREPARED.
+Open a second Termius connection to check reconnecting before closing the first.
+The status report explicitly leaves external reconnect verification false and
+does not claim that UFW protects Docker-published ports.
+
+Checks use valid/invalid IPv4/IPv6 SSH connections, unknown public database ports,
+and loopback services. An isolated Ubuntu 26.04 fixture checks the actual packaged
+Fail2ban parser and generates IPv4/IPv6 UFW rules in dry-run mode, comparing
+configuration checksums before/after. These checks do not enable a firewall or
+start services; the real VM completion output and external reconnect must still
+be verified. Pending OS security updates also remain a separate host task.
+
 Before deploying services, inspect listening sockets, the actual SSH port,
 provider firewall and host rules. Then allow required web/SSH access without
 breaking the owner's Termius session. Docker-published ports can bypass UFW;
 publish only the intended HTTPS proxy, keep PostgreSQL/container administration
-off public interfaces, and verify exposure from outside the VPS. This script
-does not claim that a host firewall has been configured.
+off public interfaces, and verify exposure from outside the VPS. Host preparation
+alone does not configure a firewall; security setup has its own completion report.
 
 Preserve original account IDs/password hashes and track IDs, perform a staged
 import with record counts/checksums, and keep the previous backend for rollback.
@@ -78,8 +106,9 @@ needs the owner's channel confirmation and local credentials.
 The owner's 3 October 2026 output confirms Docker Engine 29.8.2 and Compose
 5.6.0 installed successfully. The first installer stopped before swap creation:
 `excl` was incorrectly supplied as an output flag to `dd`; the corrected code
-uses `conv=excl`. Full host preparation on the real VPS still requires its final
-output; do not call the swap or application deployed prematurely.
+uses `conv=excl`. The later owner screenshot confirms the complete host stage,
+including swap. The app, database migration and host-security stage still require
+their own verification; do not call Muwa deployed prematurely.
 
 Validation: Bash syntax, ShellCheck, root/OS preflight, and real 4 MiB allocation
 and formatting using GNU coreutils and Ubuntu 26 coreutils. The file tests also

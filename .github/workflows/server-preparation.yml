@@ -23,21 +23,27 @@ jobs:
         run: |
           bash -n tools/server/bootstrap-ubuntu.sh
           bash -n tools/server/test-swap.sh
-          shellcheck tools/server/bootstrap-ubuntu.sh tools/server/test-swap.sh
+          bash -n tools/server/secure-ubuntu.sh
+          bash -n tools/server/test-security.sh
+          shellcheck tools/server/*.sh
       - name: Real swap allocation and preservation checks
         run: bash tools/server/test-swap.sh
+      - name: SSH connection and public port safety checks
+        run: bash tools/server/test-security.sh
       - name: Non-root execution must stop before mutations
         shell: bash
         run: |
           set +e
-          output=$(bash tools/server/bootstrap-ubuntu.sh --check 2>&1)
-          result=$?
+          for script in bootstrap-ubuntu.sh secure-ubuntu.sh; do
+            output=$(bash "tools/server/$script" --check 2>&1)
+            result=$?
+            test "$result" -eq 1 || exit 1
+            [[ "$output" == *'Run in the server console as root.'* ]] || exit 1
+          done
           set -e
-          test "$result" -eq 1
-          [[ "$output" == *'Run in the server console as root.'* ]]
       - name: Read-only Ubuntu host preflight
         run: sudo bash tools/server/bootstrap-ubuntu.sh --check
-  ubuntu26-swap:
+  ubuntu26:
     runs-on: ubuntu-24.04
     container: ubuntu:26.04@sha256:3595d7fc4286a33fad0fd853a4063e654287a9c3787437d7937c94ca3f7a804e
     timeout-minutes: 5
@@ -45,12 +51,15 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: Install formatting tools for an isolated fixture
+      - name: Install formatting and security tools for isolated fixtures
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends util-linux
+          apt-get install -y --no-install-recommends util-linux python3 ufw fail2ban python3-systemd
       - name: Verify Ubuntu 26 coreutils and swap allocation
         shell: bash
         run: |
           dd --version
           bash tools/server/test-swap.sh
+      - name: Verify Ubuntu 26 UFW and Fail2ban without enabling a firewall
+        shell: bash
+        run: bash tools/server/test-security.sh --packages
