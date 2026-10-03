@@ -4,7 +4,7 @@ The owner rented a server on 3 October 2026 and connected using Termius. The
 screenshots identify Ubuntu 26.04.1 LTS, x86_64, 3.8 GiB RAM and a 38 GiB root
 filesystem with approximately 33 GiB free after preparation. The final output
 confirms 2 CPUs, Docker 29.8.2, Compose 5.6.0, 2 GiB active swap and HOST PREPARED.
-Provider and region have not yet been verified. This is the owner's test host; capacity for 10,000 total
+The owner confirmed Beget as the provider; region is not yet verified. This is the owner's test host; capacity for 10,000 total
 registered users still needs measurement and a separate media delivery plan.
 
 `bootstrap-ubuntu.sh` prepares the host; it does **not** create a replacement
@@ -62,32 +62,52 @@ listening TCP sockets for the subsequent firewall review.
 
 ## Next stage
 
-`secure-ubuntu.sh` is the next independent host-security stage. Run its pinned,
-checksum-verified version inside the owner's authenticated Termius SSH session.
-`--check` reads state without changing files/firewall rules. The script detects
-the actual SSH port and current client IP from `SSH_CONNECTION`, validates both,
-and refuses unknown public TCP services, existing unmanaged Fail2ban or firewall
-rules. It allows the SSH port, 80/TCP and 443/TCP for IPv4/IPv6 before enabling
-UFW with incoming-deny/outgoing-allow defaults. It does not change SSH keys,
-root/password authentication or restart SSH.
+`secure-ubuntu.sh` is the next independent host-security stage. The owner's
+later screenshot confirms that Beget already installed an active Fail2ban SSH
+jail, with systemd journal matching, while UFW is inactive. The previous script
+stopped at its pre-existing-Fail2ban guard before mutations. The temporary SSH
+timeout remains unexplained; it is not evidence that that run enabled UFW.
 
-Fail2ban uses the systemd journal, an explicitly installed Python systemd module,
-the UFW action, eight failures per ten minutes and a fifteen-minute ban. The
-current authenticated owner's IP is exempted to preserve access during setup.
-Unknown or differing managed configurations cause a stop rather than an
-overwrite. Partial runs with the matching Muwa jail can resume. If the owner's
-IP changes on a subsequent run, the changed configuration needs review.
-The completion marker is HOST SECURITY CONFIGURED, separate from HOST PREPARED.
-Open a second Termius connection to check reconnecting before closing the first.
-The status report explicitly leaves external reconnect verification false and
-does not claim that UFW protects Docker-published ports.
+The updated script requires installed UFW and an active existing Fail2ban SSH
+jail. It performs no package installation, changes no Fail2ban configuration,
+does not reload/restart its service, and preserves SSH authentication. It reads
+the real client/server IPs and ports from the authenticated SSH connection.
+Unknown public TCP services, custom UFW rules, an already active UFW, unknown
+rollback units or a pending change cause a stop for inspection. UFW must handle
+IPv6 and preserve other built-in firewall chains (`MANAGE_BUILTINS=no`).
 
-Checks use valid/invalid IPv4/IPv6 SSH connections, unknown public database ports,
-and loopback services. An isolated Ubuntu 26.04 fixture checks the actual packaged
-Fail2ban parser and generates IPv4/IPv6 UFW rules in dry-run mode, comparing
-configuration checksums before/after. These checks do not enable a firewall or
-start services; the real VM completion output and external reconnect must still
-be verified. Pending OS security updates also remain a separate host task.
+Run the pinned, checksum-verified script in Termius. `--check` is read-only.
+Before changing UFW, it snapshots configuration to a private root-owned directory
+and enables a systemd rollback timer. If scheduling fails, no firewall rules are
+changed. The timer runs independently of the SSH shell and remains enabled over
+a reboot, with a new five-minute window when activated after boot. Failed
+rollback jobs retry. Generation tokens and the host setup lock prevent old jobs
+from reverting a newer or already confirmed change.
+
+The script then allows the actual SSH port, 80/TCP and 443/TCP for IPv4/IPv6 and
+enables incoming-deny/outgoing-allow defaults. FIREWALL PENDING means the change
+still requires a **new authenticated SSH connection to the same endpoint**.
+Within five minutes, open another Termius connection and run:
+
+```bash
+bash /var/lib/muwa/security-rollback.sh --confirm-access
+```
+
+The original TCP connection cannot confirm its own accessibility. After a valid
+new connection, HOST SECURITY CONFIGURED records external reconnect verification
+and cancels the timer. Without confirmation, the timer disables UFW and restores
+its original files, while preserving Fail2ban configuration/service and SSH
+settings. Snapshots remain available for review. Docker-published ports are
+explicitly not claimed to be protected by UFW.
+
+Checks use IPv4/IPv6 SSH connections, unknown public database ports and loopback
+services. An isolated Ubuntu 26.04 fixture validates the actual UFW dry-run rules,
+Fail2ban parser and systemd unit syntax. Transaction scenarios run the real
+installer with simulated firewall/service control and real file snapshots:
+failed scheduling, original/wrong/new SSH sessions, expiry, stale generation,
+failed firewall mutation and preservation of provider config. CI does not run a
+live systemd timer or change kernel firewall rules; those still require the VPS
+completion/reconnect output. Pending OS security updates remain a separate task.
 
 Before deploying services, inspect listening sockets, the actual SSH port,
 provider firewall and host rules. Then allow required web/SSH access without

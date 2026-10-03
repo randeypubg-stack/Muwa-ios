@@ -25,6 +25,7 @@ jobs:
           bash -n tools/server/test-swap.sh
           bash -n tools/server/secure-ubuntu.sh
           bash -n tools/server/test-security.sh
+          bash -n tools/server/test-security-transaction.sh
           shellcheck tools/server/*.sh
       - name: Real swap allocation and preservation checks
         run: bash tools/server/test-swap.sh
@@ -54,7 +55,7 @@ jobs:
       - name: Install formatting and security tools for isolated fixtures
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends util-linux python3 ufw fail2ban python3-systemd
+          apt-get install -y --no-install-recommends util-linux python3 ufw fail2ban python3-systemd jq systemd
       - name: Verify Ubuntu 26 coreutils and swap allocation
         shell: bash
         run: |
@@ -63,3 +64,8 @@ jobs:
       - name: Verify Ubuntu 26 UFW and Fail2ban without enabling a firewall
         shell: bash
         run: bash tools/server/test-security.sh --packages
+      - name: Firewall rollback and provider preservation scenarios
+        shell: bash
+        env:
+          MUWA_ISOLATED_FIXTURE: '1'
+        run: bash tools/server/test-security-transaction.sh

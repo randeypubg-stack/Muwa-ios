@@ -16,8 +16,8 @@ for muwa_connection in '198.51.100.4 34567 203.0.113.5 22' '2001:db8::4 50000 20
 import json, sys
 with open(sys.argv[1]) as f:
     result = json.load(f)
-client, _, server, port = sys.argv[2].split()
-assert result == {"client": client, "server": server, "port": int(port)}
+client, client_port, server, port = sys.argv[2].split()
+assert result == {"client": client, "client_port": int(client_port), "server": server, "port": int(port)}
 PY
 done
 for muwa_connection in '' 'bad 2 203.0.113.5 22' '198.51.100.4 0 203.0.113.5 22' \
@@ -59,25 +59,8 @@ muwa_config_hashes() {
     find /etc/fail2ban /etc/ufw -type f -exec sha256sum {} + | sort
 }
 muwa_config_hashes > "$muwa_test_dir/config-before"
-cp -a /etc/fail2ban "$muwa_test_dir/fail2ban"
-for muwa_client in 198.51.100.4 2001:db8::4; do
-    muwa_ssh_jail 2222 "$muwa_client" > "$muwa_test_dir/fail2ban/jail.d/muwa-ssh.local"
-    fail2ban-client -c "$muwa_test_dir/fail2ban" -t
-    fail2ban-client -c "$muwa_test_dir/fail2ban" -d > "$muwa_test_dir/fail2ban-dump"
-    python3 - "$muwa_test_dir/fail2ban-dump" "$muwa_client" <<'PY'
-import ast, sys
-with open(sys.argv[1]) as f:
-    commands = [ast.literal_eval(line) for line in f if line.startswith("[")]
-assert ["add", "sshd", "systemd"] in commands
-ignore = next(c for c in commands if c[:3] == ["set", "sshd", "addignoreip"])
-assert sys.argv[2] in ignore[3:]
-assert ["set", "sshd", "maxretry", 8] in commands
-assert ["set", "sshd", "bantime", "15m"] in commands
-assert ["set", "sshd", "findtime", "10m"] in commands
-assert any(c[:3] == ["set", "sshd", "addaction"] and c[3] == "ufw" for c in commands)
-PY
-done
-printf 'PASS: packaged Fail2ban validates journal, UFW action and owner IPv4/IPv6 exemption.\n'
+fail2ban-client -t
+printf 'PASS: packaged Fail2ban configuration remains valid without a Muwa override.\n'
 
 # Verify real rule generation, including IPv6, without touching netfilter.
 for muwa_port in 2222 80 443; do
@@ -91,6 +74,8 @@ for chain in ("ufw-user-input", "ufw6-user-input"):
 PY
 done
 printf 'PASS: packaged UFW generates SSH/HTTP/HTTPS allow rules for both IP families.\n'
+# UFW dry-run enable/disable can still write ufw.conf; only rule generation is
+# read-only. Exercise state changes through the isolated transaction fixture.
 muwa_config_hashes > "$muwa_test_dir/config-after"
 cmp -s "$muwa_test_dir/config-before" "$muwa_test_dir/config-after"
 printf 'PASS: configuration validation changed no host UFW/Fail2ban files.\n'
