@@ -149,3 +149,58 @@ p.write_text(s)
 p=root/'Sources/Views/Library/LibraryDetailView.swift'
 s=p.read_text().replace('    .libraryNavigation(title: title)', '    .task { if ProcessInfo.processInfo.arguments.contains("--audit-playlist-create") { createPlaylistPresented = true } }\n    .libraryNavigation(title: title)',1)
 p.write_text(s)
+
+# Exercise the real artwork decoder/cache/backdrop with a controlled HTTPS
+# response, independently of live CDN availability. Screen artwork remains the
+# actual catalogue URL or its normal fallback; the test image is never a track.
+p=root/'Sources/Views/Components/ArtworkView.swift'
+s=p.read_text().replace('URLSession.shared.data(from: url)', 'ReviewArtworkProtocol.session.data(from: url)')
+s += '''
+private final class ReviewArtworkProtocol: URLProtocol, @unchecked Sendable {
+  static let session: URLSession = {
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [ReviewArtworkProtocol.self]
+    return URLSession(configuration: config)
+  }()
+  override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "muwa-review.invalid" }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+  override func startLoading() {
+    guard let url = request.url, let bytes = UIImage(named: "AppMark")?.pngData() else {
+      client?.urlProtocol(self, didFailWithError: URLError(.cannotDecodeContentData)); return
+    }
+    let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil,
+                                   headerFields: ["Content-Type": "image/png"])!
+    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+    client?.urlProtocol(self, didLoad: bytes)
+    client?.urlProtocolDidFinishLoading(self)
+  }
+  override func stopLoading() {}
+}
+'''
+p.write_text(s)
+p=root/'Sources/App/RootView.swift'
+s=p.read_text().replace('if let url = Track.catalog[0].artworkURL {', 'if let url = URL(string: "https://muwa-review.invalid/cache-check.png") {')
+p.write_text(s)
+
+# Real AVPlayer, paused on a generated local PCM fixture, for UI review only.
+# Production streaming/offline source selection is packaged before this step.
+# A missing published backend must not cover CarPlay design review with an
+# unrelated network-error alert. Live media availability is reported separately.
+import base64, io, wave
+buffer=io.BytesIO()
+with wave.open(buffer,'wb') as audio:
+    audio.setnchannels(1); audio.setsampwidth(2); audio.setframerate(8000)
+    audio.writeframes(bytes(16000))
+p=root/'Sources/Services/PlayerManager.swift'
+s=p.read_text().replace('AVPlayerItem(url: playbackURL)', 'AVPlayerItem(url: ProcessInfo.processInfo.arguments.contains("--audit-player") ? ReviewAudioFixture.url : playbackURL)')
+s += '''
+private enum ReviewAudioFixture {
+  static let url: URL = {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("muwa-review-pause.wav")
+    let bytes = Data(base64Encoded: "'''+base64.b64encode(buffer.getvalue()).decode()+'''")!
+    try! bytes.write(to: url, options: .atomic)
+    return url
+  }()
+}
+'''
+p.write_text(s)

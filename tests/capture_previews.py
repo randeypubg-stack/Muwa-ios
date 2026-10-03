@@ -83,3 +83,19 @@ for i,d in enumerate(selected):
     if kind != 'phone': run('xcrun','simctl','shutdown',udid)
     (out/f'{i}-device.txt').write_text(d['name'])
 (out/'manifest.json').write_text(json.dumps([{'device': d['name'], 'index': i} for i,d in enumerate(selected)], ensure_ascii=False, indent=2))
+
+# UI/decoder checks use controlled fixtures; record live service availability
+# separately so a successful design capture never implies CDN playback works.
+import urllib.request, urllib.error
+live=[]
+for path in ['/_api/catalog/tracks','/_cdn/static/muwa-cover-1.jpg']:
+    entry={'path':path}
+    try:
+        with urllib.request.urlopen('https://muwa-app.floot.app'+path,timeout=10) as response:
+            entry.update(status=response.status,contentType=response.headers.get('Content-Type'))
+    except urllib.error.HTTPError as error:
+        entry.update(status=error.code,error=error.read(400).decode(errors='replace'))
+    except Exception as error:
+        entry['error']=str(error)
+    live.append(entry)
+(out/'live-assets-status.json').write_text(json.dumps({'checks':live,'uiFixture':'native app with local paused audio; controlled artwork decoder check; catalogue artwork uses normal URL or fallback'},ensure_ascii=False,indent=2))
