@@ -83,7 +83,7 @@ struct ProfileView: View {
               .foregroundStyle(.secondary)
               .lineLimit(1)
           } else {
-            Text("Войдите, чтобы управлять аккаунтом")
+            Text(auth.state == .checking ? "Проверяем аккаунт…" : "Войдите, чтобы управлять аккаунтом")
               .font(.caption)
               .foregroundStyle(.secondary)
               .lineLimit(2)
@@ -102,7 +102,7 @@ struct ProfileView: View {
         }
       }
 
-      if auth.isGuest {
+      if !auth.isAuthenticated {
         Button {
           auth.showAuthentication()
         } label: {

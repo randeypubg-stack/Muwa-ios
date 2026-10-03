@@ -9,7 +9,8 @@ private actor HeldAuthService: AuthServing {
     isWaiting = true
     return try await withCheckedThrowingContinuation { restoreContinuation = $0 }
   }
-  func completeRestore(_ user: AuthUser?) { restoreContinuation?.resume(returning: user); restoreContinuation = nil }
+  func completeRestore(_ user: AuthUser?) { restoreContinuation?.resume(returning: user); restoreContinuation = nil; isWaiting = false }
+  func failRestore() { restoreContinuation?.resume(throwing: URLError(.notConnectedToInternet)); restoreContinuation = nil; isWaiting = false }
   func login(email: String, password: String) async throws -> AuthUser { AuthChecks.user(2) }
   func register(displayName: String, email: String, password: String) async throws -> AuthUser { AuthChecks.user(2) }
   func logout() async throws {}
@@ -60,10 +61,12 @@ struct AuthChecks {
     defer { defaults.removePersistentDomain(forName: suite) }
     let service = HeldAuthService()
     let manager = AuthManager(service: service, defaults: defaults)
+    precondition(manager.state == .checking && manager.user == nil, "An unverified startup session exposed account access")
     let restoration = Task { await manager.restore() }
     await waitUntil { await service.isWaiting }
     await manager.restore()
     let calls = await service.restoreCalls
+    precondition(manager.state == .checking && !manager.isWorking, "Restoration blocked explicit account actions")
     precondition(calls == 1, "A second window started duplicate session restoration")
     let loggedIn = await manager.login(email: "fixture@example.com", password: "fixture-only")
     precondition(loggedIn && manager.user?.id == 2)
@@ -79,6 +82,31 @@ struct AuthChecks {
     await guestService.completeRestore(user(1))
     await guestRestoration.value
     precondition(guest.isGuest, "Old session response replaced an explicit guest choice")
+
+    // First install, expired cookies and offline restoration keep public listening
+    // available. They do not force a sign-in screen or grant account privileges.
+    for offline in [false, true] {
+      defaults.set(false, forKey: "muwa.auth.continueAsGuest")
+      let unavailable = HeldAuthService()
+      let startup = AuthManager(service: unavailable, defaults: defaults)
+      let task = Task { await startup.restore() }
+      await waitUntil { await unavailable.isWaiting }
+      precondition(startup.state == .checking && startup.user == nil)
+      if offline { await unavailable.failRestore() } else { await unavailable.completeRestore(nil) }
+      await task.value
+      precondition(startup.isGuest && !startup.isAuthenticated, "Unauthenticated launch forced sign-in or granted access")
+      startup.showAuthentication()
+      precondition(startup.state == .signedOut, "Explicit sign-in became inaccessible")
+    }
+
+    let explicitService = HeldAuthService()
+    let explicit = AuthManager(service: explicitService, defaults: defaults)
+    let explicitRestore = Task { await explicit.restore() }
+    await waitUntil { await explicitService.isWaiting }
+    explicit.showAuthentication()
+    await explicitService.completeRestore(user(1))
+    await explicitRestore.value
+    precondition(explicit.state == .signedOut && explicit.user == nil, "Background response dismissed explicit sign-in")
 
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [OfflineProtocol.self]
@@ -102,6 +130,6 @@ struct AuthChecks {
     do { _ = try await AuthService(session: failedSession).login(email: "fixture@example.invalid", password: "fixture-only"); preconditionFailure("503 login succeeded") } catch {}
     precondition(FailedServerProtocol.log.urls.count == 1, "Login retried credentials on another backend")
     precondition(FailedServerProtocol.log.urls.first?.host == BackendConfig.productionAPIBaseURL.host, "Credentials sent outside production")
-    print("PASS: restoration isolation, stale response rejection, cookie cleanup, no credential fallback on HTTP 503")
+    print("PASS: offline/expired startup stays usable, explicit sign-in, restoration isolation, stale response rejection, cookie cleanup, no credential fallback on HTTP 503")
   }
 }

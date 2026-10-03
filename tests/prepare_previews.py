@@ -5,9 +5,29 @@ root=Path(sys.argv[1])
 app=root/'Sources/App/MuwaNasheedsApp.swift'
 s=app.read_text()
 s=s.replace('.task { await auth.restore() }', '''.task {
-          auth.continueAsGuest()
+          if ProcessInfo.processInfo.arguments.contains("--audit-launch") {
+            await auth.restore()
+          } else {
+            auth.continueAsGuest()
+          }
         }''')
 s=s.replace('.task { await premium.load() }', '')
+s=s.replace('AuthManager()', 'AuthManager(service: ProcessInfo.processInfo.arguments.contains("--audit-launch") ? HeldLaunchAuthService() : AuthService.shared)')
+s += """
+// Disposable Simulator-only service. Release source/IPA were packaged before
+// fixture injection. A real pending session keeps the original bug reproducible.
+private actor HeldLaunchAuthService: AuthServing {
+  func restoreSession() async throws -> AuthUser? {
+    try? String(ProcessInfo.processInfo.processIdentifier).write(to: URL.documentsDirectory.appendingPathComponent("launch-auth-pending.txt"), atomically: true, encoding: .utf8)
+    try await Task.sleep(for: .seconds(45))
+    try? String(ProcessInfo.processInfo.processIdentifier).write(to: URL.documentsDirectory.appendingPathComponent("launch-auth-finished.txt"), atomically: true, encoding: .utf8)
+    return nil
+  }
+  func login(email: String, password: String) async throws -> AuthUser { throw URLError(.notConnectedToInternet) }
+  func register(displayName: String, email: String, password: String) async throws -> AuthUser { throw URLError(.notConnectedToInternet) }
+  func logout() async throws {}
+}
+"""
 app.write_text(s)
 view=root/'Sources/App/RootView.swift'
 s=view.read_text().replace('@EnvironmentObject private var auth: AuthManager',
@@ -63,6 +83,7 @@ s=s.replace(needle, '''    .task {
       }
     }
 '''+needle)
+s=s.replace('      .coordinateSpace(name: "playerContainer")', '      .coordinateSpace(name: "playerContainer")\n      .onAppear {\n        if ProcessInfo.processInfo.arguments.contains("--audit-launch") {\n          precondition(auth.state == .checking, "Session finished before startup review")\n          try? String(ProcessInfo.processInfo.processIdentifier).write(to: URL.documentsDirectory.appendingPathComponent("launch-home-mounted.txt"), atomically: true, encoding: .utf8)\n        }\n      }', 1)
 view.write_text(s)
 
 # AI review fixture, injected only after production IPA/source packaging.

@@ -3,9 +3,9 @@
 Run from the repository root after building the review app:
     python3 tests/capture_launch_ios.py
 
-The review build uses its normal native intro for --audit-launch and restores a
-guest session. This script never synthesizes frames or waits for artwork/network
-fixtures. It preserves recording logs and status.json even when capture fails.
+The review build mounts the real Home while its account service is held for
+45 seconds. The mark animates in the toolbar, without blocking the app. This
+script never synthesizes frames or waits for artwork/network fixtures. It preserves recording logs and status.json even when capture fails.
 """
 import json
 import fcntl
@@ -211,6 +211,9 @@ def main():
             if time.monotonic() >= ready_deadline:
                 raise RuntimeError(f"Simulator recorder never became ready: {log_path.read_text()}")
             time.sleep(0.1)
+        data_container = Path(run("xcrun", "simctl", "get_app_container", udid, PACKAGE, "data").strip())
+        for name in ["launch-home-mounted.txt", "launch-auth-pending.txt", "launch-auth-finished.txt"]:
+            (data_container / "Documents" / name).unlink(missing_ok=True)
         launch_offset = time.monotonic() - recording_start
         response = run("xcrun", "simctl", "launch", "--terminate-running-process", udid, PACKAGE, "--audit-launch")
         pid_match = re.search(r":\s*(\d+)\s*$", response)
@@ -218,7 +221,18 @@ def main():
             raise AssertionError(f"Simulator did not report Muwa's PID: {response}")
         status["launch_pid"] = int(pid_match.group(1))
         status["launch_offset_seconds"] = round(launch_offset, 3)
-        time.sleep(3)
+        mounted = data_container / "Documents/launch-home-mounted.txt"
+        pending = data_container / "Documents/launch-auth-pending.txt"
+        deadline = time.monotonic() + 25
+        pid = str(status["launch_pid"])
+        while not all(p.exists() and p.read_text() == pid for p in [mounted, pending]):
+            if time.monotonic() >= deadline:
+                raise AssertionError("Home did not mount while account restoration was pending")
+            time.sleep(0.1)
+        status["home_mounted_while_auth_pending"] = True
+        # Timing includes simctl/host overhead; it is not physical iPhone latency.
+        status["shell_proof_after_launch_command_seconds"] = round(time.monotonic() - recording_start - launch_offset, 3)
+        time.sleep(0.5)
         if recorder.poll() is not None:
             raise RuntimeError("Simulator recorder exited during the launch animation")
         # Simulator app processes run on the host; this catches a startup crash.
@@ -226,6 +240,9 @@ def main():
         final = OUTPUT / "home-after-launch.png"
         run("xcrun", "simctl", "io", udid, "screenshot", final)
         status["final_screen"] = validate_png(final)
+        if (data_container / "Documents/launch-auth-finished.txt").exists():
+            raise AssertionError("Auth finished before Home screenshot; pending-session proof is invalid")
+        status["home_frame_proof"] = json.loads(run("swift", "tests/verify_home_frame.swift", final))
         stop_recording()
         recorder_log.close()
         recorder_log = None
@@ -239,7 +256,7 @@ def main():
         ffmpeg = shutil.which("ffmpeg")
         if ffmpeg:
             frames = []
-            for label, offset in [("reveal", 0.25), ("sheen", 0.60), ("home", 1.80)]:
+            for label, offset in [("first-frame", 0.25), ("toolbar-mark", 0.60), ("home", 1.80)]:
                 frame = OUTPUT / f"recorded-{label}.png"
                 timestamp = launch_offset + offset
                 run(ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-ss", f"{timestamp:.3f}",

@@ -56,6 +56,9 @@ struct HomeView: View {
       .navigationTitle("Главная")
       .navigationBarTitleDisplayMode(.large)
       .toolbar {
+        ToolbarItem(placement: .topBarLeading) {
+          MuwaLaunchView()
+        }
         ToolbarItem(placement: .topBarTrailing) {
           Button(action: openSearch) {
             Image(systemName: "magnifyingglass")

@@ -38,6 +38,8 @@ final class AuthManager: ObservableObject {
     guard !hasRestoredSession else { return }
     hasRestoredSession = true
     let revision = stateRevision
+    // Restore account privileges in the background. Public listening is usable
+    // while checking, and a missing/offline session must not force sign-in.
     state = .checking
     do {
       let user = try await service.restoreSession()
@@ -47,12 +49,15 @@ final class AuthManager: ObservableObject {
         registrationJustCompleted = false
         state = .authenticated(user)
       } else {
-        state = defaults.bool(forKey: guestKey) ? .guest : .signedOut
+        state = .guest
       }
     } catch {
       guard stateRevision == revision else { return }
       Diagnostics.shared.record("auth-restore", error: error)
-      state = defaults.bool(forKey: guestKey) ? .guest : .signedOut
+      // Public listening remains available without a verified session. Only an
+        // explicit sign-in action opens authentication; a slow/offline restore
+        // must not replace the already usable app shell.
+      state = .guest
     }
   }
 

@@ -4,7 +4,6 @@ import UIKit
 struct RootView: View {
   @EnvironmentObject private var player: PlayerManager
   @EnvironmentObject private var auth: AuthManager
-  @EnvironmentObject private var launch: LaunchPresentation
 
   @State private var selection: AppTab = .home
   @State private var playerExpansion: CGFloat = 0
@@ -19,26 +18,15 @@ struct RootView: View {
             .transition(.opacity.combined(with: .scale(scale: 0.985)))
         } else {
           switch auth.state {
-          case .checking:
-            LaunchGateView()
-              .transition(.opacity)
-
           case .signedOut:
             AuthFlowView()
               .transition(.opacity)
 
-          case .guest, .authenticated:
+          case .checking, .guest, .authenticated:
             appShell
               .transition(.opacity)
           }
         }
-      }
-      .accessibilityHidden(launch.isVisible)
-      .allowsHitTesting(!launch.isVisible)
-
-      if launch.isVisible {
-        MuwaLaunchView()
-          .zIndex(1000)
       }
     }
     .background(Color.black.ignoresSafeArea())
@@ -197,21 +185,6 @@ struct RootView: View {
   private func smoothStep(_ value: CGFloat) -> CGFloat {
     let x = min(1, max(0, value))
     return x * x * (3 - (2 * x))
-  }
-}
-
-private struct LaunchGateView: View {
-  var body: some View {
-    ZStack {
-      Color.black.ignoresSafeArea()
-      VStack(spacing: 16) {
-        ProgressView().tint(.white.opacity(0.8))
-        Text("Открываем Muwa…")
-          .font(.system(size: 14))
-          .foregroundStyle(.secondary)
-      }
-      .accessibilityElement(children: .combine)
-    }
   }
 }
 
