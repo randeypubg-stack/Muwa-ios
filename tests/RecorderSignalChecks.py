@@ -14,6 +14,7 @@ from capture_launch_ios import parse_home_proof, start_recording
 with tempfile.TemporaryDirectory() as folder:
     logpath = Path(folder) / "recorder.log"
     original = signal.getsignal(signal.SIGINT)
+    original_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
     process = None
     terminal = None
     try:
@@ -23,6 +24,7 @@ import os, signal, sys, time
 assert os.isatty(0)
 assert os.tcgetpgrp(0) == os.getpgrp() == os.getpid()
 assert signal.getsignal(signal.SIGINT) != signal.SIG_IGN
+assert not ({signal.SIGINT, signal.SIGTERM} & signal.pthread_sigmask(signal.SIG_BLOCK, set()))
 def finish(signum, frame):
     print('finalized', flush=True)
     sys.exit(0)
@@ -40,9 +42,10 @@ while True: time.sleep(0.05)
             os.write(terminal, b"\x03")
             assert process.wait(timeout=5) == 0
         assert logpath.read_text().splitlines() == ["recording", "finalized"]
-        print("Inherited SIGINT ignored: isolated recorder finalized via terminal Ctrl-C")
+        print("Inherited SIGINT ignored and blocked: isolated recorder finalized via terminal Ctrl-C")
     finally:
         signal.signal(signal.SIGINT, original)
+        signal.pthread_sigmask(signal.SIG_SETMASK, original_mask)
         if process is not None and process.poll() is None:
             os.killpg(process.pid, signal.SIGKILL)
             process.wait(timeout=5)

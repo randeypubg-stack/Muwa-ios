@@ -39,6 +39,9 @@ def start_recording(command, logfile):
     def prepare_terminal():
         signal.signal(signal.SIGINT, signal.SIG_DFL)
         signal.signal(signal.SIGTERM, signal.SIG_DFL)
+        # A default disposition does not clear a mask inherited from the host.
+        # Keep both the terminal interrupt and explicit group stop deliverable.
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT, signal.SIGTERM})
         fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
         os.tcsetpgrp(slave, os.getpgrp())
 
@@ -218,6 +221,7 @@ def main():
             raise RuntimeError("xcrun did not resolve the Simulator control executable")
         recording_command = [simctl, "io", udid, "recordVideo", "--codec=h264", str(video)]
         status["parent_sigint_ignored"] = signal.getsignal(signal.SIGINT) == signal.SIG_IGN
+        status["parent_blocked_signals"] = [signal.Signals(value).name for value in signal.pthread_sigmask(signal.SIG_BLOCK, set())]
         recorder, recorder_input = start_recording(recording_command, recorder_log)
         status["recording_stop_method"] = "SIGINT to the owned recorder group"
         status["recording_command"] = recording_command
