@@ -8,20 +8,50 @@ guest session. This script never synthesizes frames or waits for artwork/network
 fixtures. It preserves recording logs and status.json even when capture fails.
 """
 import json
+import fcntl
 import os
 from pathlib import Path
 import plistlib
+import pty
 import re
 import shutil
 import signal
 import struct
 import subprocess
+import termios
 import time
 
 
 PACKAGE = "app.muwa.nasheeds"
 OUTPUT = Path("build/previews/launch")
 APP_FOLDER = Path("build/PreviewDerivedData/Build/Products/Debug-iphonesimulator")
+
+
+def start_recording(command, logfile):
+    """Give simctl a real controlling terminal, including its Ctrl-C signal.
+
+    Hosted shells can pass an ignored SIGINT to children. A detached process
+    group alone does not restore that signal or provide terminal input.
+    This script is single-threaded; configure the child's terminal before exec.
+    """
+    master, slave = pty.openpty()
+
+    def prepare_terminal():
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
+        fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
+        os.tcsetpgrp(slave, os.getpgrp())
+
+    try:
+        process = subprocess.Popen(command, stdin=slave, stdout=logfile,
+                                   stderr=subprocess.STDOUT, start_new_session=True,
+                                   preexec_fn=prepare_terminal)
+    except BaseException:
+        os.close(master)
+        raise
+    finally:
+        os.close(slave)
+    return process, master
 
 
 def validate_png(path):
@@ -69,6 +99,7 @@ def main():
     status = {"captured": False, "package": PACKAGE, "commands": []}
     recorder = None
     recorder_log = None
+    recorder_input = None
     udid = None
     booted_here = False
 
@@ -84,7 +115,7 @@ def main():
         return result.stdout
 
     def stop_recording():
-        nonlocal recorder
+        nonlocal recorder, recorder_input
         if recorder is None:
             return
         def signal_group(value):
@@ -94,7 +125,9 @@ def main():
                 # The process can finish between poll() and delivery.
                 pass
         if recorder.poll() is None:
-            signal_group(signal.SIGINT)
+            # Match Simulator's documented Ctrl-C stop through its controlling
+            # terminal. Do not kill the encoder before it finalizes the MP4.
+            os.write(recorder_input, b"\x03")
             try:
                 # Hosted Simulator encoders may need longer than the recording
                 # itself to flush frames and write the MP4's final moov atom.
@@ -110,6 +143,9 @@ def main():
                 raise RuntimeError("Simulator recorder did not finish after SIGINT")
         status["recorder_exit_code"] = recorder.returncode
         recorder = None
+        if recorder_input is not None:
+            os.close(recorder_input)
+            recorder_input = None
 
     try:
         apps = list(APP_FOLDER.glob("*.app"))
@@ -149,11 +185,13 @@ def main():
         log_path = OUTPUT / "recording.log"
         recorder_log = log_path.open("w")
         recording_start = time.monotonic()
-        recording_command = ["xcrun", "simctl", "io", udid, "recordVideo", "--codec=h264", str(video)]
-        # Own the isolated recording process group so xcrun children receive the
-        # same graceful interruption. Never signal unrelated Simulator processes.
-        recorder = subprocess.Popen(recording_command, stdout=recorder_log,
-                                    stderr=subprocess.STDOUT, start_new_session=True)
+        simctl = run("xcrun", "--find", "simctl").strip()
+        if not Path(simctl).is_file():
+            raise RuntimeError("xcrun did not resolve the Simulator control executable")
+        recording_command = [simctl, "io", udid, "recordVideo", "--codec=h264", str(video)]
+        status["parent_sigint_ignored"] = signal.getsignal(signal.SIGINT) == signal.SIG_IGN
+        recorder, recorder_input = start_recording(recording_command, recorder_log)
+        status["recording_stop_method"] = "controlling-terminal Ctrl-C"
         status["recording_command"] = recording_command
         # Launch only once simctl confirms that the screen recording is active.
         ready_deadline = time.monotonic() + 10

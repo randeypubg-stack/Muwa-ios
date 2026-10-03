@@ -13,6 +13,9 @@ on:
         "tests/**",
         "!tests/capture_carplay.py",
         "!tests/locate_carplay_app.swift",
+        "!tests/capture_launch_ios.py",
+        "!tests/RecorderSignalChecks.py",
+        "!tests/verify_native_snapshot.py",
         ".github/workflows/build-native-swiftui-ipa.yml",
       ]
   workflow_dispatch:
@@ -386,7 +389,9 @@ jobs:
         run: python3 tests/capture_previews.py
       - name: Record native launch animation
         if: matrix.device == 'phone'
-        run: python3 tests/capture_launch_ios.py
+        run: |
+          python3 tests/RecorderSignalChecks.py
+          python3 tests/capture_launch_ios.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

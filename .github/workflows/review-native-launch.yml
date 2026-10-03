@@ -1,0 +1,73 @@
+name: Review native iOS launch
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        type: string
+        default: "37080911175"
+        required: true
+      source_artifact_name:
+        type: string
+        default: Muwa-Full-Source-97
+        required: true
+      simulator_artifact_name:
+        type: string
+        default: Muwa-build40-simulator-37080911175
+        required: true
+  push:
+    branches: [feat/muwa-native-build35]
+    paths:
+      - tests/capture_launch_ios.py
+      - tests/RecorderSignalChecks.py
+      - tests/verify_native_snapshot.py
+      - .github/workflows/review-native-launch.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  source-security:
+    uses: ./.github/workflows/security.yml
+  capture:
+    name: Record native cold launch
+    needs: source-security
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ inputs.source_artifact_name || 'Muwa-Full-Source-97' }}
+          run-id: ${{ inputs.source_run_id || '37080911175' }}
+          github-token: ${{ github.token }}
+          path: build/launch-source
+      - name: Verify the compiled source snapshot
+        run: |
+          SOURCE_ZIP="$(find build/launch-source -name '*FULL-SOURCE.zip' -print -quit)"
+          test -n "$SOURCE_ZIP"
+          unzip -q "$SOURCE_ZIP" -d build/launch-source/native
+          python3 tests/verify_native_snapshot.py build/launch-source/native/Repository
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ inputs.simulator_artifact_name || 'Muwa-build40-simulator-37080911175' }}
+          run-id: ${{ inputs.source_run_id || '37080911175' }}
+          github-token: ${{ github.token }}
+          path: build
+      - name: Unpack the native Simulator app
+        run: |
+          mkdir -p build/PreviewDerivedData/Build/Products/Debug-iphonesimulator
+          tar -xzf build/muwa-review-app.tar.gz -C build/PreviewDerivedData/Build/Products/Debug-iphonesimulator
+      - name: Verify terminal signals and record the native launch
+        run: |
+          python3 tests/RecorderSignalChecks.py
+          python3 tests/capture_launch_ios.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: Muwa-build40-launch-validation-${{ github.run_number }}
+          path: build/previews/launch
+          if-no-files-found: warn
