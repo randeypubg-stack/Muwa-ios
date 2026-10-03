@@ -42,10 +42,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     playlists = makeList("Плейлисты", symbol: "rectangle.stack")
     recent = makeList("Недавние", symbol: "clock")
     queue = makeList("Очередь", symbol: "list.bullet")
-    guard let catalog, let favorites, let offline, let playlists, let recent else { return }
-    catalog.leadingNavigationBarButtons = [CPBarButton(title: "Недавние") { [weak self] _ in
-      Task { @MainActor in self?.controller?.pushTemplate(recent, animated: true, completion: nil) }
-    }]
+    guard let catalog, let favorites, let offline, let playlists else { return }
     refreshLists()
     // Audio CarPlay allows four tabs. Recent tracks remain reachable from Muwa.
     // Set the root only on connection; section updates preserve navigation.
@@ -139,7 +136,21 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
   private func update(_ template: CPListTemplate?, tracks: [Track]) {
     let player = CarPlayCoordinator.shared.player
-    let rows = tracks.prefix(CPListTemplate.maximumItemCount).map { track in
+    // Tab-bar roots hide navigation-bar buttons. Keep history reachable as a
+    // normal list item and reserve its slot inside Apple's list capacity.
+    var rows: [CPListItem] = []
+    if let template, template === catalog {
+      let history = CPListItem(text: "Недавние", detailText: "Продолжить прослушивание", image: UIImage(systemName: "clock"))
+      history.handler = { [weak self] _, completion in
+        Task { @MainActor in
+          defer { completion() }
+          guard let self, let recent = self.recent else { return }
+          self.controller?.pushTemplate(recent, animated: true, completion: nil)
+        }
+      }
+      rows.append(history)
+    }
+    rows += tracks.prefix(CPListTemplate.maximumItemCount - rows.count).map { track in
       let item = CPListItem(text: track.title, detailText: track.artist)
       item.isPlaying = player?.currentTrack?.id == track.id && player?.isPlaying == true
       item.handler = { [weak self] _, completion in
