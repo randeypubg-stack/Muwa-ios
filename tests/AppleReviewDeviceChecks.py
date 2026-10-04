@@ -1,12 +1,13 @@
 """Selection checks with mixed real-shaped simctl inventories; no macOS needed."""
 import copy
+import json
 from pathlib import Path
 import tempfile
 import subprocess
 import unittest
 from unittest.mock import patch
 
-from select_apple_review_devices import normalize_inventory, open_simulator_gui, request_status, select_devices
+from select_apple_review_devices import boot_selected_device, normalize_inventory, open_simulator_gui, request_status, select_devices
 
 
 def runtime(version, available=True, name=None):
@@ -105,15 +106,48 @@ class AppleReviewDeviceChecks(unittest.TestCase):
             bundle = Path(directory) / "Applications/Simulator.app"
             bundle.mkdir(parents=True)
             with patch("select_apple_review_devices.subprocess.run") as launch:
-                self.assertEqual(open_simulator_gui("requested-udid", directory), str(bundle))
+                self.assertEqual(open_simulator_gui("requested-udid", directory), {'bundle':str(bundle),'available':True,'opened':True})
                 launch.assert_called_once_with(["/usr/bin/open", "-a", str(bundle), "--args", "-CurrentDeviceUDID", "requested-udid"], check=True, timeout=45, stdout=subprocess.DEVNULL)
 
     def test_gui_warmup_does_not_fall_back_to_another_xcode(self):
         with tempfile.TemporaryDirectory() as directory:
             with patch("select_apple_review_devices.subprocess.run") as launch:
-                with self.assertRaisesRegex(ValueError, "Selected Xcode Simulator GUI is unavailable"):
-                    open_simulator_gui("requested-udid", directory)
+                status = open_simulator_gui("requested-udid", directory)
+                self.assertEqual(status['bundle'], str(Path(directory) / 'Applications/Simulator.app'))
+                self.assertFalse(status['available'])
+                self.assertFalse(status['opened'])
                 launch.assert_not_called()
+
+    def test_gui_open_failure_remains_explicit_and_does_not_fake_warmup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / 'Applications/Simulator.app').mkdir(parents=True)
+            with patch('select_apple_review_devices.subprocess.run', side_effect=subprocess.CalledProcessError(1, ['/usr/bin/open'])):
+                status = open_simulator_gui('requested-udid', directory)
+                self.assertTrue(status['available'])
+                self.assertFalse(status['opened'])
+                self.assertEqual(status['launchErrorType'], 'CalledProcessError')
+
+    def test_explicit_boot_waits_and_rechecks_exact_runtime_and_udid(self):
+        device = select_devices(self.records, 'large-phone')[0]
+        def live(state):
+            return json.dumps({'devices':{device['runtimeIdentifier']:[{'udid':device['udid'],'isAvailable':True,'state':state}]}})
+        with patch('select_apple_review_devices.command', side_effect=[live('Shutdown'), '', 'ready', live('Booted')]) as commands:
+            status = boot_selected_device(device)
+            self.assertEqual(status['udid'], device['udid'])
+            self.assertEqual(status['runtimeIdentifier'], device['runtimeIdentifier'])
+            self.assertTrue(status['bootstatusCompleted'])
+            self.assertTrue(status['bootRequested'])
+            self.assertEqual(commands.call_args_list[1].args, ('xcrun','simctl','boot',device['udid']))
+            self.assertEqual(commands.call_args_list[2].args, ('xcrun','simctl','bootstatus',device['udid'],'-b'))
+            self.assertEqual(commands.call_args_list[2].kwargs, {'timeout':240})
+
+    def test_explicit_boot_rejects_runtime_substitution(self):
+        device = select_devices(self.records, 'large-phone')[0]
+        wrong = json.dumps({'devices':{'com.apple.CoreSimulator.SimRuntime.iOS-18-6':[{'udid':device['udid'],'isAvailable':True,'state':'Booted'}]}})
+        with patch('select_apple_review_devices.command', return_value=wrong) as commands:
+            with self.assertRaisesRegex(ValueError, 'Selected Simulator runtime changed'):
+                boot_selected_device(device)
+            self.assertEqual(commands.call_count, 1)
 
 
 if __name__ == "__main__":

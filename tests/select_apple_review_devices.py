@@ -145,8 +145,8 @@ def request_status(records, selected, requested_device=None, requested_ios=None)
     }
 
 
-def command(*args):
-    return subprocess.check_output(args, text=True, timeout=120).strip()
+def command(*args, timeout=120):
+    return subprocess.check_output(args, text=True, timeout=timeout).strip()
 
 
 def open_simulator_gui(udid, developer_directory=None):
@@ -158,12 +158,50 @@ def open_simulator_gui(udid, developer_directory=None):
     """
     developer_directory = developer_directory or os.environ.get("DEVELOPER_DIR") or command("xcode-select", "-p")
     simulator = Path(developer_directory) / "Applications/Simulator.app"
-    if not simulator.is_dir():
-        raise ValueError(f"Selected Xcode Simulator GUI is unavailable: {simulator}")
+    status = {"bundle":str(simulator), "available":simulator.is_dir(), "opened":False}
+    if not status['available']:
+        status['reason'] = 'Selected Xcode image has no Simulator GUI bundle; using its actual headless runtime'
+        print(status['reason'] + ': ' + str(simulator), file=sys.stderr, flush=True)
+        return status
     argv = ["/usr/bin/open", "-a", str(simulator), "--args", "-CurrentDeviceUDID", udid]
     print("Opening selected Simulator GUI:", " ".join(argv), file=sys.stderr, flush=True)
-    subprocess.run(argv, check=True, timeout=45, stdout=subprocess.DEVNULL)
-    return str(simulator)
+    try:
+        subprocess.run(argv, check=True, timeout=45, stdout=subprocess.DEVNULL)
+        status['opened'] = True
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        # The GUI is optional on stripped hosted images; the exact selected
+        # runtime must still pass bootstatus and all actual capture assertions.
+        status['reason'] = str(error)
+        status['launchErrorType'] = type(error).__name__
+        print('Selected Simulator GUI could not open: ' + str(error), file=sys.stderr, flush=True)
+    return status
+
+
+def boot_selected_device(device):
+    """Boot and verify the same selected runtime/UDID before XCTest starts."""
+    def live_device():
+        groups = json.loads(command('xcrun', 'simctl', 'list', 'devices', 'available', '--json'))['devices']
+        matches = [(runtime, item) for runtime, items in groups.items()
+                   for item in items if item['udid'] == device['udid']]
+        if len(matches) != 1:
+            raise ValueError(f"Selected Simulator UDID unavailable: {device['udid']}")
+        runtime, item = matches[0]
+        if runtime != device['runtimeIdentifier'] or not item.get('isAvailable'):
+            raise ValueError(f"Selected Simulator runtime changed or unavailable: {device['udid']}")
+        return item
+
+    current = live_device()
+    requested_boot = current['state'] == 'Shutdown'
+    if requested_boot:
+        print('Booting selected Simulator: ' + device['udid'], file=sys.stderr, flush=True)
+        command('xcrun', 'simctl', 'boot', device['udid'])
+    print('Waiting for selected Simulator bootstatus: ' + device['udid'], file=sys.stderr, flush=True)
+    command('xcrun', 'simctl', 'bootstatus', device['udid'], '-b', timeout=240)
+    current = live_device()
+    if current['state'] != 'Booted':
+        raise ValueError(f"Selected Simulator did not become Booted: {device['udid']}")
+    return {'udid':device['udid'], 'runtimeIdentifier':device['runtimeIdentifier'],
+            'state':current['state'], 'bootRequested':requested_boot, 'bootstatusCompleted':True}
 
 
 def load_selection(kind=None, requested_device=None, requested_ios=None, runtime_version=None):
@@ -202,12 +240,17 @@ def main():
     parser.add_argument("--output", type=Path)
     parser.add_argument("--print-udid", action="store_true")
     parser.add_argument("--open-gui", action="store_true", help="Open the selected Xcode Simulator GUI for one selected device")
+    parser.add_argument("--boot", action="store_true", help="Require the selected runtime and UDID to finish booting before XCTest")
     args = parser.parse_args()
     selected, report = load_selection(args.kind, args.requested_device, args.requested_ios, args.runtime_version)
     if args.open_gui:
         if len(selected) != 1:
             parser.error("--open-gui requires one --kind")
-        report["simulatorGUIBundle"] = open_simulator_gui(selected[0]["udid"])
+        report["simulatorGUI"] = open_simulator_gui(selected[0]["udid"])
+    if args.boot:
+        if len(selected) != 1:
+            parser.error("--boot requires one --kind")
+        report['simulatorBoot'] = boot_selected_device(selected[0])
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")

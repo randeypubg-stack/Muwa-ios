@@ -48,7 +48,7 @@ for i,d in enumerate(selected):
     (out/f'{i}-device.txt').write_text(d['name'])
     # shutdown all above invalidates the states from the original device list.
     run('xcrun','simctl','boot',udid)
-    preparation = {'guiBundle':open_simulator_gui(udid), 'appearanceAttempts':0, 'recoveredOnce':False}
+    preparation = {'gui':open_simulator_gui(udid), 'appearanceAttempts':0, 'recoveredOnce':False}
     run('xcrun','simctl','bootstatus',udid,'-b')
     preparation['bootstatusCompleted'] = True
     preparation_path = out/f'{i}-simulator-preparation.json'

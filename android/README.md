@@ -41,6 +41,15 @@ failures remain failures and retain boot diagnostics. Native cold launch and
 reduced-motion checks still require actual Home content; optional launch video
 is an independent, strict workflow-dispatch option.
 
+Android 17 removed the reflective `InputManager.getInstance` method used by the
+older Espresso dependency. Instrumentation uses the stable AndroidX Test release
+set: Espresso 3.7.0, runner 1.7.0 and JUnit 1.3.0. Google's release notes explicitly
+record the switch to `getSystemService`. These are test APK dependencies; the
+application's Compose dependencies and SDK target stay unchanged. Functional
+navigation and queue assertions are retained.
+
+Release evidence: https://developer.android.com/jetpack/androidx/releases/test#espresso-3.7.0
+
 Run the evidence regression checks with:
 
 ```sh

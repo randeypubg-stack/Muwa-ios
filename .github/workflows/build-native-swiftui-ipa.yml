@@ -521,7 +521,7 @@ jobs:
           ruby tests/prepare_interaction_tests.rb build/interaction-source/native/MuwaNasheedsNative
       - name: Exercise real row dragging and playlist creation
         run: |
-          python3 tests/select_apple_review_devices.py --kind "${{ matrix.device }}" --open-gui --output build/interaction-devices.json
+          python3 tests/select_apple_review_devices.py --kind "${{ matrix.device }}" --open-gui --boot --output build/interaction-devices.json
           DEVICE_ID="$(python3 tests/select_apple_review_devices.py --kind "${{ matrix.device }}" --print-udid)"
           set -o pipefail
           xcodebuild -project build/interaction-source/native/MuwaNasheedsNative/MuwaNasheeds.xcodeproj -scheme MuwaInteractions -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE_ID" -derivedDataPath build/InteractionDerivedData -resultBundlePath build/interactions.xcresult CODE_SIGNING_ALLOWED=NO test 2>&1 | tee build/interactions.log
