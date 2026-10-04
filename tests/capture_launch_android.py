@@ -18,6 +18,7 @@ import shutil
 import struct
 import subprocess
 import time
+from android_review_device import assert_frame_dimensions, review_device
 
 PACKAGE = "app.muwa.nasheeds"
 ANIMATION_KEYS = ("window_animation_scale", "transition_animation_scale", "animator_duration_scale")
@@ -63,12 +64,12 @@ def set_animation_scale(value):
     return confirmed
 
 
-def screenshot(path):
+def screenshot(path, device):
     check_foreground()
     data = adb("exec-out", "screencap", "-p", binary=True, timeout=15)
     assert data.startswith(b"\x89PNG\r\n\x1a\n") and data[12:16] == b"IHDR", "Invalid Android PNG"
     width, height = struct.unpack(">II", data[16:24])
-    assert 0 < width < height, f"Expected portrait screenshot, got {width}x{height}"
+    assert_frame_dimensions(device, width, height, "portrait")
     path.write_bytes(data)
     return {"file": path.name, "width": width, "height": height, "bytes": len(data), "source": "adb screencap"}
 
@@ -146,7 +147,7 @@ def recognize_home_header(path, height):
     return "главная" in headers and "нашиды без музыки" in headers
 
 
-def assert_home(remote_xml, out, label="launch"):
+def assert_home(remote_xml, out, device, label="launch"):
     # Cold emulator renderers can keep the starting window above Compose after
     # am start -W returns. Verify a fresh hierarchy until actual home is visible.
     deadline = time.monotonic() + 30
@@ -169,20 +170,21 @@ def assert_home(remote_xml, out, label="launch"):
             path.write_text(hierarchy)
             return {"method": "fresh UiAutomation hierarchy", "file": path.name}
         path = out / f"{label}-home-verification.png"
-        frame = screenshot(path)
+        frame = screenshot(path, device)
         if recognize_home_header(path, frame["height"]):
             return {"method": "fresh native PNG header OCR", "file": path.name,
                     "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                     "foregroundPackage": PACKAGE, "width": frame["width"], "height": frame["height"]}
         time.sleep(0.4)
     (out / "failed-hierarchy.xml").write_text(hierarchy)
-    screenshot(out / "launch-failed.png")
+    screenshot(out / "launch-failed.png", device)
     raise AssertionError("Launch did not reveal native home within 30 seconds")
 
 
 def main():
     out = Path(os.environ.get("MUWA_ANDROID_OUTPUT", "build/android-previews")) / "launch"
     out.mkdir(parents=True, exist_ok=True)
+    device = review_device(adb)
     record_video = os.environ.get("MUWA_ANDROID_LAUNCH_VIDEO", "1") != "0"
     unique = f"{os.getpid()}-{int(time.time())}"
     recording_name = f"muwa-launch-{unique}.webm"
@@ -193,9 +195,8 @@ def main():
                 for namespace, key in setting_keys}
     manifest = {
         "package": PACKAGE, "route": "launch", "captureStatus": "started",
-        "model": adb("shell", "getprop", "ro.product.model").strip(),
-        "size": adb("shell", "wm", "size").strip(),
-        "density": adb("shell", "wm", "density").strip(),
+        "model": device["model"], "device": device,
+        "size": device["size"], "density": device["density"],
         "orientation": "portrait", "requestedPostLaunchSeconds": 3,
         "previousSettings": {f"{namespace}.{key}": value for (namespace, key), value in previous.items()},
         "recordingAnimationScale": 1, "reducedAnimationScale": 0,
@@ -229,10 +230,10 @@ def main():
         print("Verify actual Android launch: review.route=launch", flush=True)
         manifest["launchResult"] = start_launch()
         time.sleep(0.25)
-        manifest["files"].append(screenshot(out / "launch-window.png"))
+        manifest["files"].append(screenshot(out / "launch-window.png", device))
         # am start -W can return while the GPU is still presenting the starting
         # window on a cold CI emulator. Keep recording through actual native home.
-        manifest["homeVerification"] = assert_home(remote_xml, out)
+        manifest["homeVerification"] = assert_home(remote_xml, out, device)
         manifest["nativeHomeVerified"] = True
         if record_video:
             manifest["nativeHomeVerifiedBeforeStop"] = True
@@ -267,20 +268,20 @@ def main():
                                       "source": "Emulator recording converted to MP4"})
         # Preserve the verified actual foreground frame before the second
         # cold start. The video branch also verified home during recording.
-        manifest["files"].append(screenshot(out / "launch-home.png"))
+        manifest["files"].append(screenshot(out / "launch-home.png", device))
         manifest["captureStatus"] = "recorded" if record_video else "verified"
         # A real second cold start proves that disabling motion reveals usable home.
         manifest["confirmedReducedScales"] = set_animation_scale(0)
         manifest["reducedLaunchResult"] = start_launch()
         time.sleep(0.4)
-        manifest["reducedHomeVerification"] = assert_home(remote_xml, out, label="reduced")
-        manifest["files"].append(screenshot(out / "launch-reduced-motion-home.png"))
+        manifest["reducedHomeVerification"] = assert_home(remote_xml, out, device, label="reduced")
+        manifest["files"].append(screenshot(out / "launch-reduced-motion-home.png", device))
         manifest["captureStatus"] = "complete"
     except Exception as error:
         manifest["captureStatus"] = "failed"
         manifest["error"] = str(error)
         try:
-            screenshot(out / "launch-failed.png")
+            screenshot(out / "launch-failed.png", device)
         except Exception as capture_error:
             manifest["failureScreenshotError"] = str(capture_error)
         try:

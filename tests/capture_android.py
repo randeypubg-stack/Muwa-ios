@@ -5,6 +5,7 @@ from pathlib import Path
 import struct
 import subprocess
 import time
+from android_review_device import assert_frame_dimensions, review_device
 
 PACKAGE = 'app.muwa.nasheeds'
 ROUTES = ['home', 'library', 'profile', 'premium', 'promo', 'settings', 'search', 'queue', 'downloads', 'auth', 'publication', 'player']
@@ -40,8 +41,10 @@ def capture_oriented(rotation, diagnostic_path):
 
 out = Path(os.environ.get('MUWA_ANDROID_OUTPUT', 'build/android-previews'))
 out.mkdir(parents=True, exist_ok=True)
-manifest = {'package': PACKAGE, 'model': adb('shell', 'getprop', 'ro.product.model').strip(),
-            'size': adb('shell', 'wm', 'size').strip(), 'density': adb('shell', 'wm', 'density').strip(), 'screens': []}
+device = review_device(adb)
+manifest = {'package': PACKAGE, 'model': device['model'], 'device': device,
+            'size': device['size'], 'density': device['density'], 'captureStatus': 'started', 'screens': []}
+(out / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
 for rotation, orientation in [(0, 'portrait'), (1, 'landscape')]:
     adb('shell', 'input', 'keyevent', 'KEYCODE_WAKEUP')
     adb('shell', 'wm', 'dismiss-keyguard')
@@ -59,7 +62,7 @@ for rotation, orientation in [(0, 'portrait'), (1, 'landscape')]:
         foreground = adb('shell', 'dumpsys', 'activity', 'activities')
         assert any(PACKAGE in line and ('mResumedActivity' in line or 'topResumedActivity' in line) for line in foreground.splitlines()), 'Muwa is not in the foreground'
         screenshot, width, height, retries = capture_oriented(rotation, out / 'diagnostics' / f'{orientation}-{route}-orientation.png')
-        assert (height > width) if rotation == 0 else (width > height), f'Incorrect orientation: {width}x{height}'
+        assert_frame_dimensions(device, width, height, orientation)
         path = folder / f'{route}.png'
         path.write_bytes(screenshot)
         manifest['screens'].append({'route': route, 'orientation': orientation, 'width': width, 'height': height, 'orientationRetries': retries, 'file': str(path.relative_to(out))})
@@ -76,10 +79,12 @@ try:
         path = out / 'large-text' / f'{route}.png'
         path.parent.mkdir(parents=True, exist_ok=True)
         screenshot, width, height, retries = capture_oriented(0, out / 'diagnostics' / f'{route}-large-text.png')
+        assert_frame_dimensions(device, width, height, 'portrait')
         path.write_bytes(screenshot)
         manifest['screens'].append({'route': route, 'orientation': 'portrait', 'fontScale': 1.45,
             'width': width, 'height': height, 'orientationRetries': retries, 'file': str(path.relative_to(out))})
 finally:
     adb('shell', 'settings', 'put', 'system', 'font_scale', '1.0')
+manifest['captureStatus'] = 'complete'
 (out / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
 print(f'Captured {len(manifest["screens"])} native Android screens', flush=True)

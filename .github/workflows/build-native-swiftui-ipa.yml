@@ -17,6 +17,8 @@ on:
         "!tests/capture_launch_ios.py",
         "!tests/capture_launch_android.py",
         "!tests/capture_android.py",
+        "!tests/android_review_device.py",
+        "!tests/AndroidReviewDeviceChecks.py",
         "!tests/RecorderSignalChecks.py",
         "!tests/verify_native_snapshot.py",
         ".github/workflows/build-native-swiftui-ipa.yml",
