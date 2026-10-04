@@ -44,6 +44,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.math.PI
@@ -54,6 +55,15 @@ import kotlin.math.sin
 fun MuwaLaunchHost(showIntro: Boolean, systemLaunchReady: Boolean = true, content: @Composable () -> Unit) {
     // This is deliberately not saveable: rotation/recreation must not replay the launch.
     var introVisible by remember { mutableStateOf(showIntro && ValueAnimator.areAnimatorsEnabled()) }
+    LaunchedEffect(introVisible) {
+        if (introVisible) {
+            // System splash/focus/frame-commit callbacks can be lost when a
+            // renderer is recreated. A decorative reveal must never hide the
+            // already-mounted home indefinitely; fall back to usable content.
+            delay(3000)
+            introVisible = false
+        }
+    }
     Box(Modifier.fillMaxSize()) {
         Box(if (introVisible) Modifier.clearAndSetSemantics { } else Modifier) { content() }
         if (introVisible) MuwaLaunchIntro(systemLaunchReady) { introVisible = false }
