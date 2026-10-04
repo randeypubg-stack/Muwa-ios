@@ -121,10 +121,18 @@ def start_launch():
 def recognize_home_header(path, height):
     # Validate pixels independently when Android's transient UiAutomation bridge
     # cannot return a root. Read the unmodified native PNG, never a prior frame.
+    # Decode only the actual top header for OCR. Keep the original proof PNG
+    # intact; scanning every Arabic track row wastes CPU on hosted tablet GPUs.
+    header = subprocess.check_output(
+        ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-threads", "1",
+         "-i", str(path), "-vf", f"crop=iw:{min(height // 4, 600)}:0:0",
+         "-frames:v", "1", "-threads", "1", "-f", "image2pipe", "-vcodec", "png", "pipe:1"],
+        stderr=subprocess.PIPE, timeout=10)
     result = subprocess.check_output(
-        ["tesseract", str(path), "stdout", "-l", "rus", "--psm", "11",
+        ["tesseract", "stdin", "stdout", "-l", "rus", "--psm", "11",
          "-c", "tessedit_create_tsv=1", "-c", "tessedit_create_txt=0"],
-        text=True, stderr=subprocess.PIPE, timeout=10)
+        input=header, stderr=subprocess.PIPE, timeout=10,
+        env={**os.environ, "OMP_THREAD_LIMIT": "1"}).decode()
     lines = {}
     for row in csv.DictReader(io.StringIO(result), delimiter="\t"):
         word = (row.get("text") or "").strip()
