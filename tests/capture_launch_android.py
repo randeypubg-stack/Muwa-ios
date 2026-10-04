@@ -121,11 +121,18 @@ def assert_home(remote_xml, out):
         check_foreground()
         # Never accept the first launch's stale XML on the reduced-motion launch.
         adb("shell", "rm", "-f", remote_xml)
-        result = adb("shell", "uiautomator", "dump", "--compressed", remote_xml, timeout=30)
-        if "ERROR:" in result:
+        try:
+            # UiAutomator can report a null root on stderr while exiting zero,
+            # without creating XML. Retry a fresh dump rather than accepting an
+            # old hierarchy or failing on a transient missing file.
+            result = adb("shell", "uiautomator", "dump", "--compressed", remote_xml, timeout=10)
+            if "ERROR:" in result:
+                time.sleep(0.4)
+                continue
+            hierarchy = adb("shell", "cat", remote_xml, timeout=10)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
             time.sleep(0.4)
             continue
-        hierarchy = adb("shell", "cat", remote_xml, timeout=15)
         if 'text="Главная"' in hierarchy and 'text="Нашиды без музыки"' in hierarchy:
             (out / "home-hierarchy.xml").write_text(hierarchy)
             return
