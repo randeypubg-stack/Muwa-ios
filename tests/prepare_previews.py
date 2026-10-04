@@ -4,6 +4,9 @@ import sys
 root=Path(sys.argv[1])
 app=root/'Sources/App/MuwaNasheedsApp.swift'
 s=app.read_text()
+track=root/'Sources/Models/Track.swift'
+track.write_text(track.read_text()+'\n#if DEBUG\n'+Path('tests/FixtureCatalog.swift').read_text()+'\n#endif\n')
+s=s.replace('let library = LibraryStore()', 'CatalogStore.shared.installReviewTracks(Track.reviewCatalog)\n    let library = LibraryStore()')
 s=s.replace('.task { await auth.restore() }', '''.task {
           if ProcessInfo.processInfo.arguments.contains("--audit-launch") {
             await auth.restore()

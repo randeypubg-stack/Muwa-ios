@@ -7,26 +7,19 @@ confirms 2 CPUs, Docker 29.8.2, Compose 5.6.0, 2 GiB active swap and HOST PREPAR
 The owner confirmed Beget as the provider and Russia as the region. This is the owner's test host; capacity for 10,000 total
 registered users still needs measurement and a separate media delivery plan.
 
-`bootstrap-ubuntu.sh` prepares the host; it does **not** create a replacement
-backend, empty account database, public media bucket, or a running Muwa service.
-The existing Floot db/auth/storage adapters and data must first be exported and
-adapted as described in [the migration plan](../../docs/CLOSED-BETA-HOSTING.md).
+`bootstrap-ubuntu.sh` prepares the host; application deployment is a separate stage.
+On 4 October the owner authorized a fresh Beget database and catalog, without
+importing Floot records. That deployment is now running: PostgreSQL, the adapted
+existing backend/admin panel, private NVMe media storage and trusted IP HTTPS.
+See [current deployment and owner login](../../docs/BEGET-BETA-DEPLOYMENT.md).
+The old Floot project remains untouched; an export or hosting top-up is not required.
 
-## Confirmed remote access and migration staging
+## Confirmed remote access
 
-On 4 October 2026, Remote Desktop Commander executed commands as root on the
-expected Beget IPv4/hostname. The live read-only preflight confirmed two CPUs,
-about 4 GiB RAM, 2 GiB swap, Docker 29.8.2/Compose 5.6.0, active UFW/Fail2ban,
-and no existing containers. Host configuration was saved privately under
-`/var/backups/muwa/pre-migration-20261004T093650Z/`; this local snapshot is not
-an off-host database/media backup.
-
-The verified repository commit `b4ea23108e96454a53471372b73aad71cf1a7a05` is staged
-at `/opt/muwa/source`. Missing Floot-owned source dependencies are preserved
-separately with version/hash manifests. Neither source staging nor these
-generated schema types restore database records. The owner reports an existing
-database export, which must be received and checked before trial restoration.
-Private incoming files belong in `/var/backups/muwa/incoming/`, never in Git.
+Remote commands were verified on the expected Beget IPv4/hostname. Host settings
+were saved under `/var/backups/muwa/pre-migration-20261004T093650Z/` before deployment.
+Source snapshots preserve the existing implementation; snapshots do not restore
+old database records. The current release is `/srv/muwa/current`.
 
 The reviewed Desktop Commander 0.2.52 installation and npm lock were copied from
 the working cache to `/opt/muwa/tools/desktop-commander`. The canonical service
@@ -40,8 +33,8 @@ reboot was performed. This unit assumes the verified installation exists; it
 does not install or authorize a new agent.
 
 `/var/lib/muwa/remote-access-status.json` and `migration-status.json` record the
-observed stages privately on the VPS. Muwa application/data deployment and mobile
-backend switching remain separate pending stages.
+observed stages privately on the VPS. The dated deployment document supersedes
+earlier staging reports; native clients now target the Beget HTTPS origin.
 
 ## Review and run
 
@@ -155,29 +148,20 @@ publish only the intended HTTPS proxy, keep PostgreSQL/container administration
 off public interfaces, and verify exposure from outside the VPS. Host preparation
 alone does not configure a firewall; security setup has its own completion report.
 
-Preserve original account IDs/password hashes and track IDs, perform a staged
-import with record counts/checksums, and keep the previous backend for rollback.
-Use a private media origin, tested Range requests and owner beta access. Provide
-off-host backups with a restoration check; `/var/backups/muwa` is only a local
-staging directory. Do not activate paid ASR. Telegram export/history access still
-needs the owner's channel confirmation and local credentials.
-
-Source access is a prerequisite for migration. Floot's 4 October 2026 account
-status reports exhausted hosting credit: the published app is offline and
-PostgreSQL connections are disabled, with all data preserved. Source files remain
-readable, but a source/schema-type snapshot is not a database backup. A verified
-existing backup/export or restored database access is needed before transferring
-accounts/catalog records. No hosting credit was purchased. See the
-[migration status](../../docs/CLOSED-BETA-HOSTING.md) and
-[Floot hosting balance](https://floot.com/dashboard/hosting).
+The fresh-database scripts `init-fresh-beget.py`, `run-with-env.py`, service/proxy
+units and certificate/backup scripts are the deployment sources for this beta.
+The database initializer refuses an unrecognized existing database; it does not
+reset a live deployment. Passwords and signing secrets are generated on the VPS
+and stored privately. Do not commit generated env files or owner setup links.
+Automatic ASR stays disabled. Telegram history import needs channel confirmation
+and local credentials before actual ingestion; no channel has been copied yet.
 
 The owner's 3 October 2026 output confirms Docker Engine 29.8.2 and Compose
 5.6.0 installed successfully. The first installer stopped before swap creation:
 `excl` was incorrectly supplied as an output flag to `dd`; the corrected code
 uses `conv=excl`. The later owner screenshot confirms the complete host stage,
 including swap. Host security is confirmed separately by the 4 October screenshot.
-The app and database migration still require their own verification; do not call
-Muwa deployed prematurely.
+Application deployment is confirmed separately in the 4 October deployment report.
 
 Validation: Bash syntax, ShellCheck, root/OS preflight, and real 4 MiB allocation
 and formatting using GNU coreutils and Ubuntu 26 coreutils. The file tests also

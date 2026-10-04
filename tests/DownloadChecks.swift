@@ -3,6 +3,7 @@ import Foundation
 @main
 struct DownloadChecks {
   @MainActor static func main() throws {
+    CatalogStore.shared.installReviewTracks(Track.reviewCatalog)
     let suite = "muwa.download.audit.\(UUID())"
     let defaults = UserDefaults(suiteName: suite)!
     let folder = URL.temporaryDirectory.appendingPathComponent(suite)

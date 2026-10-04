@@ -186,7 +186,7 @@ final class PlayerManager: ObservableObject {
     {
       item = AVPlayerItem(asset: prefetchedAsset)
     } else {
-      item = AVPlayerItem(url: playbackURL)
+      item = AVPlayerItem(asset: playbackAsset(url: playbackURL))
     }
     prefetchedTrackID = nil
     prefetchedURL = nil
@@ -525,6 +525,12 @@ final class PlayerManager: ObservableObject {
     updateNowPlaying()
   }
 
+  private func playbackAsset(url: URL) -> AVURLAsset {
+    guard !url.isFileURL else { return AVURLAsset(url: url) }
+    let cookies = HTTPCookieStorage.shared.cookies(for: url) ?? []
+    return AVURLAsset(url: url, options: [AVURLAssetHTTPCookiesKey: cookies])
+  }
+
   private func prefetchFollowingTrack(after track: Track) {
     prefetchTask?.cancel()
     prefetchedTrackID = nil
@@ -562,7 +568,7 @@ final class PlayerManager: ObservableObject {
       ? (downloads.localURL(for: nextTrack) ?? nextTrack.audioURL)
       : nextTrack.audioURL
 
-    let asset = AVURLAsset(url: url)
+    let asset = playbackAsset(url: url)
     prefetchedTrackID = nextTrack.id
     prefetchedURL = url
     prefetchedAsset = asset

@@ -34,7 +34,7 @@ final class DownloadManager: ObservableObject {
     downloadedIDs = Set(defaults.stringArray(forKey: Self.key) ?? [])
     sources = defaults.dictionary(forKey: Self.sourcesKey) as? [String: String] ?? [:]
     for id in downloadedIDs where sources[id] == nil {
-      sources[id] = Track.bundledCatalog.first(where: { $0.id == id })?.audioURL.absoluteString ?? Track.track(id: id)?.audioURL.absoluteString
+      sources[id] = Track.track(id: id)?.audioURL.absoluteString
     }
     defaults.set(sources, forKey: Self.sourcesKey)
     try? fileManager.createDirectory(at: self.folder, withIntermediateDirectories: true)

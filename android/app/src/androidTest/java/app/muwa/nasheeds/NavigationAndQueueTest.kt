@@ -8,9 +8,11 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import org.junit.Assert.assertEquals
 import org.junit.Rule
+import org.junit.Before
 import org.junit.Test
 
 class NavigationAndQueueTest {
+    @Before fun loadReviewCatalog() { installReviewCatalog() }
     @get:Rule val compose = createEmptyComposeRule()
 
     @Test

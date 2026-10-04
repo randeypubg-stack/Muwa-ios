@@ -1,8 +1,8 @@
 import Combine
 import Foundation
 
-/// One catalogue owner. The bundled seven tracks bootstrap the first offline launch;
-/// a successfully fetched empty catalogue remains empty, rather than resurrecting tracks.
+/// One catalogue owner. A fresh Beget install starts empty; a verified local
+/// snapshot remains usable offline and never resurrects retired Floot samples.
 @MainActor
 final class CatalogStore: ObservableObject {
   static let shared = CatalogStore()
@@ -14,7 +14,7 @@ final class CatalogStore: ObservableObject {
   private let baseURL: URL
   private let defaults: UserDefaults
   private let cacheKey = "muwa.native.catalog.v1"
-  private struct Cache: Codable { let tracks: [Track]; let known: [Track] }
+  private struct Cache: Codable { let tracks: [Track]; let known: [Track]; let origin: String? }
   private struct Document: Decodable { let version: Int; let tracks: [Item] }
   private struct Item: Decodable {
     let id: String; let title: String; let artist: String; let duration: Double
@@ -25,11 +25,19 @@ final class CatalogStore: ObservableObject {
     self.session = session; self.baseURL = baseURL
     self.defaults = defaults
     let cached = defaults.data(forKey: cacheKey).flatMap { try? JSONDecoder().decode(Cache.self, from: $0) }
-    tracks = cached?.tracks ?? Track.bundledCatalog
-    known = Dictionary((cached?.known ?? Track.bundledCatalog).map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
+    let snapshot = cached?.origin == baseURL.absoluteString ? cached : nil
+    tracks = snapshot?.tracks ?? []
+    known = Dictionary((snapshot?.known ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
   }
 
   func track(id: String) -> Track? { known[id] }
+
+  #if DEBUG || MUWA_TEST_FIXTURES
+  func installReviewTracks(_ values: [Track]) {
+    tracks = values
+    known = Dictionary(values.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
+  }
+  #endif
 
   func refresh(force: Bool = false) async {
     guard !refreshing, (force || Date().timeIntervalSince(lastRefresh) >= 30) else { return }
@@ -57,7 +65,7 @@ final class CatalogStore: ObservableObject {
       // Keep metadata for downloaded/queued tracks; remote archive never destroys user IDs or interrupts AVPlayer.
       values.forEach { known[$0.id] = $0 }
       if tracks != values { tracks = values }
-      if let encoded = try? JSONEncoder().encode(Cache(tracks: values, known: Array(known.values))) { defaults.set(encoded, forKey: cacheKey) }
+      if let encoded = try? JSONEncoder().encode(Cache(tracks: values, known: Array(known.values), origin: baseURL.absoluteString)) { defaults.set(encoded, forKey: cacheKey) }
       lastRefresh = Date()
     } catch {
       guard !Task.isCancelled else { return }

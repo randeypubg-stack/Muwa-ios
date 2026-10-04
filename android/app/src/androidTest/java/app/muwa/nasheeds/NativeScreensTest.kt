@@ -6,11 +6,13 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.Until
+import org.junit.Before
 import org.junit.Test
 import org.junit.Assert.*
 import java.io.File
 
 class NativeScreensTest {
+    @Before fun loadReviewCatalog() { installReviewCatalog() }
     @Test fun captureNativeScreens() {
         val instrumentation=InstrumentationRegistry.getInstrumentation()
         val context=instrumentation.targetContext

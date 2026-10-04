@@ -1,5 +1,5 @@
 import { sql } from "kysely";
-import { remove, getInfo } from "@floot/storage";
+import { remove, getInfo } from "./storage";
 import { db } from "./db";
 import { SecurityError } from "./requestSecurity";
 type File = { filename: string; visibility?: "private" | "public" };

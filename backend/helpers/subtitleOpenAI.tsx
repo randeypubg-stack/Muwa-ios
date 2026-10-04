@@ -1,3 +1,4 @@
+import { publicOrigin } from "./runtimeConfig";
 // Server-only provider. Never expose credentials or upstream error bodies.
 export class SubtitleProviderError extends Error {
   constructor(public code: string, public status: number) { super(code); }
@@ -38,7 +39,7 @@ export function normalizeWhisper(raw: any) {
 }
 async function original(src: string) {
   if (!/^\/_cdn\/static\/[A-Za-z0-9_-]+\.(mp3|m4a|wav|aac|ogg)$/.test(src)) throw new Error('INVALID_SOURCE');
-  const response = await fetch(new URL(src,'https://muwa-app.floot.app'), {redirect:'error',signal:AbortSignal.timeout(30000)});
+  const response = await fetch(new URL(src,publicOrigin()), {redirect:'error',signal:AbortSignal.timeout(30000)});
   if (!response.ok || !response.body) throw new Error('AUDIO_UNAVAILABLE');
   if (Number(response.headers.get('content-length')) > MAX_AUDIO) { await response.body.cancel(); throw new Error('AUDIO_TOO_LARGE'); }
   const reader=response.body.getReader(); const chunks: Uint8Array[]=[]; let size=0;

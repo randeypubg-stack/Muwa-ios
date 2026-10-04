@@ -6,13 +6,11 @@ import kotlinx.coroutines.*
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
-import java.util.concurrent.TimeUnit
 
-class Downloads(context: Context) {
+class Downloads(context: Context, private val client: OkHttpClient) {
     private val prefs = context.getSharedPreferences("muwa.download.sources", Context.MODE_PRIVATE)
     private val folder = File(context.filesDir, "OfflineAudio").apply { mkdirs() }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val client = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build()
     var downloaded by mutableStateOf(folder.listFiles().orEmpty().filter { it.extension == "mp3" && it.length() > 0 }.map { it.nameWithoutExtension }.toSet()); private set
     init {
         val original = org.json.JSONArray(context.assets.open("catalog.json").bufferedReader().use { it.readText() })

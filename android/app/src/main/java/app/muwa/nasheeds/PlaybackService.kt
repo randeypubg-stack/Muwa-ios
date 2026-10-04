@@ -7,6 +7,9 @@ import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.*
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import kotlinx.coroutines.*
@@ -16,7 +19,7 @@ object AppGraph {
     lateinit var library: Library; private set
     lateinit var downloads: Downloads; private set
     lateinit var backend: Backend; private set
-    fun init(context: Context) { library = Library(context); downloads = Downloads(context); backend = Backend(context) }
+    fun init(context: Context) { backend = Backend(context); library = Library(context); downloads = Downloads(context, backend.mediaClient) }
     fun mediaItem(track: Track): MediaItem = MediaItem.Builder().setMediaId(track.id)
         .setUri(downloads.local(track)?.toURI()?.toString() ?: track.audio)
         .setMediaMetadata(MediaMetadata.Builder().setTitle(track.title).setArtist(track.artist).setArtworkUri(android.net.Uri.parse(track.artwork)).build()).build()
@@ -34,13 +37,14 @@ object SleepTimer {
     fun cancel() { handler.removeCallbacks(stop); endAt = null; afterTrack = false; player?.pauseAtEndOfMediaItems = false }
     fun finished() { if (afterTrack) { player?.pause(); cancel() } }
 }
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 class PlaybackService : MediaSessionService() {
     private lateinit var player: ExoPlayer
     private var session: MediaSession? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     override fun onCreate() {
         super.onCreate()
-        player = ExoPlayer.Builder(this).build().apply {
+        player = ExoPlayer.Builder(this).setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(this, OkHttpDataSource.Factory(AppGraph.backend.mediaClient)))).build().apply {
             setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
             setHandleAudioBecomingNoisy(true)
         }

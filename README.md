@@ -1,11 +1,11 @@
 # Muwa
 
 Native iOS/iPadOS (SwiftUI, AVPlayer) and Android (Kotlin, Jetpack Compose, Media3)
-clients for Muwa. Both use the existing Muwa backend and the same account service.
+clients for Muwa. Both use the same Muwa backend and account contracts, now hosted on Beget.
 
 - App name: **Muwa**
 - Bundle/application ID: `app.muwa.nasheeds`
-- Version: `1.4.0`, build `40`
+- Version: `1.4.0`; iOS build `43`, Android build `41`
 - Brand assets: the supplied silver-blue logo in `branding/`, verified by SHA-256
 - Cold launch: short native reveal, light sweep and fade; respects reduced animation
 
@@ -36,7 +36,10 @@ paid infrastructure are deferred by the owner. Production StoreKit/Play Billing,
 CarPlay provisioning and physical-device validation still require completion.
 
 The owner permits a public repository. CI scans source history and archives for
-secrets. Prepared server security changes have **not** been deployed while Floot
-developer actions are unavailable; see
-[Build39 security status](docs/SECURITY-HARDENING-BUILD39.md). A passing client build
-does not prove those production changes are active.
+secrets. On 4 October 2026, the owner chose a fresh database and catalog without
+importing old Floot records. The existing backend and admin handlers run on Beget
+with private media storage and trusted HTTPS: https://93.188.187.96/admin.
+Floot is no longer required to build or run this beta; its old project is untouched.
+See [the deployment and first-login instructions](docs/BEGET-BETA-DEPLOYMENT.md).
+Client build numbers above identify the updated source; CI results establish
+whether their installable artifacts are ready.

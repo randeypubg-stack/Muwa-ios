@@ -1,42 +1,32 @@
 # Muwa remote control panel
 
-Live route: https://muwa-app.floot.app/admin
+Live route: https://93.188.187.96/admin. This is the existing Muwa panel adapted
+for the fresh Beget deployment chosen by the owner on 4 October 2026. It shares
+canonical contracts with `../backend`; it is not a browser wrapper for the apps.
 
-The panel is part of the existing Floot project
-`20d2f317-3710-4331-80ee-ea6072056928`. These files mirror the changed Floot
-pages/components/auth helper. They are an overlay for that project, not a second
-frontend/backend or an independent deployment. Shared seeded controls and the
-existing database/auth adapters stay in the Floot project. Server implementations
-are in `backend/helpers/admin*` and `backend/endpoints/admin`/`catalog`.
+Run `npm ci && npm run build` to typecheck and create the nginx `dist/` bundle.
+React/Vite provide the panel runtime, existing controls and screen logic are
+retained. All API/media requests use the same HTTPS origin and HttpOnly session.
+No third-party fonts, embedded credentials or separate account service are required.
 
-- Use the existing Muwa account. Server checks `users.role = 'admin'` on every
-  panel request. The owner explicitly selected their existing account in the conversation.
-- Audio and covers upload directly to Floot storage; files are verified before
-  saving. Maximum audio 100 MiB, cover 10 MiB. No paid server was provisioned.
-- New tracks start as drafts unless Published is selected. Archive removes a
-  track from discovery without deleting listener IDs, queues or downloaded files.
-- Metadata, status, subtitles and moderation use revisions: a stale edit returns
-  HTTP 409 and must be reopened after refresh.
-- Subtitles support original Arabic, Russian and English with timed lines,
-  listening preview, seek, JSON import/export. Times must be ordered, non-overlapping
-  and within the audio duration. Replacing audio clears old timings.
-- Automatic ASR is paused because the existing provider lacks credits. The panel
-  never starts a paid recognition request. Existing legacy/v2 endpoints are retained.
-- Publications use the original private audio/cover/submission.json protocol.
-  Refresh scans final ready markers in bounded batches; a presigned draft alone
-  is not accepted for moderation. Approval copies files via the administrator's
-  browser to public storage and atomically creates one catalogue entry.
-- All committed catalogue and moderation changes write the same database journal.
-  Session tokens, passwords, private URLs and PUT credentials are not journaled.
-- Public endpoints: GET /\_api/catalog/tracks and
-  GET /\_api/catalog/captions?trackId=...; only published data is returned.
-- Native build 38 consumes these endpoints. Older builds with a bundled catalogue
-  need an app update. The public feed is cached for 30 seconds.
+First owner login is described in [deployment instructions](../docs/BEGET-BETA-DEPLOYMENT.md).
+The one-time setup link remains in a private root file on the VPS. Public
+registration and anonymous catalog access are disabled during the owner-only beta.
+Server-side user role is checked on every admin request, including uploads.
 
-Migration: `backend/admin-migration.sql` (additive, existing DB). Seed:
-`backend/admin-seed.sql` copies the original seven IDs with ON CONFLICT DO NOTHING.
-The migration intentionally grants no roles or Premium entitlements.
+- Audio/cover upload uses private signed PUT tickets on NVMe, then server-side
+  file validation; maximum audio 100 MiB, cover 10 MiB.
+- New tracks can be drafts or published. Archive removes discovery entries
+  without replacing track identity. Revision conflicts return 409.
+- Manual Arabic/Russian/English timed captions support preview, seek and JSON
+  import/export; bounds and overlaps are validated. Replacing audio clears timing.
+- Automatic ASR is paused; uploading and publishing remain independent of it.
+- Publications preserve the audio/cover/submission.json readiness protocol.
+- Committed catalog/moderation mutations write the existing audit journal.
+  Passwords, session tokens and signed file tickets are not journaled.
+- Native iOS build 43 / Android build 41 use the Beget catalog with authenticated
+  audio and covers. Demonstration tracks are isolated to review/test fixtures.
 
-Validation: Floot full typecheck + Jasmine validation/provider tests; disposable
-Postgres integration tests (`backend/README.md`); authenticated live API/storage
-checks; native registration, Android build/unit/lint and GitHub iOS CI.
+The old `backend/admin-seed.sql` is historical and was not applied to this fresh
+beta. No old accounts, Premium grants or media were imported. Backend checks cover
+real PostgreSQL transactions and the full HTTP login/upload/publication chain.

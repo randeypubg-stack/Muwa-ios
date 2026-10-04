@@ -36,8 +36,8 @@ import {
 } from "./Dialog";
 import { PasswordLoginForm } from "./PasswordLoginForm";
 import { useAuth } from "../helpers/useAuth";
-import { getAdminState } from "../endpoints/admin/state_GET.schema";
-import { postAdminAction } from "../endpoints/admin/action_POST.schema";
+import { getAdminState } from "../../backend/endpoints/admin/state_GET.schema";
+import { postAdminAction } from "../../backend/endpoints/admin/action_POST.schema";
 import {
   adminValidation,
   type AdminState,
@@ -46,10 +46,10 @@ import {
   type Caption,
   type SubmissionRecord,
   type AdminAction,
-} from "../helpers/adminValidation";
+} from "../../backend/helpers/adminValidation";
 import styles from "./AdminWorkspace.module.css";
 const logo =
-  "/_cdn/static/eb49d339-6241-4b45-b49a-5520ade894f9-muwa-admin-mark.png";
+  "/assets/app-mark.png";
 const labels: Record<string, string> = {
   published: "Опубликован",
   draft: "Черновик",
@@ -167,7 +167,7 @@ export const AdminWorkspace = () => {
       <main className={styles.gate}>
         <p>Откройте панель Muwa в отдельном окне.</p>
         <a
-          href="https://muwa-app.floot.app/admin"
+          href="/admin"
           target="_blank"
           rel="noopener noreferrer"
         >

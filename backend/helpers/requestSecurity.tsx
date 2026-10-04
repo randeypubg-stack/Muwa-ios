@@ -15,10 +15,9 @@ export function guardMutation(request: Request) {
   if (type !== "application/json")
     throw new SecurityError("Нужен JSON-запрос.", 415);
   const origin = request.headers.get("origin");
-  const allowed = new Set([
-    "https://muwa-app.floot.app",
-    "https://20d2f317-3710-4331-80ee-ea6072056928.sandbox.floot.app",
-  ]);
+  const configured = process.env.MUWA_PUBLIC_ORIGIN;
+  if (!configured) throw new SecurityError("Сервер не настроен.", 503);
+  const allowed = new Set([new URL(configured).origin]);
   if (
     (origin && !allowed.has(origin)) ||
     request.headers.get("sec-fetch-site") === "cross-site"

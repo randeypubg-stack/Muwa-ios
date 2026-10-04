@@ -21,9 +21,11 @@
   existing manual/cached captions and the future requirement for automatic
   nasheed transcription after upload, independent of the chosen ASR provider.
   Do not activate paid recognition or make upload/publication depend on it now.
-- The next hosting direction is a closed beta on rented infrastructure. Follow
-  `docs/CLOSED-BETA-HOSTING.md`; preserve existing accounts, track IDs and API
-  contracts through a staged migration rather than creating an unrelated backend.
+- The hosting direction is a closed beta on rented infrastructure. On 4 October
+  2026 the owner explicitly chose a fresh Beget database and catalog: previous
+  Floot accounts, Premium grants, captions and media need not be imported. Leave
+  that project untouched. Adapt the existing backend and panel, preserve native
+  application IDs and API contracts, and do not create an unrelated application.
   Initially only the owner tests. Size the initial hosting for the planned
   10,000 total registered users with headroom, not for a small beta group or
   10,000 simultaneous listeners; validate capacity with load tests.

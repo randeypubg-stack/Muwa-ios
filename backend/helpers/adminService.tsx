@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { sql, type Transaction } from "kysely";
-import { upload, getInfo, getUrl, listFolder } from "@floot/storage";
+import { upload, getInfo, getUrl, listFolder } from "./storage";
 import { db } from "./db";
 import type { DB, Json } from "./schema";
 import { getServerUserSession } from "./getServerUserSession";

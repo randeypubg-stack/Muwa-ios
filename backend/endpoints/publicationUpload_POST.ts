@@ -1,4 +1,4 @@
-import { upload, getInfo } from "@floot/storage";
+import { upload, getInfo } from "../helpers/storage";
 import superjson from "superjson";
 import { NotAuthenticatedError } from "../helpers/getSetServerSession";
 import { getServerUserSession } from "../helpers/getServerUserSession";

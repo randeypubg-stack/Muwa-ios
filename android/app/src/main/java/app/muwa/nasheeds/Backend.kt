@@ -69,11 +69,12 @@ private class SessionCookies(context: Context) : CookieJar {
 }
 class Backend(context: Context) {
     companion object {
-        const val base = "https://muwa-app.floot.app"
-        val url = okhttp3.HttpUrl.Builder().scheme("https").host("muwa-app.floot.app").build()
+        const val base = "https://93.188.187.96"
+        val url = okhttp3.HttpUrl.Builder().scheme("https").host("93.188.187.96").build()
     }
     private val cookies = SessionCookies(context)
     private val client = OkHttpClient.Builder().cookieJar(cookies).connectTimeout(20, TimeUnit.SECONDS).readTimeout(45, TimeUnit.SECONDS).build()
+    internal val mediaClient = client.newBuilder().readTimeout(60, TimeUnit.SECONDS).build()
     private val uploads = OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).readTimeout(300, TimeUnit.SECONDS).writeTimeout(300, TimeUnit.SECONDS).build()
     suspend fun request(path: String, body: JSONObject? = null, envelope: Boolean = false): JSONObject = withContext(Dispatchers.IO) {
         val builder = Request.Builder().url("$base/_api/$path").header("Accept", "application/json")
@@ -82,7 +83,7 @@ class Backend(context: Context) {
             val text = response.body?.string().orEmpty()
             val raw = runCatching { JSONObject(text) }.getOrElse { throw IllegalStateException("Сервер вернул неверный ответ (${response.code}).") }
             val data = raw.optJSONObject("json") ?: raw
-            if (!response.isSuccessful) throw ApiException(response.code, data.optString("error", "Сервис недоступен. Повторите позже."))
+            if (!response.isSuccessful) throw ApiException(response.code, data.optString("error", data.optString("message", "Сервис недоступен. Повторите позже.")))
             data
         }
     }

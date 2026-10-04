@@ -25,7 +25,7 @@ class Library(context: Context) {
         require(tracks.map { it.id }.distinct().size == tracks.size)
         return tracks
     }
-    private val cached = runCatching { prefs.getString("catalog.v1",null)?.let { JSONObject(it) } }.getOrNull()
+    private val cached = runCatching { prefs.getString("catalog.v1",null)?.let { JSONObject(it).takeIf { doc -> doc.optString("origin") == Backend.base } } }.getOrNull()
     var catalog by mutableStateOf(runCatching { cached?.getJSONArray("tracks")?.let(::parseCatalog) }.getOrNull()
         ?: parseCatalog(JSONArray(context.assets.open("catalog.json").bufferedReader().use { it.readText() }))); private set
     private val known = (runCatching { cached?.getJSONArray("known")?.let(::parseCatalog) }.getOrNull() ?: catalog).associateBy { it.id }.toMutableMap()
@@ -36,7 +36,7 @@ class Library(context: Context) {
         updated.forEach { known[it.id] = it }
         catalog = updated
         fun rows(tracks: Collection<Track>) = JSONArray(tracks.map { JSONObject().put("id",it.id).put("title",it.title).put("artist",it.artist).put("duration",it.duration).put("artwork",it.artwork).put("audio",it.audio).put("captionsRevision",it.captionsRevision) })
-        prefs.edit().putString("catalog.v1",JSONObject().put("tracks",rows(updated)).put("known",rows(known.values)).toString()).apply()
+        prefs.edit().putString("catalog.v1",JSONObject().put("origin",Backend.base).put("tracks",rows(updated)).put("known",rows(known.values)).toString()).apply()
     }
     var favorites by mutableStateOf(readIDs("favorites", emptyList()).toSet()); private set
     var history by mutableStateOf(readIDs("history", emptyList())); private set

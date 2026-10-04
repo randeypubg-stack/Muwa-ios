@@ -47,7 +47,7 @@ export async function handle(request: Request) {
         },
       });
     }
-    console.error("Session validation error:", error);
+    console.error(JSON.stringify({event:"session_validation_failed"}));
     return new Response(
       superjson.stringify({ error: "Session validation failed" }),
       {

@@ -134,6 +134,7 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
         val result = backend.request(if(name == null) "auth/login_with_password" else "auth/register_with_password",body,true)
         user = result.getJSONObject("user"); Diagnostics.setAccount(user?.optInt("id")); premium = null; codes = emptyList(); createdCode = null
         message = "Вы вошли в Muwa."
+        refreshCatalog()
         try { refreshPremium() }
         catch (e: CancellationException) { throw e }
         catch (e: Throwable) { Diagnostics.record("premium", e); message = "Вы вошли в Muwa. Статус Premium временно недоступен." }

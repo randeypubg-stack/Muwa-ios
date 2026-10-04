@@ -1,4 +1,4 @@
-# Muwa Premium and subtitles
+# Muwa backend on Beget
 
 ## Telegram catalogue import (3 October 2026)
 
@@ -9,8 +9,20 @@ use the same private upload/verification path. Apply
 deploying the handler: normal saves/approvals also record verified fingerprints.
 No new auth mechanism, Telegram credentials or ASR provider is added to clients.
 See [the importer and deployment instructions](../tools/telegram-import/README.md).
-The code is prepared/tested locally; no live channel import, migration or server
-deployment has occurred. Current Floot unavailability remains a separate blocker.
+The handlers and migration are deployed to the fresh Beget database. No live
+Telegram channel import has occurred; channel access is a separate step.
+
+## Current deployment — 4 October 2026
+
+The existing endpoint implementation runs as a standalone Node/Hono service on
+Beget with PostgreSQL and private filesystem media. The owner explicitly chose
+fresh data; no old Floot accounts or media were imported. Floot access/balance is
+not a prerequisite. See [deployment and first login](../docs/BEGET-BETA-DEPLOYMENT.md).
+
+`npm ci && npm run typecheck && npm run build` creates `dist/server.mjs`.
+Required private server configuration: MUWA_DATABASE_URL, MUWA_PUBLIC_ORIGIN,
+MUWA_STORAGE_ROOT and signing secrets; values stay on the VPS. Schema types are
+generated from the actual database by `npm run schema:generate`.
 
 ## Reproducible checks
 Run `npm ci && npm test` in this directory for provider/document tests without
@@ -40,10 +52,16 @@ requirements are recorded in [the closed beta plan](../docs/CLOSED-BETA-HOSTING.
 
 Original provider adapter: server-only OpenAI Whisper 1 timestamps + GPT-4.1-mini translation into RU/EN/TR/UZ/KK/FR. Real ASR previously failed due exhausted provider credit. Owner chose a rented worker, then deferred it for lack of budget. New automatic generation is therefore explicitly paused in subtitleV2Service; existing cached documents are still readable, subtitles are free. No paid AI calls/provisioning were made in this change. Provider and document unit specs pass but are not evidence of real recognition quality.
 
-## Security hardening staged for build 39
+## Security deployment
 
-See [implementation and deployment status](../docs/SECURITY-HARDENING-BUILD39.md).
-Apply `security-migration.sql` after `admin-migration.sql`, regenerate the Floot
-schema and update every upload consumer to pass SDK headers before deploying.
-The changes are local and not yet deployed. Authentication contracts and account
-identity remain unchanged. Do not apply the test runner to a real database.
+Admin, security, Premium, subtitle v2 and Telegram migrations are applied in the
+fresh database. Existing authentication and handler contracts are preserved.
+Runtime additionally enforces owner-only beta access and disables registration.
+Production API/storage smoke passed with a trusted TLS connection; unit checks
+alone are not presented as production evidence.
+
+`npm run test:runtime` requires MUWA_TEST_DATABASE_URL pointing to a loopback
+**muwa_audit** database; it refuses production and resets only that test schema.
+Set MUWA_AUDIT_STORAGE_BASE to a writable disk with more than 5 GiB free, matching
+the real upload disk reserve. The earlier transaction suite also uses muwa_audit.
+Neither test command may be pointed at production.

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { getInfo, getUrl } from "@floot/storage";
+import { getInfo, getUrl } from "./storage";
+import { publicOrigin } from "./runtimeConfig";
 import { SecurityError } from "./requestSecurity";
 
 export type MediaFingerprint = {
@@ -189,7 +190,7 @@ export async function inspectStoredMedia(
   const etag = "etag" in info && typeof info.etag === "string" ? info.etag : "";
   if (!etag) throw new SecurityError("Хранилище не вернуло версию файла.", 503);
   const source = await getUrl({ visibility, filename, expiresInSeconds: 120 });
-  if (!source.ok || new URL(source.url).protocol !== "https:")
+  if (!source.ok || (new URL(source.url).protocol !== "https:" && !(process.env.MUWA_RUNTIME_TEST === "1" && new URL(source.url).origin === publicOrigin())))
     throw new SecurityError("Файл недоступен.", 503);
   // Only SDK-issued URLs for an already owned storage key; no URL supplied by the client.
   const response = await fetch(source.url, {
@@ -260,5 +261,5 @@ export function catalogueMediaURL(
     .update(filename)
     .digest("hex")
     .slice(0, 32);
-  return `https://muwa-app.floot.app/_api/catalog/media?trackId=${encodeURIComponent(trackId)}&part=${part}&v=${version}`;
+  return `${publicOrigin()}/_api/catalog/media?trackId=${encodeURIComponent(trackId)}&part=${part}&v=${version}`;
 }

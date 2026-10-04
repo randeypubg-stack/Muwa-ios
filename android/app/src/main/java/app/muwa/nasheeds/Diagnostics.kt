@@ -10,7 +10,8 @@ import java.util.UUID
 import java.time.Instant
 import kotlinx.coroutines.*
 
-class MuwaApplication : Application() {
+class MuwaApplication : Application(), coil.ImageLoaderFactory {
+    override fun newImageLoader() = coil.ImageLoader.Builder(this).okHttpClient(AppGraph.backend.mediaClient).build()
     override fun onCreate() {
         super.onCreate()
         Diagnostics.init(this)

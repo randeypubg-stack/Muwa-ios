@@ -3,6 +3,7 @@ import Foundation
 @main
 struct AuditChecks {
   @MainActor static func main() throws {
+    CatalogStore.shared.installReviewTracks(Track.reviewCatalog)
     let suite = "muwa.audit.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }

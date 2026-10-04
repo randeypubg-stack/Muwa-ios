@@ -36,7 +36,7 @@ struct MorphingPlayerView: View {
   @State private var artworkVerticalStartExpansion: CGFloat?
 
   private var track: Track {
-    player.currentTrack ?? Track.bundledCatalog[0]
+    player.currentTrack ?? Track(id: "empty-player", title: "Выберите нашид", artist: "Muwa", duration: 0, artworkURL: nil, audioURL: URL(fileURLWithPath: "/dev/null"))
   }
 
   var body: some View {

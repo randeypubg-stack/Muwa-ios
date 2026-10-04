@@ -38,3 +38,8 @@ security-reports/
 .muwa-telegram/
 *.egg-info/
 tools/telegram-import/.venv/
+
+backend/dist/
+backend/.runtime-run-*/
+admin-panel/node_modules/
+admin-panel/dist/

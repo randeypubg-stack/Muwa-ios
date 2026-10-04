@@ -1,11 +1,13 @@
-// Compile the checked-in helpers into a disposable test tree. Floot-owned auth
-// and DB adapters are replaced only in these tests, never in application builds.
+// Compile canonical helpers into a disposable CommonJS test tree.
+// Auth and DB adapters are replaced only in fixtures, never in application builds.
 const fs = require("node:fs");
 const path = require("node:path");
 const ts = require("typescript");
 const Jasmine = require("jasmine");
 const root = path.resolve(__dirname, "..");
 const folder = fs.mkdtempSync(path.join(root, ".test-run-"));
+process.env.MUWA_PUBLIC_ORIGIN ??= "https://muwa-app.floot.app";
+fs.writeFileSync(path.join(folder, "package.json"), JSON.stringify({type:"commonjs"}));
 const databaseTests = Boolean(process.env.MUWA_TEST_DATABASE_URL);
 const helpers = path.join(folder, "helpers");
 fs.mkdirSync(helpers);
@@ -30,6 +32,7 @@ async function main() {
       "subtitleV2Validation.spec.tsx",
       "adminValidation.tsx",
       "adminValidation.spec.tsx",
+      "runtimeConfig.ts",
       "requestSecurity.tsx",
       "requestSecurity.spec.tsx",
     ];
@@ -60,13 +63,13 @@ async function main() {
         )
       )
         throw new Error(`Invalid TypeScript: ${name}`);
-      const code = output.outputText.includes('require("@floot/storage")')
+      const code = output.outputText.includes('require("./storage")')
         ? output.outputText.replace(
-            'require("@floot/storage")',
+            'require("./storage")',
             'require("./testStorage")',
           )
         : output.outputText;
-      fs.writeFileSync(path.join(helpers, name.replace(/\.tsx$/, ".js")), code);
+      fs.writeFileSync(path.join(helpers, name.replace(/\.tsx?$/, ".js")), code);
     }
     if (databaseTests) {
       for (const name of [
@@ -89,7 +92,7 @@ async function main() {
             },
           )
           .outputText.replace(
-            'require("@floot/storage")',
+            /require\("(?:\.\.\/)+helpers\/storage"\)/g,
             `require(${JSON.stringify(path.join(helpers, "testStorage.js"))})`,
           );
         const destination = path.join(

@@ -1,5 +1,6 @@
 import { db } from "../../helpers/db";
-import { getUrl } from "@floot/storage";
+import { getUrl } from "../../helpers/storage";
+import { publicOrigin } from "../../helpers/runtimeConfig";
 import { getServerUserSession } from "../../helpers/getServerUserSession";
 import { NotAuthenticatedError } from "../../helpers/getSetServerSession";
 import { catalogueMediaURL } from "../../helpers/mediaSecurity";
@@ -48,7 +49,7 @@ export async function handle(request: Request) {
           ? Math.max(3600, Math.min(86400, Math.ceil(track.duration) + 1800))
           : 300,
     });
-    if (!source.ok || new URL(source.url).protocol !== "https:")
+    if (!source.ok || (new URL(source.url).protocol !== "https:" && !(process.env.MUWA_RUNTIME_TEST === "1" && new URL(source.url).origin === publicOrigin())))
       return secureJSON({ error: "Файл недоступен." }, 503);
     // S3 serves the bytes and Range requests; the app server never proxies an audio stream.
     return new Response(null, {

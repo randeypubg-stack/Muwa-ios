@@ -41,7 +41,7 @@ struct MuwaNasheedsApp: App {
         .environmentObject(auth)
         .preferredColorScheme(.dark)
         .task { await auth.restore() }
-        .task { await CatalogStore.shared.refresh() }
+        .task(id: auth.user?.id) { if auth.isAuthenticated { await CatalogStore.shared.refresh(force: true) } }
          .onChange(of: auth.state, initial: true) { _, state in
           premium.setAccount(auth.user?.id)
           if state != .checking { Diagnostics.shared.setAccount(auth.user?.id) }
@@ -49,7 +49,7 @@ struct MuwaNasheedsApp: App {
         .task { await premium.load() }
         .onChange(of: scenePhase) { _, phase in
           player.handleScenePhase(phase)
-          if phase == .active { Diagnostics.shared.flush(); Task { await premium.refreshEntitlements() }; Task { await CatalogStore.shared.refresh() } }
+          if phase == .active { Diagnostics.shared.flush(); Task { await premium.refreshEntitlements() }; Task { if auth.isAuthenticated { await CatalogStore.shared.refresh() } } }
         }
     }
   }

@@ -6,9 +6,9 @@ import React, {
   useEffect,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getSession } from "../endpoints/auth/session_GET.schema";
-import { postLogout } from "../endpoints/auth/logout_POST.schema";
-import { User } from "./User";
+import { getSession } from "../../backend/endpoints/auth/session_GET.schema";
+import { postLogout } from "../../backend/endpoints/auth/logout_POST.schema";
+import { User } from "../../backend/helpers/User";
 
 // React Query key for auth session. Make sure to optimistically update user infos using this.
 export const AUTH_QUERY_KEY = ["auth", "session"] as const;
@@ -92,6 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   // and update the data linked to AUTH_QUERY_KEY.
   const onLogin = useCallback(
     (user: User) => {
+      void queryClient.cancelQueries({ queryKey: AUTH_QUERY_KEY });
       queryClient.removeQueries({ queryKey: ["muwa-admin"] });
       queryClient.setQueryData(AUTH_QUERY_KEY, user);
     },

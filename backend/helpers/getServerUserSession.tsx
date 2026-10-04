@@ -20,7 +20,7 @@ export async function getServerUserSession(request: Request) {
         .execute();
     } catch (cleanupError) {
       // Log but don't fail the request if cleanup fails
-      console.error("Session cleanup error:", cleanupError);
+      console.error(JSON.stringify({event:"session_cleanup_failed"}));
     }
   }
 

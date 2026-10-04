@@ -16,7 +16,7 @@ import styles from "./PasswordLoginForm.module.css";
 import {
   schema,
   postLogin,
-} from "../endpoints/auth/login_with_password_POST.schema";
+} from "../../backend/endpoints/auth/login_with_password_POST.schema";
 import { useAuth } from "../helpers/useAuth";
 
 export type LoginFormData = z.infer<typeof schema>;
