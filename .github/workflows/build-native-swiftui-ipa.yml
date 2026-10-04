@@ -15,6 +15,8 @@ on:
         "!tests/capture_carplay.py",
         "!tests/locate_carplay_app.swift",
         "!tests/capture_launch_ios.py",
+        "!tests/capture_launch_android.py",
+        "!tests/capture_android.py",
         "!tests/RecorderSignalChecks.py",
         "!tests/verify_native_snapshot.py",
         ".github/workflows/build-native-swiftui-ipa.yml",

@@ -10,6 +10,11 @@ on:
         ".github/workflows/build-native-android.yml",
       ]
   workflow_dispatch:
+    inputs:
+      record_launch_video:
+        description: Record launch video on a runner with a stable emulator GPU
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -108,7 +113,7 @@ jobs:
             gradle -p android --stop
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
             MUWA_ANDROID_OUTPUT=build/android-previews/${{ matrix.screen.name }} python3 tests/capture_android.py
-            MUWA_ANDROID_OUTPUT=build/android-previews/${{ matrix.screen.name }} python3 tests/capture_launch_android.py
+            MUWA_ANDROID_OUTPUT=build/android-previews/${{ matrix.screen.name }} MUWA_ANDROID_LAUNCH_VIDEO=${{ inputs.record_launch_video && '1' || '0' }} python3 tests/capture_launch_android.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

@@ -2,7 +2,10 @@
 
 Run after installing the debug APK on an emulator. The normal review screenshots
 disable animations; this capture restores them temporarily and always puts the
-emulator settings back. All frames come from Emulator screenrecord/adb screencap.
+emulator settings back. Set MUWA_ANDROID_LAUNCH_VIDEO=0 for independent cold-launch
+and reduced-motion verification without the host recorder. Requested recordings
+remain strict: no missing video or failed launch is converted into success.
+All frames come from Emulator screenrecord/adb screencap.
 """
 import json
 import os
@@ -145,6 +148,7 @@ def assert_home(remote_xml, out):
 def main():
     out = Path(os.environ.get("MUWA_ANDROID_OUTPUT", "build/android-previews")) / "launch"
     out.mkdir(parents=True, exist_ok=True)
+    record_video = os.environ.get("MUWA_ANDROID_LAUNCH_VIDEO", "1") != "0"
     unique = f"{os.getpid()}-{int(time.time())}"
     recording_name = f"muwa-launch-{unique}.webm"
     remote_xml = f"/sdcard/Download/muwa-launch-{unique}.xml"
@@ -167,7 +171,9 @@ def main():
     # transport copy after recording, without creating a guest virtual display.
     recording_width = min(width, 720)
     recording_height = round(height * recording_width / width / 2) * 2
-    manifest["videoResolution"] = f"{recording_width}x{recording_height}"
+    manifest["videoRequested"] = record_video
+    if record_video:
+        manifest["videoResolution"] = f"{recording_width}x{recording_height}"
     recording = False
     try:
         adb("shell", "input", "keyevent", "KEYCODE_WAKEUP")
@@ -178,53 +184,56 @@ def main():
         manifest["confirmedRecordingScales"] = set_animation_scale(1)
         time.sleep(1)
         adb("shell", "am", "force-stop", PACKAGE)
-        # The guest MediaCodec recorder caused hosted GLES emulators to go
-        # offline. Record their actual display through the emulator console,
-        # which avoids an extra Android virtual-display/encoder surface.
-        manifest["recordingBackend"] = "Android Emulator console screenrecord"
-        manifest["recordingStart"] = emulator_recording("start", recording_name)
-        recording = True
-        print("Record actual Android launch: review.route=launch", flush=True)
+        # Host/guest video recorders can stall hosted GLES emulators. Keep
+        # functional cold-launch verification independent of recording support.
+        # Video is explicit and strict, never silently skipped after a failure.
+        if record_video:
+            manifest["recordingBackend"] = "Android Emulator console screenrecord"
+            manifest["recordingStart"] = emulator_recording("start", recording_name)
+            recording = True
+        print("Verify actual Android launch: review.route=launch", flush=True)
         manifest["launchResult"] = start_launch()
         time.sleep(0.25)
         manifest["files"].append(screenshot(out / "launch-window.png"))
         # am start -W can return while the GPU is still presenting the starting
         # window on a cold CI emulator. Keep recording through actual native home.
         assert_home(remote_xml, out)
-        manifest["nativeHomeVerifiedBeforeStop"] = True
+        manifest["nativeHomeVerified"] = True
+        if record_video:
+            manifest["nativeHomeVerifiedBeforeStop"] = True
         time.sleep(3)
         check_foreground()
-        manifest["recordingStop"] = emulator_recording("stop")
-        recording = False
-        original = recorded_file(recording_name)
-        raw_path = out / "launch.webm"
-        shutil.copy2(original, raw_path)
-        original.unlink()
-        path = out / "launch.mp4"
-        probe = json.loads(subprocess.check_output(
-            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
-             "stream=width,height", "-of", "json", str(raw_path)], text=True, timeout=15))
-        video_width, video_height = (int(probe['streams'][0][key]) for key in ['width', 'height'])
-        assert 0 < video_width < video_height, "Console recording is not a native portrait video"
-        recording_width = min(video_width, 720)
-        recording_height = round(video_height * recording_width / video_width / 2) * 2
-        manifest["originalVideoResolution"] = f"{video_width}x{video_height}"
-        manifest["videoResolution"] = f"{recording_width}x{recording_height}"
-        subprocess.run(["ffmpeg", "-nostdin", "-y", "-hide_banner", "-loglevel", "error",
-                        "-i", str(raw_path), "-vf", f"scale={recording_width}:{recording_height}",
-                        "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
-                        "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(path)],
-                       check=True, timeout=120)
-        manifest["durationSeconds"] = video_duration(path)
-        manifest["files"].append({"file": raw_path.name, "bytes": raw_path.stat().st_size,
-                                  "source": "original Emulator console recording"})
-        manifest["files"].append({"file": path.name, "bytes": path.stat().st_size,
-                                  "source": "Emulator recording converted to MP4"})
-        # Home was verified while the recording was still running. Avoid a
-        # second short-lived UiAutomation connection; capture the actual
-        # foreground frame instead.
+        if record_video:
+            manifest["recordingStop"] = emulator_recording("stop")
+            recording = False
+            original = recorded_file(recording_name)
+            raw_path = out / "launch.webm"
+            shutil.copy2(original, raw_path)
+            original.unlink()
+            path = out / "launch.mp4"
+            probe = json.loads(subprocess.check_output(
+                ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                 "stream=width,height", "-of", "json", str(raw_path)], text=True, timeout=15))
+            video_width, video_height = (int(probe['streams'][0][key]) for key in ['width', 'height'])
+            assert 0 < video_width < video_height, "Console recording is not a native portrait video"
+            recording_width = min(video_width, 720)
+            recording_height = round(video_height * recording_width / video_width / 2) * 2
+            manifest["originalVideoResolution"] = f"{video_width}x{video_height}"
+            manifest["videoResolution"] = f"{recording_width}x{recording_height}"
+            subprocess.run(["ffmpeg", "-nostdin", "-y", "-hide_banner", "-loglevel", "error",
+                            "-i", str(raw_path), "-vf", f"scale={recording_width}:{recording_height}",
+                            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+                            "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(path)],
+                           check=True, timeout=120)
+            manifest["durationSeconds"] = video_duration(path)
+            manifest["files"].append({"file": raw_path.name, "bytes": raw_path.stat().st_size,
+                                      "source": "original Emulator console recording"})
+            manifest["files"].append({"file": path.name, "bytes": path.stat().st_size,
+                                      "source": "Emulator recording converted to MP4"})
+        # Preserve the verified actual foreground frame before the second
+        # cold start. The video branch also verified home during recording.
         manifest["files"].append(screenshot(out / "launch-home.png"))
-        manifest["captureStatus"] = "recorded"
+        manifest["captureStatus"] = "recorded" if record_video else "verified"
         # A real second cold start proves that disabling motion reveals usable home.
         manifest["confirmedReducedScales"] = set_animation_scale(0)
         manifest["reducedLaunchResult"] = start_launch()
@@ -266,7 +275,10 @@ def main():
             manifest["cleanupErrors"].append(str(error))
         (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
     assert not manifest["cleanupErrors"], "Android settings could not be fully restored"
-    print(f"Captured native Android launch: {manifest['durationSeconds']:.3f}s", flush=True)
+    if record_video:
+        print(f"Captured native Android launch: {manifest['durationSeconds']:.3f}s", flush=True)
+    else:
+        print("Verified native Android cold launch and reduced-motion home", flush=True)
 
 
 if __name__ == "__main__":
