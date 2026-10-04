@@ -62,9 +62,9 @@ listening TCP sockets for the subsequent firewall review.
 
 ## Next stage
 
-`secure-ubuntu.sh` is the next independent host-security stage. The owner's
-later screenshot confirms that Beget already installed an active Fail2ban SSH
-jail, with systemd journal matching, while UFW is inactive. The previous script
+`secure-ubuntu.sh` handles the independent host-security stage. Before this stage,
+the owner's screenshot confirmed that Beget already installed an active Fail2ban
+SSH jail, with systemd journal matching, while UFW was inactive. The previous script
 stopped at its pre-existing-Fail2ban guard before mutations. The temporary SSH
 timeout remains unexplained; it is not evidence that that run enabled UFW.
 
@@ -100,14 +100,22 @@ its original files, while preserving Fail2ban configuration/service and SSH
 settings. Snapshots remain available for review. Docker-published ports are
 explicitly not claimed to be protected by UFW.
 
+The owner's 4 October 2026 screenshot confirms HOST SECURITY CONFIGURED on the
+VPS: UFW is active, incoming/routed traffic is denied by default, outgoing traffic
+is allowed, and TCP 22/80/443 are allowed for IPv4/IPv6. Confirmation ran in a new
+authenticated SSH connection and removed the rollback timer. The existing
+provider Fail2ban configuration/service was preserved. No Muwa application or
+database has been deployed by these preparation/security scripts.
+
 Checks use IPv4/IPv6 SSH connections, unknown public database ports and loopback
 services. An isolated Ubuntu 26.04 fixture validates the actual UFW dry-run rules,
 Fail2ban parser and systemd unit syntax. Transaction scenarios run the real
 installer with simulated firewall/service control and real file snapshots:
 failed scheduling, original/wrong/new SSH sessions, expiry, stale generation,
 failed firewall mutation and preservation of provider config. CI does not run a
-live systemd timer or change kernel firewall rules; those still require the VPS
-completion/reconnect output. Pending OS security updates remain a separate task.
+live systemd timer or change kernel firewall rules. Enabling UFW on the VPS and
+successful SSH reconnection are confirmed by the owner's output; timer expiry on
+the real VM has not been observed. Pending OS security updates remain a separate task.
 
 Before deploying services, inspect listening sockets, the actual SSH port,
 provider firewall and host rules. Then allow required web/SSH access without
@@ -123,12 +131,22 @@ off-host backups with a restoration check; `/var/backups/muwa` is only a local
 staging directory. Do not activate paid ASR. Telegram export/history access still
 needs the owner's channel confirmation and local credentials.
 
+Source access is a prerequisite for migration. Floot's 4 October 2026 account
+status reports exhausted hosting credit: the published app is offline and
+PostgreSQL connections are disabled, with all data preserved. Source files remain
+readable, but a source/schema-type snapshot is not a database backup. A verified
+existing backup/export or restored database access is needed before transferring
+accounts/catalog records. No hosting credit was purchased. See the
+[migration status](../../docs/CLOSED-BETA-HOSTING.md) and
+[Floot hosting balance](https://floot.com/dashboard/hosting).
+
 The owner's 3 October 2026 output confirms Docker Engine 29.8.2 and Compose
 5.6.0 installed successfully. The first installer stopped before swap creation:
 `excl` was incorrectly supplied as an output flag to `dd`; the corrected code
 uses `conv=excl`. The later owner screenshot confirms the complete host stage,
-including swap. The app, database migration and host-security stage still require
-their own verification; do not call Muwa deployed prematurely.
+including swap. Host security is confirmed separately by the 4 October screenshot.
+The app and database migration still require their own verification; do not call
+Muwa deployed prematurely.
 
 Validation: Bash syntax, ShellCheck, root/OS preflight, and real 4 MiB allocation
 and formatting using GNU coreutils and Ubuntu 26 coreutils. The file tests also
