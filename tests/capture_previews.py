@@ -1,7 +1,9 @@
 import json, re, subprocess, time
 import shutil
 import os
+import struct
 from pathlib import Path
+from select_apple_review_devices import load_selection
 
 def run(*args):
     print("Running:", " ".join(args), flush=True)
@@ -23,27 +25,23 @@ def launch_ready(udid, args):
     time.sleep(3)
     return data
 
-devices=json.loads(run('xcrun','simctl','list','devices','available','--json'))['devices']
-available=[d for group in devices.values() for d in group if d.get('isAvailable')]
-phones=[d for d in available if d['name'].startswith('iPhone')]
-pads=[d for d in available if d['name'].startswith('iPad')]
-assert phones and pads, 'Need iPhone and iPad simulator runtimes'
-selected=[phones[0],pads[0]]
-large=next((d for d in phones if 'Pro Max' in d['name'] or 'Plus' in d['name']), None)
-mini=next((d for d in pads if 'mini' in d['name']), None)
-for device in [large, mini]:
-    if device and device not in selected: selected.append(device)
-small=next((d for d in phones if 'SE' in d['name']),None)
-if small and small not in selected: selected.append(small)
 kind = os.environ.get('MUWA_REVIEW_DEVICE')
-if kind:
-    requested = {'phone': phones[0], 'large-phone': large, 'tablet': pads[0], 'small-tablet': mini}.get(kind)
-    assert requested is not None, f'Review device unavailable: {kind}'
-    selected = [requested]
+selected, inventory = load_selection(kind, os.environ.get('MUWA_REQUESTED_DEVICE'), os.environ.get('MUWA_REQUESTED_IOS'), os.environ.get('MUWA_REVIEW_RUNTIME_VERSION'))
 run('xcrun', 'simctl', 'shutdown', 'all')
 app=next(Path('build/PreviewDerivedData/Build/Products/Debug-iphonesimulator').glob('*.app'))
 out=Path('build/previews'); out.mkdir(parents=True,exist_ok=True)
-(out/'manifest.json').write_text(json.dumps([{'device': d['name'], 'index': i} for i,d in enumerate(selected)], ensure_ascii=False, indent=2))
+(out/'device-inventory.json').write_text(json.dumps(inventory, ensure_ascii=False, indent=2))
+manifest = [{
+    'device': device['name'], 'index': index, 'kind': device['kind'],
+    'simulatorName': device['simulatorName'], 'udid': device['udid'],
+    'deviceTypeIdentifier': device['deviceTypeIdentifier'],
+    'runtimeIdentifier': device['runtimeIdentifier'], 'runtime': device['runtimeName'],
+    'osVersion': device['runtimeVersion'], 'osBuild': device['runtimeBuild'],
+    'requiredRuntimeVersion': inventory['requiredRuntimeVersion'],
+    'toolchain': inventory['toolchain'], 'requested': inventory['requested'],
+    'captureCompleted': False,
+} for index, device in enumerate(selected)]
+(out/'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
 for i,d in enumerate(selected):
     udid=d['udid']
     print('Capture device:', d['name'], flush=True)
@@ -56,6 +54,11 @@ for i,d in enumerate(selected):
     for label,args in [('home',[]),('settings',['--audit-profile','--audit-settings']),('search',['--audit-search']),('queue',['--audit-player','--audit-queue']),('profile',['--audit-profile']),('premium',['--audit-profile','--audit-premium']),('promo',['--audit-profile','--audit-promo']),('owner-premium',['--audit-profile','--audit-premium','--audit-owner']),('owner-promo',['--audit-profile','--audit-promo','--audit-owner']),('ai-unavailable',['--audit-player','--audit-ai-unavailable']),('player',['--audit-player']),('library-empty',['--audit-library-empty']),('playlist-create',['--audit-playlist-create']),('library',['--audit-library']),('landscape',['--audit-player','--audit-landscape']),('ai',['--audit-player','--audit-ai']),('ai-reader',['--audit-player','--audit-ai','--audit-ai-expanded'])]:
         data = launch_ready(udid, args)
         run('xcrun','simctl','io',udid,'screenshot',str(out/f'{i}-{label}.png'))
+        if label == 'home':
+            header = (out/f'{i}-{label}.png').read_bytes()[:24]
+            assert header.startswith(b'\x89PNG\r\n\x1a\n') and len(header) == 24, 'Invalid native screenshot'
+            width, height = struct.unpack('>II', header[16:24])
+            manifest[i]['screenPixels'] = {'width': width, 'height': height}
         proof = (data/'Documents/clock-check.txt').read_text()
         assert proof == '100 ticks; PlayerManager notifications: 0', 'Clock isolation check did not complete'
         (out/f'{i}-clock-check.txt').write_text(proof)
@@ -82,20 +85,22 @@ for i,d in enumerate(selected):
     # app. Keep its Simulator warm; every other matrix job closes its own device.
     if kind != 'phone': run('xcrun','simctl','shutdown',udid)
     (out/f'{i}-device.txt').write_text(d['name'])
-(out/'manifest.json').write_text(json.dumps([{'device': d['name'], 'index': i} for i,d in enumerate(selected)], ensure_ascii=False, indent=2))
+    manifest[i]['captureCompleted'] = True
+    (out/'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
 
 # UI/decoder checks use controlled fixtures; record live service availability
 # separately so a successful design capture never implies CDN playback works.
 import urllib.request, urllib.error
 live=[]
-for path in ['/_api/catalog/tracks','/_cdn/static/muwa-cover-1.jpg']:
-    entry={'path':path}
+origin = 'https://93.188.187.96'
+for path, expected_status in [('/_health', 200), ('/_api/auth/session', 401)]:
+    entry={'path':path, 'expectedStatus':expected_status, 'authenticated':False}
     try:
-        with urllib.request.urlopen('https://muwa-app.floot.app'+path,timeout=10) as response:
-            entry.update(status=response.status,contentType=response.headers.get('Content-Type'))
+        with urllib.request.urlopen(origin+path,timeout=10) as response:
+            entry.update(status=response.status,contentType=response.headers.get('Content-Type'),passed=response.status == expected_status)
     except urllib.error.HTTPError as error:
-        entry.update(status=error.code,error=error.read(400).decode(errors='replace'))
+        entry.update(status=error.code,passed=error.code == expected_status)
     except Exception as error:
-        entry['error']=str(error)
+        entry.update(error=str(error),passed=False)
     live.append(entry)
-(out/'live-assets-status.json').write_text(json.dumps({'checks':live,'uiFixture':'native app with local paused audio; controlled artwork decoder check; catalogue artwork uses normal URL or fallback'},ensure_ascii=False,indent=2))
+(out/'live-assets-status.json').write_text(json.dumps({'origin':origin,'checks':live,'scope':'Read-only Beget health and anonymous authentication checks; no account cookies or credentials','uiFixture':'Native app with local paused audio and controlled artwork decoder/catalogue fixtures; screenshots do not prove production media playback'},ensure_ascii=False,indent=2))

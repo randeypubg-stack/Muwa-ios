@@ -29,3 +29,9 @@
   Initially only the owner tests. Size the initial hosting for the planned
   10,000 total registered users with headroom, not for a small beta group or
   10,000 simultaneous listeners; validate capacity with load tests.
+- Device verification must include the latest available stable iOS/iPadOS and
+  Android runtimes, alongside meaningful compatibility coverage. The owner
+  specifically requested iPhone 18 Pro Max and iOS 27 on 4 October 2026.
+  Record the actual simulator device type, OS/runtime, SDK/toolchain and capture
+  dimensions. Screen-size overrides do not establish testing on a physical model;
+  never relabel an older runtime or mockup as the requested device.

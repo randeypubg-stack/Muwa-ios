@@ -51,6 +51,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Verify exact Apple runtime and device selection
+        run: python3 tests/AppleReviewDeviceChecks.py
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
@@ -68,7 +70,14 @@ jobs:
   build:
     needs: [backend, source-security]
     name: Build native SwiftUI unsigned IPA
-    runs-on: macos-15
+    # Official GitHub preview runner; select the stable Xcode 27.0 toolchain,
+    # not its separately installed Xcode 27.1/27.2 preview toolchains.
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+      MUWA_REVIEW_RUNTIME_VERSION: "27.0"
+      MUWA_REQUESTED_DEVICE: iPhone 18 Pro Max
+      MUWA_REQUESTED_IOS: "27.0"
     timeout-minutes: 60
 
     steps:
@@ -76,6 +85,13 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Require the selected stable iOS 27 SDK
+        shell: bash
+        run: |
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 27.0"
+          test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "27.0"
+          xcodebuild -version
+          xcrun simctl list runtimes --json
 
       - name: Prepare native source
         shell: bash
@@ -372,7 +388,14 @@ jobs:
   review:
     name: Review iOS ${{ matrix.device }}
     needs: build
-    runs-on: macos-15
+    # Official GitHub preview runner; select the stable Xcode 27.0 toolchain,
+    # not its separately installed Xcode 27.1/27.2 preview toolchains.
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+      MUWA_REVIEW_RUNTIME_VERSION: "27.0"
+      MUWA_REQUESTED_DEVICE: iPhone 18 Pro Max
+      MUWA_REQUESTED_IOS: "27.0"
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -382,6 +405,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Require the selected stable iOS 27 SDK
+        shell: bash
+        run: |
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 27.0"
+          test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "27.0"
+          xcodebuild -version
+          xcrun simctl list runtimes --json
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: Muwa-build43-simulator-${{ github.run_id }}
@@ -398,13 +428,50 @@ jobs:
         if: matrix.device == 'phone'
         run: |
           python3 tests/RecorderSignalChecks.py
+          export MUWA_LAUNCH_DEVICE="$(python3 tests/select_apple_review_devices.py --kind phone --print-udid)"
           python3 tests/capture_launch_ios.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: Muwa-build43-${{ matrix.device }}-screenshots
-          path: build/previews
-          if-no-files-found: warn
+          # Keep individual downloadable archives below the attachment limit on
+          # large iPads. All files remain unmodified native Simulator captures.
+          path: |
+            build/previews/*home*.png
+            build/previews/*search.png
+            build/previews/*library*.png
+            build/previews/*playlist-create.png
+            build/previews/*.json
+            build/previews/*-device.txt
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: Muwa-build43-${{ matrix.device }}-player-screenshots
+          path: |
+            build/previews/*player.png
+            build/previews/*landscape.png
+            build/previews/*queue*.png
+            build/previews/*ai*.png
+            build/previews/*cached-backdrop.png
+            build/previews/*-check.txt
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: Muwa-build43-${{ matrix.device }}-account-screenshots
+          path: |
+            build/previews/*profile.png
+            build/previews/*settings.png
+            build/previews/*premium.png
+            build/previews/*promo.png
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always() && matrix.device == 'phone'
+        with:
+          name: Muwa-build43-phone-launch-review
+          path: build/previews/launch
+          if-no-files-found: error
 
   carplay-review:
     name: Review CarPlay external display
@@ -417,12 +484,26 @@ jobs:
   native-interactions:
     name: Verify native queue drag and playlist actions
     needs: build
-    runs-on: macos-15
+    # Official GitHub preview runner; select the stable Xcode 27.0 toolchain,
+    # not its separately installed Xcode 27.1/27.2 preview toolchains.
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+      MUWA_REVIEW_RUNTIME_VERSION: "27.0"
+      MUWA_REQUESTED_DEVICE: iPhone 18 Pro Max
+      MUWA_REQUESTED_IOS: "27.0"
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Require the selected stable iOS 27 SDK
+        shell: bash
+        run: |
+          test "$(xcodebuild -version | head -n 1)" = "Xcode 27.0"
+          test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "27.0"
+          xcodebuild -version
+          xcrun simctl list runtimes --json
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: Muwa-Full-Source-${{ github.run_number }}
@@ -436,7 +517,8 @@ jobs:
           ruby tests/prepare_interaction_tests.rb build/interaction-source/native/MuwaNasheedsNative
       - name: Exercise real row dragging and playlist creation
         run: |
-          DEVICE_ID="$(xcrun simctl list devices available --json | python3 -c 'import json,sys; print(next(d["udid"] for ds in json.load(sys.stdin)["devices"].values() for d in ds if d["name"].startswith("iPhone") and d["isAvailable"]))')"
+          python3 tests/select_apple_review_devices.py --kind large-phone --output build/interaction-devices.json
+          DEVICE_ID="$(python3 tests/select_apple_review_devices.py --kind large-phone --print-udid)"
           set -o pipefail
           xcodebuild -project build/interaction-source/native/MuwaNasheedsNative/MuwaNasheeds.xcodeproj -scheme MuwaInteractions -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE_ID" -derivedDataPath build/InteractionDerivedData -resultBundlePath build/interactions.xcresult CODE_SIGNING_ALLOWED=NO test 2>&1 | tee build/interactions.log
       - name: Export actual interaction screenshots
@@ -452,5 +534,6 @@ jobs:
           path: |
             build/interactions.xcresult
             build/interactions.log
+            build/interaction-devices.json
             build/interaction-screenshots
           if-no-files-found: error
