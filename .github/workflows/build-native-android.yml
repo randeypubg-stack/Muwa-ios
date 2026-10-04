@@ -95,6 +95,10 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y ffmpeg
           fi
+          if ! tesseract --list-langs 2>/dev/null | grep -qx rus; then
+            sudo apt-get update
+            sudo apt-get install -y tesseract-ocr tesseract-ocr-rus
+          fi
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: 35

@@ -93,6 +93,9 @@ iOS build 43 прошёл GitHub Actions run 109 (37201734663): Release arm64, r
 видео. На hosted GPU видеозапись приводила к зависанию/offline эмулятора;
 поэтому она запускается явно через `record_launch_video` в Android workflow и
 при запросе остаётся строгой проверкой, а не превращает сбой в успешный результат.
+При недоступном корне UiAutomation проверка запуска читает заголовок и подзаголовок
+с нового, неизменённого PNG переднего приложения; сохраняет источник и SHA кадра.
+Старый снимок, экран профиля или пустая заставка не засчитываются как главная.
 
 Для контроля: `systemctl status muwa-api nginx postgresql`, `journalctl -u muwa-api`,
 `systemctl list-timers muwa-cert-renew.timer muwa-backup.timer`. Секреты и одноразовую

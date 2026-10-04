@@ -8,6 +8,9 @@ remain strict: no missing video or failed launch is converted into success.
 All frames come from Emulator screenrecord/adb screencap.
 """
 import json
+import csv
+import hashlib
+import io
 import os
 from pathlib import Path
 import re
@@ -115,7 +118,27 @@ def start_launch():
     return result.strip()
 
 
-def assert_home(remote_xml, out):
+def recognize_home_header(path, height):
+    # Validate pixels independently when Android's transient UiAutomation bridge
+    # cannot return a root. Read the unmodified native PNG, never a prior frame.
+    result = subprocess.check_output(
+        ["tesseract", str(path), "stdout", "-l", "rus", "--psm", "11",
+         "-c", "tessedit_create_tsv=1", "-c", "tessedit_create_txt=0"],
+        text=True, stderr=subprocess.PIPE, timeout=10)
+    lines = {}
+    for row in csv.DictReader(io.StringIO(result), delimiter="\t"):
+        word = (row.get("text") or "").strip()
+        if not word or float(row["conf"]) < 50 or int(row["top"]) > min(height * .25, 600):
+            continue
+        key = (row["block_num"], row["par_num"], row["line_num"])
+        lines.setdefault(key, []).append(word)
+    headers = [" ".join(words).casefold() for words in lines.values()]
+    # The top header is required: a bottom navigation label on Profile/Library
+    # cannot satisfy this check. The subtitle must be on the same fresh screen.
+    return "главная" in headers and "нашиды без музыки" in headers
+
+
+def assert_home(remote_xml, out, label="launch"):
     # Cold emulator renderers can keep the starting window above Compose after
     # am start -W returns. Verify a fresh hierarchy until actual home is visible.
     deadline = time.monotonic() + 30
@@ -129,16 +152,20 @@ def assert_home(remote_xml, out):
             # without creating XML. Retry a fresh dump rather than accepting an
             # old hierarchy or failing on a transient missing file.
             result = adb("shell", "uiautomator", "dump", "--compressed", remote_xml, timeout=10)
-            if "ERROR:" in result:
-                time.sleep(0.4)
-                continue
-            hierarchy = adb("shell", "cat", remote_xml, timeout=10)
+            if "ERROR:" not in result:
+                hierarchy = adb("shell", "cat", remote_xml, timeout=10)
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-            time.sleep(0.4)
-            continue
+            hierarchy = ""
         if 'text="Главная"' in hierarchy and 'text="Нашиды без музыки"' in hierarchy:
-            (out / "home-hierarchy.xml").write_text(hierarchy)
-            return
+            path = out / f"{label}-home-hierarchy.xml"
+            path.write_text(hierarchy)
+            return {"method": "fresh UiAutomation hierarchy", "file": path.name}
+        path = out / f"{label}-home-verification.png"
+        frame = screenshot(path)
+        if recognize_home_header(path, frame["height"]):
+            return {"method": "fresh native PNG header OCR", "file": path.name,
+                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                    "foregroundPackage": PACKAGE, "width": frame["width"], "height": frame["height"]}
         time.sleep(0.4)
     (out / "failed-hierarchy.xml").write_text(hierarchy)
     screenshot(out / "launch-failed.png")
@@ -197,7 +224,7 @@ def main():
         manifest["files"].append(screenshot(out / "launch-window.png"))
         # am start -W can return while the GPU is still presenting the starting
         # window on a cold CI emulator. Keep recording through actual native home.
-        assert_home(remote_xml, out)
+        manifest["homeVerification"] = assert_home(remote_xml, out)
         manifest["nativeHomeVerified"] = True
         if record_video:
             manifest["nativeHomeVerifiedBeforeStop"] = True
@@ -238,7 +265,7 @@ def main():
         manifest["confirmedReducedScales"] = set_animation_scale(0)
         manifest["reducedLaunchResult"] = start_launch()
         time.sleep(0.4)
-        assert_home(remote_xml, out)
+        manifest["reducedHomeVerification"] = assert_home(remote_xml, out, label="reduced")
         manifest["files"].append(screenshot(out / "launch-reduced-motion-home.png"))
         manifest["captureStatus"] = "complete"
     except Exception as error:
