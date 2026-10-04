@@ -42,5 +42,6 @@ for executable, sources, check in [
     ('download-checks', ['Services/DownloadManager.swift', 'Models/Track.swift', 'Services/CatalogStore.swift', 'Services/BackendConfig.swift'], 'tests/DownloadChecks.swift'),
 ]:
     subprocess.run(['swiftc', '-D', 'MUWA_TEST_FIXTURES', '-parse-as-library', '-o', str(build/executable),
-        *[str(root/'Sources'/source) for source in sources], str(build/'AuditDiagnostics.swift'), 'tests/FixtureCatalog.swift', check], check=True)
+        *[str(root/'Sources'/source) for source in sources], str(build/'AuditDiagnostics.swift'),
+        *(['tests/FixtureCatalog.swift'] if 'Models/Track.swift' in sources else []), check], check=True)
     subprocess.run([str(build/executable)], check=True)

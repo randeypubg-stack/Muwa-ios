@@ -4,7 +4,8 @@ Live route: https://93.188.187.96/admin. This is the existing Muwa panel adapted
 for the fresh Beget deployment chosen by the owner on 4 October 2026. It shares
 canonical contracts with `../backend`; it is not a browser wrapper for the apps.
 
-Run `npm ci && npm run build` to typecheck and create the nginx `dist/` bundle.
+Install shared contract dependencies first: `cd ../backend && npm ci`. Then run
+`npm ci && npm run build` in `admin-panel/` to typecheck and create the nginx `dist/` bundle.
 React/Vite provide the panel runtime, existing controls and screen logic are
 retained. All API/media requests use the same HTTPS origin and HttpOnly session.
 No third-party fonts, embedded credentials or separate account service are required.
