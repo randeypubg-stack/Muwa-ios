@@ -12,11 +12,90 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import tempfile
+import time
 from urllib.request import urlopen
 import xml.etree.ElementTree as ET
+import zipfile
 
 PLATFORMS_URL = "https://dl.google.com/android/repository/repository2-3.xml"
 IMAGES_URL = "https://dl.google.com/android/repository/sys-img/google_apis/sys-img2-3.xml"
+
+
+def verify_installed_tools(tools, build_id="16111833", revision="23.0"):
+    """Verify this SDK installation against Google's original archive bytes."""
+    with urlopen(PLATFORMS_URL, timeout=30) as response:
+        index = response.read()
+    package = next(p for p in ET.fromstring(index).findall("remotePackage")
+                   if p.attrib["path"] == "cmdline-tools;latest")
+    assert package.find("channelRef").attrib["ref"] == "channel-0", "SDK tools are not on Google's stable channel"
+    actual_revision = f'{package.findtext("revision/major")}.{package.findtext("revision/minor") or "0"}'
+    assert actual_revision == revision, "Google's stable SDK tools changed; update the verified pin explicitly"
+    archive = next(a for a in package.findall("archives/archive") if a.findtext("host-os") == "linux")
+    filename = archive.findtext("complete/url")
+    assert filename == f"commandlinetools-linux-{build_id}_latest.zip", "Unexpected stable SDK archive"
+    checksum = archive.find("complete/checksum")
+    assert checksum.attrib["type"] == "sha1", "Unsupported Google archive checksum format"
+    url = "https://dl.google.com/android/repository/" + filename
+    with tempfile.TemporaryFile() as downloaded:
+        sha1 = hashlib.sha1()
+        sha256 = hashlib.sha256()
+        byte_count = 0
+        with urlopen(url, timeout=60) as response:
+            while chunk := response.read(1024 * 1024):
+                downloaded.write(chunk)
+                sha1.update(chunk)
+                sha256.update(chunk)
+                byte_count += len(chunk)
+        assert byte_count == int(archive.findtext("complete/size")), "Incomplete SDK command-line tools archive"
+        assert sha1.hexdigest() == checksum.text, "SDK archive differs from Google's official checksum"
+        downloaded.seek(0)
+        file_count = 0
+        with zipfile.ZipFile(downloaded) as original:
+            for info in original.infolist():
+                if info.is_dir(): continue
+                assert info.filename.startswith("cmdline-tools/") and ".." not in Path(info.filename).parts, "Unexpected SDK archive member"
+                installed = tools / info.filename.removeprefix("cmdline-tools/")
+                assert installed.is_file(), f"SDK installation is incomplete: {info.filename}"
+                assert hashlib.sha256(installed.read_bytes()).digest() == hashlib.sha256(original.read(info)).digest(), f"SDK file differs from Google's archive: {info.filename}"
+                file_count += 1
+    return {"revision": revision, "archiveURL": url, "archiveBytes": byte_count,
+            "officialSHA1": checksum.text, "archiveSHA256": sha256.hexdigest(),
+            "verifiedInstalledFiles": file_count, "installedToolsDirectory": str(tools.resolve()),
+            "indexURL": PLATFORMS_URL, "indexSHA256": hashlib.sha256(index).hexdigest(),
+            "checkedAtUTC": datetime.now(timezone.utc).isoformat()}
+
+
+def wait_for_review_services(adb, timeout=90, clock=time.monotonic, pause=time.sleep):
+    """Wait for real Binder services, rather than only the early boot flag."""
+    started = clock()
+    stable = 0
+    attempts = 0
+    errors = []
+    scales = ("window_animation_scale", "transition_animation_scale", "animator_duration_scale")
+    while clock() - started < timeout:
+        attempts += 1
+        try:
+            assert adb("shell", "getprop", "sys.boot_completed").strip() == "1", "Android boot flag is not complete"
+            packages = adb("shell", "cmd", "package", "list", "packages", "android")
+            assert "package:android" in packages.splitlines(), "Android package service is not ready"
+            size = adb("shell", "wm", "size")
+            density = adb("shell", "wm", "density")
+            display_state(size, density)
+            for key in scales:
+                adb("shell", "settings", "put", "global", key, "0")
+            confirmed = {key: adb("shell", "settings", "get", "global", key).strip() for key in scales}
+            assert all(float(value) == 0 for value in confirmed.values()), "Android settings service did not apply animation scales"
+            stable += 1
+            if stable >= 3:
+                return {"status": "ready", "consecutiveStableServiceChecks": stable, "attempts": attempts,
+                        "elapsedSeconds": round(clock() - started, 3), "confirmedAnimationScales": confirmed,
+                        "transientErrors": errors[-12:], "services": ["package", "window", "settings"]}
+        except (AssertionError, subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError) as error:
+            stable = 0
+            errors.append(str(error))
+        pause(1)
+    raise AssertionError(f"Android Binder services did not stabilize within {timeout}s: {errors[-3:]}")
 
 
 def select_profile(inventory, kind):
@@ -199,6 +278,9 @@ def review_device(adb):
         device["profileSelection"] = json.loads(selection.read_text())
         assert device["profileSelection"]["profile"] == device["avd"]["hardwareProfile"], "Booted profile differs from the recorded SDK selection"
         assert device["profileSelection"]["avdManagerPath"] == str(Path(shutil.which("avdmanager")).resolve()), "AVD selection and creation use different SDK tool installations"
+    for filename, key in [("sdk-tools-verification.json", "sdkToolsVerification"), ("boot-readiness.json", "bootReadiness")]:
+        proof = availability.with_name(filename)
+        if proof.exists(): device[key] = json.loads(proof.read_text())
     return device
 
 
@@ -213,12 +295,32 @@ if __name__ == "__main__":
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--api")
     mode.add_argument("--select-profile", choices=["phone", "tablet"])
+    mode.add_argument("--wait-ready", action="store_true")
+    mode.add_argument("--verify-tools", type=Path)
     parser.add_argument("--target")
     parser.add_argument("--arch", default="x86_64")
     parser.add_argument("--require-latest", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    if args.select_profile:
+    if args.verify_tools:
+        proof = verify_installed_tools(args.verify_tools)
+        print(f'Verified SDK tools {proof["revision"]} against Google archive and installed files', flush=True)
+    elif args.wait_ready:
+        def adb(*arguments):
+            return subprocess.check_output(["adb", *arguments], text=True, timeout=10)
+        try:
+            proof = wait_for_review_services(adb)
+        except AssertionError as error:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(json.dumps({"status": "failed", "error": str(error)}, indent=2))
+            try:
+                diagnostic = adb("logcat", "-d", "-t", "120", "-s", "ActivityManager", "AndroidRuntime", "SystemServer")
+                args.output.with_suffix(".log").write_text(diagnostic)
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                pass
+            raise
+        print("Verified stable Android package/window/settings Binder services", flush=True)
+    elif args.select_profile:
         avd_manager = Path(shutil.which("avdmanager")).resolve()
         inventory = subprocess.check_output([str(avd_manager), "list", "device", "-c"], text=True, timeout=30)
         proof = select_profile(inventory, args.select_profile)

@@ -104,8 +104,9 @@ struct PremiumView: View {
           }.padding(.horizontal, 24).padding(.vertical, 12).background(.ultraThinMaterial)
         }
       }
+      .navigationTitle("Muwa")
+      .navigationBarTitleDisplayMode(.inline)
       .toolbar {
-        ToolbarItem(placement: .topBarLeading) { Text("Muwa").font(.headline).foregroundStyle(.secondary) }
         ToolbarItem(placement: .topBarTrailing) {
           Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }.accessibilityLabel("Закрыть")
         }

@@ -1,8 +1,12 @@
 """Selection checks with mixed real-shaped simctl inventories; no macOS needed."""
 import copy
+from pathlib import Path
+import tempfile
+import subprocess
 import unittest
+from unittest.mock import patch
 
-from select_apple_review_devices import normalize_inventory, request_status, select_devices
+from select_apple_review_devices import normalize_inventory, open_simulator_gui, request_status, select_devices
 
 
 def runtime(version, available=True, name=None):
@@ -95,6 +99,21 @@ class AppleReviewDeviceChecks(unittest.TestCase):
         self.runtimes.append(extra)
         self.devices[extra["identifier"]] = [copy.deepcopy(self.devices[self.runtimes[2]["identifier"]][0])]
         self.assertEqual(len(normalize_inventory(self.devices, self.runtimes, self.types, "27.0")), len(self.records))
+
+    def test_gui_warmup_uses_exact_xcode_bundle_and_device(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory) / "Applications/Simulator.app"
+            bundle.mkdir(parents=True)
+            with patch("select_apple_review_devices.subprocess.run") as launch:
+                self.assertEqual(open_simulator_gui("requested-udid", directory), str(bundle))
+                launch.assert_called_once_with(["/usr/bin/open", "-a", str(bundle), "--args", "-CurrentDeviceUDID", "requested-udid"], check=True, timeout=45, stdout=subprocess.DEVNULL)
+
+    def test_gui_warmup_does_not_fall_back_to_another_xcode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch("select_apple_review_devices.subprocess.run") as launch:
+                with self.assertRaisesRegex(ValueError, "Selected Xcode Simulator GUI is unavailable"):
+                    open_simulator_gui("requested-udid", directory)
+                launch.assert_not_called()
 
 
 if __name__ == "__main__":

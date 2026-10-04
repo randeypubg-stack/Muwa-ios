@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 
 
 KINDS = ("phone", "large-phone", "tablet", "small-tablet", "small-phone")
@@ -148,6 +149,23 @@ def command(*args):
     return subprocess.check_output(args, text=True, timeout=120).strip()
 
 
+def open_simulator_gui(udid, developer_directory=None):
+    """Warm the selected Xcode's actual Simulator UI before device UI commands.
+
+    Boot status can finish before the GUI-backed appearance service responds on
+    cold hosted runners. Opening a different/default Simulator would not prove
+    that the selected Xcode/runtime has been prepared.
+    """
+    developer_directory = developer_directory or os.environ.get("DEVELOPER_DIR") or command("xcode-select", "-p")
+    simulator = Path(developer_directory) / "Applications/Simulator.app"
+    if not simulator.is_dir():
+        raise ValueError(f"Selected Xcode Simulator GUI is unavailable: {simulator}")
+    argv = ["/usr/bin/open", "-a", str(simulator), "--args", "-CurrentDeviceUDID", udid]
+    print("Opening selected Simulator GUI:", " ".join(argv), file=sys.stderr, flush=True)
+    subprocess.run(argv, check=True, timeout=45, stdout=subprocess.DEVNULL)
+    return str(simulator)
+
+
 def load_selection(kind=None, requested_device=None, requested_ios=None, runtime_version=None):
     devices = json.loads(command("xcrun", "simctl", "list", "devices", "available", "--json"))["devices"]
     runtimes = json.loads(command("xcrun", "simctl", "list", "runtimes", "--json"))["runtimes"]
@@ -183,8 +201,13 @@ def main():
     parser.add_argument("--runtime-version", default=os.environ.get("MUWA_REVIEW_RUNTIME_VERSION"))
     parser.add_argument("--output", type=Path)
     parser.add_argument("--print-udid", action="store_true")
+    parser.add_argument("--open-gui", action="store_true", help="Open the selected Xcode Simulator GUI for one selected device")
     args = parser.parse_args()
     selected, report = load_selection(args.kind, args.requested_device, args.requested_ios, args.runtime_version)
+    if args.open_gui:
+        if len(selected) != 1:
+            parser.error("--open-gui requires one --kind")
+        report["simulatorGUIBundle"] = open_simulator_gui(selected[0]["udid"])
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")

@@ -5,24 +5,13 @@ on:
     inputs:
       source_run_id:
         type: string
-        default: "37126355145"
         required: true
       source_artifact_name:
         type: string
-        default: Muwa-Full-Source-104
         required: true
       simulator_artifact_name:
         type: string
-        default: Muwa-build42-simulator-37126355145
         required: true
-  # Helper-only edits reuse this explicitly verified source/simulator pair;
-  # native changes are reviewed by the normal build with its own fresh app.
-  push:
-    branches: [feat/muwa-native-build35]
-    paths:
-      - tests/capture_launch_ios.py
-      - tests/RecorderSignalChecks.py
-      - tests/verify_native_snapshot.py
 
 permissions:
   contents: read
@@ -34,7 +23,10 @@ jobs:
   capture:
     name: Record native cold launch
     needs: source-security
-    runs-on: macos-15
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+      MUWA_REVIEW_RUNTIME_VERSION: "27.0"
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -42,8 +34,8 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ${{ inputs.source_artifact_name || 'Muwa-Full-Source-104' }}
-          run-id: ${{ inputs.source_run_id || '37126355145' }}
+          name: ${{ inputs.source_artifact_name }}
+          run-id: ${{ inputs.source_run_id }}
           github-token: ${{ github.token }}
           path: build/launch-source
       - name: Verify the compiled source snapshot
@@ -54,8 +46,8 @@ jobs:
           python3 tests/verify_native_snapshot.py build/launch-source/native/Repository
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ${{ inputs.simulator_artifact_name || 'Muwa-build42-simulator-37126355145' }}
-          run-id: ${{ inputs.source_run_id || '37126355145' }}
+          name: ${{ inputs.simulator_artifact_name }}
+          run-id: ${{ inputs.source_run_id }}
           github-token: ${{ github.token }}
           path: build
       - name: Unpack the native Simulator app
@@ -65,6 +57,7 @@ jobs:
       - name: Verify terminal signals and record the native launch
         run: |
           python3 tests/RecorderSignalChecks.py
+          export MUWA_LAUNCH_DEVICE="$(python3 tests/select_apple_review_devices.py --kind phone --open-gui --print-udid)"
           python3 tests/capture_launch_ios.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()

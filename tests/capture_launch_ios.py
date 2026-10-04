@@ -115,6 +115,14 @@ def parse_home_proof(output):
     return proofs[0]
 
 
+def command_output_summary(output, limit=4000):
+    """Keep the first diagnostic as well as the tail of a verbose failure."""
+    if len(output) <= limit:
+        return output
+    half = limit // 2
+    return output[:half] + "\n[output truncated; full command log preserved]\n" + output[-half:]
+
+
 def main():
     OUTPUT.mkdir(parents=True, exist_ok=True)
     status = {"captured": False, "package": PACKAGE, "commands": []}
@@ -127,12 +135,28 @@ def main():
     def run(*args, timeout=180):
         command = [str(arg) for arg in args]
         print("Running:", " ".join(command), flush=True)
-        result = subprocess.run(command, text=True, stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, timeout=timeout)
+        log_path = OUTPUT / f"command-{len(status['commands']) + 1:03d}.log"
+        try:
+            result = subprocess.run(command, text=True, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, timeout=timeout)
+        except subprocess.TimeoutExpired as error:
+            output = error.stdout or ""
+            if isinstance(output, bytes):
+                output = output.decode("utf-8", errors="replace")
+            log_path.write_text(output)
+            summary = command_output_summary(output)
+            status["commands"].append({"command": command, "exit_code": None,
+                                       "timeout_seconds": timeout,
+                                       "output": summary, "log_file": log_path.name})
+            raise RuntimeError(f"Command timed out after {timeout}s: {' '.join(command)}\n"
+                               f"Full log: {log_path}\n{summary}") from error
+        log_path.write_text(result.stdout)
+        summary = command_output_summary(result.stdout)
         status["commands"].append({"command": command, "exit_code": result.returncode,
-                                   "output": result.stdout[-4000:]})
+                                   "output": summary, "log_file": log_path.name})
         if result.returncode:
-            raise RuntimeError(f"Command failed ({result.returncode}): {' '.join(command)}\n{result.stdout[-4000:]}")
+            raise RuntimeError(f"Command failed ({result.returncode}): {' '.join(command)}\n"
+                               f"Full log: {log_path}\n{summary}")
         return result.stdout
 
     def stop_recording():
@@ -274,7 +298,9 @@ def main():
         status["video_bytes"] = video.stat().st_size
         # Finish the encoder before starting expensive Vision/Swift work. The
         # screenshot above was captured while the real session was still held.
-        status["home_frame_proof"] = parse_home_proof(run("swift", "tests/verify_home_frame.swift", final))
+        verifier = OUTPUT / "verify-home-frame"
+        run("xcrun", "swiftc", "-O", "tests/verify_home_frame.swift", "-o", verifier)
+        status["home_frame_proof"] = parse_home_proof(run(verifier.resolve(), final))
 
         # Extract real recorded frames only when ffmpeg is present on the runner.
         ffmpeg = shutil.which("ffmpeg")

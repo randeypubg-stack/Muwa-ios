@@ -94,6 +94,9 @@ jobs:
       - name: Set up Android SDK for screen review
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
         with:
+          # Google's current stable command-line tools 23.0. Older sdkmanager
+          # versions resolve cmdline-tools;latest using an obsolete XML index.
+          cmdline-tools-version: "16111833"
           packages: "platform-tools platforms;android-35 build-tools;35.0.0"
       - name: Use one current stable SDK device catalog for selection and AVD creation
         shell: bash
@@ -101,14 +104,23 @@ jobs:
           # setup-android and emulator-runner otherwise select different SDK
           # tool directories. A profile from one catalog may be unknown to the
           # other avdmanager. emulator-runner explicitly uses latest/bin.
-          for attempt in 1 2 3; do
-            if sdkmanager --install 'cmdline-tools;latest' --channel=0; then break; fi
-            if [ "$attempt" = 3 ]; then exit 1; fi
-            sleep 5
-          done
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import shutil
+          root = Path(os.environ["ANDROID_HOME"]) / "cmdline-tools"
+          tools = root / "16111833"
+          assert (tools / "bin/avdmanager").is_file(), "Pinned SDK23 tools were not installed"
+          assert "Pkg.Revision=23.0" in (tools / "source.properties").read_text(), "Unexpected command-line tools revision"
+          latest = root / "latest"
+          if latest.is_symlink(): latest.unlink()
+          elif latest.exists(): shutil.rmtree(latest)
+          latest.symlink_to(tools, target_is_directory=True)
+          PY
           test -x "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
           echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
+          python3 tests/android_review_device.py --verify-tools "$ANDROID_HOME/cmdline-tools/16111833" --output "$MUWA_ANDROID_OUTPUT/sdk-tools-verification.json"
       - name: Install emulator with download retries
         shell: bash
         run: |
@@ -155,8 +167,11 @@ jobs:
           # Use GLES for the headless screenrecord fixture. The emulator in the
           # preceding run went offline after its recording surface was released.
           emulator-options: -no-window -gpu swiftshader_indirect -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none
-          disable-animations: true
+          # sys.boot_completed can precede usable Binder services on API37.2.
+          # Our bounded readiness check owns animation settings after startup.
+          disable-animations: false
           script: |
+            python3 tests/android_review_device.py --wait-ready --output "$MUWA_ANDROID_OUTPUT/boot-readiness.json"
             adb shell wm size ${{ matrix.device.size }}
             adb shell wm density ${{ matrix.device.density }}
             adb shell input keyevent KEYCODE_WAKEUP

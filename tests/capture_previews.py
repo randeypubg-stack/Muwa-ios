@@ -3,11 +3,11 @@ import shutil
 import os
 import struct
 from pathlib import Path
-from select_apple_review_devices import load_selection
+from select_apple_review_devices import load_selection, open_simulator_gui
 
-def run(*args):
+def run(*args, timeout=240):
     print("Running:", " ".join(args), flush=True)
-    return subprocess.check_output(list(args), text=True, timeout=240)
+    return subprocess.check_output(list(args), text=True, timeout=timeout)
 
 def launch_ready(udid, args):
     data = Path(run('xcrun','simctl','get_app_container',udid,'app.muwa.nasheeds','data').strip())
@@ -48,17 +48,56 @@ for i,d in enumerate(selected):
     (out/f'{i}-device.txt').write_text(d['name'])
     # shutdown all above invalidates the states from the original device list.
     run('xcrun','simctl','boot',udid)
+    preparation = {'guiBundle':open_simulator_gui(udid), 'appearanceAttempts':0, 'recoveredOnce':False}
     run('xcrun','simctl','bootstatus',udid,'-b')
-    run('xcrun','simctl','ui',udid,'appearance','dark')
+    preparation['bootstatusCompleted'] = True
+    preparation_path = out/f'{i}-simulator-preparation.json'
+    # simctl bootstatus succeeded but appearance timed out before Muwa install
+    # on the cold iOS 27 mini runner. Warm the GUI, bound that command, and allow
+    # one explicit restart of this selected device before declaring a failure.
+    for attempt in range(2):
+        preparation['appearanceAttempts'] = attempt + 1
+        preparation_path.write_text(json.dumps(preparation, ensure_ascii=False, indent=2))
+        try:
+            run('xcrun','simctl','ui',udid,'appearance','dark',timeout=60)
+            preparation['appearanceConfigured'] = True
+            break
+        except subprocess.TimeoutExpired as error:
+            preparation['appearanceTimeout'] = {'command':error.cmd,'seconds':error.timeout}
+            preparation_path.write_text(json.dumps(preparation, ensure_ascii=False, indent=2))
+            if attempt:
+                raise
+            run('xcrun','simctl','shutdown',udid,timeout=60)
+            run('xcrun','simctl','boot',udid)
+            open_simulator_gui(udid)
+            run('xcrun','simctl','bootstatus',udid,'-b')
+            preparation['recoveredOnce'] = True
+    preparation_path.write_text(json.dumps(preparation, ensure_ascii=False, indent=2))
+    manifest[i]['simulatorPreparation'] = preparation
     run('xcrun','simctl','install',udid,str(app))
     for label,args in [('home',[]),('settings',['--audit-profile','--audit-settings']),('search',['--audit-search']),('queue',['--audit-player','--audit-queue']),('profile',['--audit-profile']),('premium',['--audit-profile','--audit-premium']),('promo',['--audit-profile','--audit-promo']),('owner-premium',['--audit-profile','--audit-premium','--audit-owner']),('owner-promo',['--audit-profile','--audit-promo','--audit-owner']),('ai-unavailable',['--audit-player','--audit-ai-unavailable']),('player',['--audit-player']),('library-empty',['--audit-library-empty']),('playlist-create',['--audit-playlist-create']),('library',['--audit-library']),('landscape',['--audit-player','--audit-landscape']),('ai',['--audit-player','--audit-ai']),('ai-reader',['--audit-player','--audit-ai','--audit-ai-expanded'])]:
+        if label == 'landscape' and d['name'].startswith('iPad'):
+            # iPad window geometry requests may be ignored in multitasking. Its
+            # physical rotation is exercised and captured by the separate XCTest
+            # matrix; never package a portrait framebuffer as landscape proof.
+            (out/f'{i}-landscape.png').unlink(missing_ok=True)
+            manifest[i]['landscapeReview'] = {
+                'status':'requires-separate-native-rotation-test',
+                'test':'NativeInteractionTests.testHomeAndPlayerFollowActualDeviceRotation',
+                'method':'XCUIDevice.orientation with device PNG dimension assertions',
+            }
+            continue
         data = launch_ready(udid, args)
         run('xcrun','simctl','io',udid,'screenshot',str(out/f'{i}-{label}.png'))
-        if label == 'home':
+        if label in ('home', 'landscape'):
             header = (out/f'{i}-{label}.png').read_bytes()[:24]
             assert header.startswith(b'\x89PNG\r\n\x1a\n') and len(header) == 24, 'Invalid native screenshot'
             width, height = struct.unpack('>II', header[16:24])
-            manifest[i]['screenPixels'] = {'width': width, 'height': height}
+            if label == 'home':
+                manifest[i]['screenPixels'] = {'width': width, 'height': height}
+            else:
+                assert width > height, f'A portrait PNG cannot prove landscape: {d["name"]} {width}x{height}'
+                manifest[i]['landscapeReview'] = {'status':'captured','width':width,'height':height,'method':'Unmodified Simulator framebuffer'}
         proof = (data/'Documents/clock-check.txt').read_text()
         assert proof == '100 ticks; PlayerManager notifications: 0', 'Clock isolation check did not complete'
         (out/f'{i}-clock-check.txt').write_text(proof)
