@@ -4,13 +4,44 @@ The owner rented a server on 3 October 2026 and connected using Termius. The
 screenshots identify Ubuntu 26.04.1 LTS, x86_64, 3.8 GiB RAM and a 38 GiB root
 filesystem with approximately 33 GiB free after preparation. The final output
 confirms 2 CPUs, Docker 29.8.2, Compose 5.6.0, 2 GiB active swap and HOST PREPARED.
-The owner confirmed Beget as the provider; region is not yet verified. This is the owner's test host; capacity for 10,000 total
+The owner confirmed Beget as the provider and Russia as the region. This is the owner's test host; capacity for 10,000 total
 registered users still needs measurement and a separate media delivery plan.
 
 `bootstrap-ubuntu.sh` prepares the host; it does **not** create a replacement
 backend, empty account database, public media bucket, or a running Muwa service.
 The existing Floot db/auth/storage adapters and data must first be exported and
 adapted as described in [the migration plan](../../docs/CLOSED-BETA-HOSTING.md).
+
+## Confirmed remote access and migration staging
+
+On 4 October 2026, Remote Desktop Commander executed commands as root on the
+expected Beget IPv4/hostname. The live read-only preflight confirmed two CPUs,
+about 4 GiB RAM, 2 GiB swap, Docker 29.8.2/Compose 5.6.0, active UFW/Fail2ban,
+and no existing containers. Host configuration was saved privately under
+`/var/backups/muwa/pre-migration-20261004T093650Z/`; this local snapshot is not
+an off-host database/media backup.
+
+The verified repository commit `b4ea23108e96454a53471372b73aad71cf1a7a05` is staged
+at `/opt/muwa/source`. Missing Floot-owned source dependencies are preserved
+separately with version/hash manifests. Neither source staging nor these
+generated schema types restore database records. The owner reports an existing
+database export, which must be received and checked before trial restoration.
+Private incoming files belong in `/var/backups/muwa/incoming/`, never in Git.
+
+The reviewed Desktop Commander 0.2.52 installation and npm lock were copied from
+the working cache to `/opt/muwa/tools/desktop-commander`. The canonical service
+is `/etc/systemd/system/muwa-remote-access.service`, matching the adjacent
+[unit file](muwa-remote-access.service). It reuses the owner's existing device
+registration; credential contents were not read or printed. The temporary
+systemd service was replaced using an independent one-shot job, then the
+persistent service and renewed remote execution were verified. Boot enablement
+is configured; an actual reboot has not been tested. No SSH/firewall change or
+reboot was performed. This unit assumes the verified installation exists; it
+does not install or authorize a new agent.
+
+`/var/lib/muwa/remote-access-status.json` and `migration-status.json` record the
+observed stages privately on the VPS. Muwa application/data deployment and mobile
+backend switching remain separate pending stages.
 
 ## Review and run
 

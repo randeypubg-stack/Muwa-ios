@@ -1,0 +1,25 @@
+[Unit]
+Description=Muwa owner remote administration (Desktop Commander)
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=6
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/root
+UMask=0077
+ExecStart=/usr/bin/node /opt/muwa/tools/desktop-commander/node_modules/@wonderwhy-er/desktop-commander/dist/index.js remote --disable-no-sleep
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+KillMode=control-group
+StandardOutput=journal
+StandardError=journal
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=100
+
+[Install]
+WantedBy=multi-user.target
