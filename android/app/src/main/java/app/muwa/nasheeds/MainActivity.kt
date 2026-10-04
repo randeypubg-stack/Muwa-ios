@@ -12,6 +12,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.muwa.nasheeds.ui.design.MuwaTheme
+import org.json.JSONArray
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -35,6 +37,13 @@ class MainActivity : ComponentActivity() {
             }
         }
         val reviewRoute = if (BuildConfig.DEBUG) intent.getStringExtra("review.route") else null
+        // Explicit debug review routes need data even after instrumentation
+        // uninstalls its target APK. The fixture asset is absent from release.
+        if (reviewRoute != null && AppGraph.library.catalog.isEmpty()) {
+            val rows = JSONArray(assets.open("review-catalog.json").bufferedReader().use { it.readText() })
+            AppGraph.library.updateCatalog(JSONObject().put("version", 1).put("tracks", rows))
+            AppGraph.library.replaceQueue(AppGraph.library.catalog.map { it.id })
+        }
         // A cold process can receive a saved Activity bundle from Recents. Process
         // ownership, rather than bundle presence, decides whether launch has played.
         val showIntro = (reviewRoute == null || reviewRoute == "launch") && !launchHasPlayed
