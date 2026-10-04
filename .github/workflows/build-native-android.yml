@@ -95,6 +95,20 @@ jobs:
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
         with:
           packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+      - name: Use one current stable SDK device catalog for selection and AVD creation
+        shell: bash
+        run: |
+          # setup-android and emulator-runner otherwise select different SDK
+          # tool directories. A profile from one catalog may be unknown to the
+          # other avdmanager. emulator-runner explicitly uses latest/bin.
+          for attempt in 1 2 3; do
+            if sdkmanager --install 'cmdline-tools;latest' --channel=0; then break; fi
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            sleep 5
+          done
+          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
       - name: Install emulator with download retries
         shell: bash
         run: |

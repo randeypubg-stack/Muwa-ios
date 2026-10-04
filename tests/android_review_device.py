@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 from urllib.request import urlopen
 import xml.etree.ElementTree as ET
@@ -197,6 +198,7 @@ def review_device(adb):
     if selection.exists():
         device["profileSelection"] = json.loads(selection.read_text())
         assert device["profileSelection"]["profile"] == device["avd"]["hardwareProfile"], "Booted profile differs from the recorded SDK selection"
+        assert device["profileSelection"]["avdManagerPath"] == str(Path(shutil.which("avdmanager")).resolve()), "AVD selection and creation use different SDK tool installations"
     return device
 
 
@@ -217,8 +219,14 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.select_profile:
-        inventory = subprocess.check_output(["avdmanager", "list", "device", "-c"], text=True, timeout=30)
+        avd_manager = Path(shutil.which("avdmanager")).resolve()
+        inventory = subprocess.check_output([str(avd_manager), "list", "device", "-c"], text=True, timeout=30)
         proof = select_profile(inventory, args.select_profile)
+        proof["avdManagerPath"] = str(avd_manager)
+        properties = (avd_manager.parent.parent / "source.properties").read_text()
+        version = re.search(r"^Pkg\.Revision\s*=\s*(.+)$", properties, re.MULTILINE)
+        assert version, "Selected SDK tools have no revision metadata"
+        proof["commandLineToolsRevision"] = version[1].strip()
         if os.environ.get("GITHUB_OUTPUT"):
             with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
                 output.write(f'profile={proof["profile"]}\n')

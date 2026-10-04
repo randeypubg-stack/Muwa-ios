@@ -1,5 +1,11 @@
 """Reject misleading OS, hardware-profile and native screenshot review evidence."""
 from copy import deepcopy
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 from android_review_device import (assert_frame_dimensions, assert_review_device,
@@ -78,6 +84,28 @@ class AndroidReviewDeviceChecks(unittest.TestCase):
         self.assertEqual(proof["profile"], "pixel_6")
         self.assertIn("display overrides", proof["selectionReason"])
         with self.assertRaises(AssertionError): select_profile("unidentified-device", "phone")
+
+    def test_cli_records_revision_and_profile_from_the_same_selected_sdk_installation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name, revision, profile in [("old", "16.0", "pixel_6"), ("latest", "20.0", "pixel_11_pro_xl")]:
+                binary = root / name / "bin/avdmanager"
+                binary.parent.mkdir(parents=True)
+                binary.write_text(f'#!/bin/sh\nprintf "%s\\n" "{profile}"\n')
+                binary.chmod(0o755)
+                (binary.parent.parent / "source.properties").write_text(f"Pkg.Revision={revision}\n")
+            output = root / "profile.json"
+            github_output = root / "step-output"
+            subprocess.run([sys.executable, str(Path(__file__).with_name("android_review_device.py")),
+                            "--select-profile", "phone", "--output", str(output)], check=True,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10,
+                           env={**os.environ, "PATH": f'{root / "latest/bin"}:{root / "old/bin"}:{os.environ["PATH"]}',
+                                "GITHUB_OUTPUT": str(github_output)})
+            proof = json.loads(output.read_text())
+            self.assertEqual(proof["profile"], "pixel_11_pro_xl")
+            self.assertEqual(proof["commandLineToolsRevision"], "20.0")
+            self.assertEqual(proof["avdManagerPath"], str(root / "latest/bin/avdmanager"))
+            self.assertEqual(github_output.read_text(), "profile=pixel_11_pro_xl\n")
 
     def test_device_requires_exact_image_profile_os_and_effective_geometry(self):
         expected = dict(api="37.2", image="system-images;android-37.2;google_apis_ps16k;x86_64",
