@@ -195,7 +195,10 @@ with wave.open(buffer,'wb') as audio:
     audio.setnchannels(1); audio.setsampwidth(2); audio.setframerate(8000)
     audio.writeframes(bytes(16000))
 p=root/'Sources/Services/PlayerManager.swift'
-s=p.read_text().replace('AVPlayerItem(url: playbackURL)', 'AVPlayerItem(url: ProcessInfo.processInfo.arguments.contains("--audit-player") ? ReviewAudioFixture.url : playbackURL)')
+s=p.read_text()
+needle='AVPlayerItem(asset: playbackAsset(url: playbackURL))'
+assert s.count(needle) == 1, "The review audio fixture must match the real playback source"
+s=s.replace(needle, 'AVPlayerItem(asset: playbackAsset(url: ProcessInfo.processInfo.arguments.contains("--audit-player") ? ReviewAudioFixture.url : playbackURL))', 1)
 s += '''
 private enum ReviewAudioFixture {
   static let url: URL = {
