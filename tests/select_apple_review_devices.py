@@ -180,7 +180,7 @@ def open_simulator_gui(udid, developer_directory=None):
 def boot_selected_device(device):
     """Boot and verify the same selected runtime/UDID before XCTest starts."""
     def live_device():
-        groups = json.loads(command('xcrun', 'simctl', 'list', 'devices', 'available', '--json'))['devices']
+        groups = json.loads(command('xcrun', 'simctl', 'list', 'devices', device['udid'], '--json'))['devices']
         matches = [(runtime, item) for runtime, items in groups.items()
                    for item in items if item['udid'] == device['udid']]
         if len(matches) != 1:
@@ -196,12 +196,14 @@ def boot_selected_device(device):
         print('Booting selected Simulator: ' + device['udid'], file=sys.stderr, flush=True)
         command('xcrun', 'simctl', 'boot', device['udid'])
     print('Waiting for selected Simulator bootstatus: ' + device['udid'], file=sys.stderr, flush=True)
-    command('xcrun', 'simctl', 'bootstatus', device['udid'], '-b', timeout=240)
+    boot_output = command('xcrun', 'simctl', 'bootstatus', device['udid'], '-b', timeout=240)
+    print('Selected Simulator bootstatus completed:\n' + boot_output, file=sys.stderr, flush=True)
     current = live_device()
     if current['state'] != 'Booted':
         raise ValueError(f"Selected Simulator did not become Booted: {device['udid']}")
     return {'udid':device['udid'], 'runtimeIdentifier':device['runtimeIdentifier'],
-            'state':current['state'], 'bootRequested':requested_boot, 'bootstatusCompleted':True}
+            'state':current['state'], 'bootRequested':requested_boot, 'bootstatusCompleted':True,
+            'bootstatusOutput':boot_output}
 
 
 def load_selection(kind=None, requested_device=None, requested_ios=None, runtime_version=None):
@@ -243,17 +245,37 @@ def main():
     parser.add_argument("--boot", action="store_true", help="Require the selected runtime and UDID to finish booting before XCTest")
     args = parser.parse_args()
     selected, report = load_selection(args.kind, args.requested_device, args.requested_ios, args.runtime_version)
-    if args.open_gui:
-        if len(selected) != 1:
-            parser.error("--open-gui requires one --kind")
-        report["simulatorGUI"] = open_simulator_gui(selected[0]["udid"])
-    if args.boot:
-        if len(selected) != 1:
-            parser.error("--boot requires one --kind")
-        report['simulatorBoot'] = boot_selected_device(selected[0])
-    if args.output:
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    def write_report():
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+
+    # Preserve actual preflight evidence even when a hosted CoreSimulator service
+    # stops responding before XCTest starts. A failed boot remains a failure.
+    write_report()
+    try:
+        if args.open_gui:
+            if len(selected) != 1:
+                parser.error("--open-gui requires one --kind")
+            report["simulatorGUI"] = open_simulator_gui(selected[0]["udid"])
+        if args.boot:
+            if len(selected) != 1:
+                parser.error("--boot requires one --kind")
+            report['simulatorBoot'] = {'completed':False, 'udid':selected[0]['udid'],
+                                       'runtimeIdentifier':selected[0]['runtimeIdentifier']}
+            write_report()
+            try:
+                report['simulatorBoot'].update(boot_selected_device(selected[0]), completed=True)
+            except Exception as error:
+                failure = {'type':type(error).__name__, 'message':str(error)}
+                if isinstance(error, subprocess.TimeoutExpired):
+                    failure.update(command=list(error.cmd), timeoutSeconds=error.timeout)
+                elif isinstance(error, subprocess.CalledProcessError):
+                    failure.update(command=list(error.cmd), exitCode=error.returncode)
+                report['simulatorBoot']['error'] = failure
+                raise
+    finally:
+        write_report()
     if args.print_udid:
         if len(selected) != 1:
             parser.error("--print-udid requires one --kind")

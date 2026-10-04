@@ -56,6 +56,8 @@ jobs:
           tar -xzf build/muwa-review-app.tar.gz -C build/PreviewDerivedData/Build/Products/Debug-iphonesimulator
       - name: Verify terminal signals and record the native launch
         run: |
+          if ! command -v tesseract >/dev/null 2>&1; then brew install tesseract; fi
+          python3 tests/verify_home_frame.py --prepare-models
           python3 tests/RecorderSignalChecks.py
           export MUWA_LAUNCH_DEVICE="$(python3 tests/select_apple_review_devices.py --kind phone --open-gui --print-udid)"
           python3 tests/capture_launch_ios.py

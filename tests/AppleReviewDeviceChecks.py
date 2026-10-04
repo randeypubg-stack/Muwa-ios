@@ -1,5 +1,6 @@
 """Selection checks with mixed real-shaped simctl inventories; no macOS needed."""
 import copy
+import io
 import json
 from pathlib import Path
 import tempfile
@@ -7,7 +8,7 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
-from select_apple_review_devices import boot_selected_device, normalize_inventory, open_simulator_gui, request_status, select_devices
+from select_apple_review_devices import boot_selected_device, main, normalize_inventory, open_simulator_gui, request_status, select_devices
 
 
 def runtime(version, available=True, name=None):
@@ -137,9 +138,12 @@ class AppleReviewDeviceChecks(unittest.TestCase):
             self.assertEqual(status['runtimeIdentifier'], device['runtimeIdentifier'])
             self.assertTrue(status['bootstatusCompleted'])
             self.assertTrue(status['bootRequested'])
+            self.assertEqual(status['bootstatusOutput'], 'ready')
+            self.assertEqual(commands.call_args_list[0].args, ('xcrun','simctl','list','devices',device['udid'],'--json'))
             self.assertEqual(commands.call_args_list[1].args, ('xcrun','simctl','boot',device['udid']))
             self.assertEqual(commands.call_args_list[2].args, ('xcrun','simctl','bootstatus',device['udid'],'-b'))
             self.assertEqual(commands.call_args_list[2].kwargs, {'timeout':240})
+            self.assertEqual(commands.call_args_list[3].args, ('xcrun','simctl','list','devices',device['udid'],'--json'))
 
     def test_explicit_boot_rejects_runtime_substitution(self):
         device = select_devices(self.records, 'large-phone')[0]
@@ -148,6 +152,47 @@ class AppleReviewDeviceChecks(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Selected Simulator runtime changed'):
                 boot_selected_device(device)
             self.assertEqual(commands.call_count, 1)
+
+    def test_failed_boot_preserves_inventory_and_reraises_original_timeout(self):
+        device = select_devices(self.records, 'large-phone')[0]
+        report = {'selected':[device], 'requiredRuntimeVersion':'27.0'}
+        timeout = subprocess.TimeoutExpired(('xcrun','simctl','list','devices',device['udid'],'--json'), 120)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'inventory.json'
+            def fail_boot(selected):
+                early = json.loads(output.read_text())
+                self.assertEqual(early['selected'][0]['udid'], device['udid'])
+                self.assertEqual(early['simulatorBoot']['runtimeIdentifier'], device['runtimeIdentifier'])
+                self.assertFalse(early['simulatorBoot']['completed'])
+                raise timeout
+            with patch('select_apple_review_devices.load_selection', return_value=([device], report)), \
+                 patch('select_apple_review_devices.boot_selected_device', side_effect=fail_boot), \
+                 patch('sys.argv', ['select', '--kind','large-phone','--boot','--output',str(output)]):
+                with self.assertRaises(subprocess.TimeoutExpired) as failure:
+                    main()
+                self.assertIs(failure.exception, timeout)
+            saved = json.loads(output.read_text())
+            self.assertFalse(saved['simulatorBoot']['completed'])
+            self.assertEqual(saved['simulatorBoot']['error']['type'], 'TimeoutExpired')
+            self.assertEqual(saved['simulatorBoot']['error']['command'], list(timeout.cmd))
+            self.assertEqual(saved['simulatorBoot']['error']['timeoutSeconds'], 120)
+
+    def test_successful_boot_updates_report_and_prints_only_selected_udid(self):
+        device = select_devices(self.records, 'large-phone')[0]
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'inventory.json'
+            stdout = io.StringIO()
+            with patch('select_apple_review_devices.load_selection', return_value=([device], {'selected':[device]})), \
+                 patch('select_apple_review_devices.boot_selected_device', return_value={'state':'Booted','bootstatusCompleted':True}), \
+                 patch('sys.argv', ['select','--kind','large-phone','--boot','--print-udid','--output',str(output)]), \
+                 patch('sys.stdout', stdout):
+                main()
+            self.assertEqual(stdout.getvalue(), device['udid'] + '\n')
+            saved = json.loads(output.read_text())
+            self.assertTrue(saved['simulatorBoot']['completed'])
+            self.assertTrue(saved['simulatorBoot']['bootstatusCompleted'])
+            self.assertEqual(saved['simulatorBoot']['state'], 'Booted')
+            self.assertNotIn('error', saved['simulatorBoot'])
 
 
 if __name__ == "__main__":

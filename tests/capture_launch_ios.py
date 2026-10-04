@@ -99,8 +99,7 @@ def validate_video(path):
 
 
 def parse_home_proof(output):
-    # Vision's graphics driver can log to stdout before/after the JSON result.
-    # Preserve those logs but accept exactly one successful native frame proof.
+    # Preserve command diagnostics but accept exactly one successful frame proof.
     proofs = []
     for line in output.splitlines():
         try:
@@ -296,11 +295,10 @@ def main():
             raise AssertionError("Native launch video is empty or truncated")
         status["video_atoms"] = validate_video(video)
         status["video_bytes"] = video.stat().st_size
-        # Finish the encoder before starting expensive Vision/Swift work. The
+        # Finish the encoder before CPU OCR. The
         # screenshot above was captured while the real session was still held.
-        verifier = OUTPUT / "verify-home-frame"
-        run("xcrun", "swiftc", "-O", "tests/verify_home_frame.swift", "-o", verifier)
-        status["home_frame_proof"] = parse_home_proof(run(verifier.resolve(), final))
+        status["home_frame_proof"] = parse_home_proof(run(
+            "python3", "tests/verify_home_frame.py", final, "--output", OUTPUT / "ocr"))
 
         # Extract real recorded frames only when ffmpeg is present on the runner.
         ffmpeg = shutil.which("ffmpeg")

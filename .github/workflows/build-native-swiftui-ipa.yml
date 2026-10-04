@@ -52,7 +52,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Verify exact Apple runtime and device selection
-        run: python3 tests/AppleReviewDeviceChecks.py
+        run: |
+          python3 tests/AppleReviewDeviceChecks.py
+          python3 tests/HomeFrameChecks.py
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
@@ -88,7 +90,7 @@ jobs:
       - name: Require the selected stable iOS 27 SDK
         shell: bash
         run: |
-          test "$(xcodebuild -version | head -n 1)" = "Xcode 27.0"
+          python3 -c 'import subprocess; value=subprocess.check_output(["xcodebuild", "-version"], text=True); print(value); assert value.splitlines()[0] == "Xcode 27.0", value'
           test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "27.0"
           xcodebuild -version
           xcrun simctl list runtimes --json
@@ -408,7 +410,7 @@ jobs:
       - name: Require the selected stable iOS 27 SDK
         shell: bash
         run: |
-          test "$(xcodebuild -version | head -n 1)" = "Xcode 27.0"
+          python3 -c 'import subprocess; value=subprocess.check_output(["xcodebuild", "-version"], text=True); print(value); assert value.splitlines()[0] == "Xcode 27.0", value'
           test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "27.0"
           xcodebuild -version
           xcrun simctl list runtimes --json
@@ -424,6 +426,11 @@ jobs:
         env:
           MUWA_REVIEW_DEVICE: ${{ matrix.device }}
         run: python3 tests/capture_previews.py
+      - name: Prepare CPU OCR for native Home verification
+        if: matrix.device == 'phone'
+        run: |
+          if ! command -v tesseract >/dev/null 2>&1; then brew install tesseract; fi
+          python3 tests/verify_home_frame.py --prepare-models
       - name: Verify Home while session restoration is pending
         if: matrix.device == 'phone'
         run: |
@@ -434,6 +441,7 @@ jobs:
         if: always()
         with:
           name: Muwa-build44-${{ matrix.device }}-screenshots
+          overwrite: true
           # Keep individual downloadable archives below the attachment limit on
           # large iPads. All files remain unmodified native Simulator captures.
           path: |
@@ -448,6 +456,7 @@ jobs:
         if: always()
         with:
           name: Muwa-build44-${{ matrix.device }}-player-screenshots
+          overwrite: true
           path: |
             build/previews/*player.png
             build/previews/*landscape.png
@@ -460,6 +469,7 @@ jobs:
         if: always()
         with:
           name: Muwa-build44-${{ matrix.device }}-account-screenshots
+          overwrite: true
           path: |
             build/previews/*profile.png
             build/previews/*settings.png
@@ -470,6 +480,7 @@ jobs:
         if: always() && matrix.device == 'phone'
         with:
           name: Muwa-build44-phone-launch-review
+          overwrite: true
           path: build/previews/launch
           if-no-files-found: error
 
@@ -504,7 +515,7 @@ jobs:
       - name: Require the selected stable iOS 27 SDK
         shell: bash
         run: |
-          test "$(xcodebuild -version | head -n 1)" = "Xcode 27.0"
+          python3 -c 'import subprocess; value=subprocess.check_output(["xcodebuild", "-version"], text=True); print(value); assert value.splitlines()[0] == "Xcode 27.0", value'
           test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "27.0"
           xcodebuild -version
           xcrun simctl list runtimes --json
@@ -521,6 +532,7 @@ jobs:
           ruby tests/prepare_interaction_tests.rb build/interaction-source/native/MuwaNasheedsNative
       - name: Exercise real row dragging and playlist creation
         run: |
+          xcrun simctl help list
           python3 tests/select_apple_review_devices.py --kind "${{ matrix.device }}" --open-gui --boot --output build/interaction-devices.json
           DEVICE_ID="$(python3 tests/select_apple_review_devices.py --kind "${{ matrix.device }}" --print-udid)"
           set -o pipefail
@@ -535,6 +547,7 @@ jobs:
         if: always()
         with:
           name: Muwa-build44-native-interactions-${{ matrix.device }}
+          overwrite: true
           path: |
             build/interactions.xcresult
             build/interactions.log
@@ -547,6 +560,7 @@ jobs:
         if: always()
         with:
           name: Muwa-build44-rotation-screenshots-${{ matrix.device }}
+          overwrite: true
           path: |
             build/interaction-screenshots
             build/interaction-devices.json

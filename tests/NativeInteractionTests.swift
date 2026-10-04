@@ -109,7 +109,7 @@ final class NativeInteractionTests: XCTestCase {
                    "Muwa did not adopt the actual device orientation")
     XCTAssertTrue(visibleElement.exists && visibleElement.isHittable,
                   "The native screen control disappeared after rotation")
-    let screenshot = XCUIDevice.shared.screenshot()
+    let screenshot = XCUIScreen.main.screenshot()
     let png = screenshot.pngRepresentation
     guard png.count >= 24,
           png.prefix(8) == Data([137, 80, 78, 71, 13, 10, 26, 10]) else {
