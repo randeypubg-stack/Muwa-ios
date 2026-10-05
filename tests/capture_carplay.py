@@ -206,7 +206,10 @@ def capture():
                              ('identifier', 'name', 'version', 'buildversion') if key in runtime}
         status['requestedStableRuntime'] = '27.0'
         status['requestedRuntimeAvailable'] = any(
-            version_parts(item.get('version')) == (27, 0, 0) and item.get('isAvailable')
+            item.get('identifier', '').startswith('com.apple.CoreSimulator.SimRuntime.iOS-')
+            and 'beta' not in item.get('name', '').casefold()
+            and version_parts(item.get('version')) == (27, 0, 0)
+            and item.get('isAvailable')
             for item in runtimes)
         status['selectedRequestedRuntime'] = version_parts(runtime['version']) == (27, 0, 0)
         status['runtimeSelection'] = 'stable runtime compatible with the measured simulator SDK'
