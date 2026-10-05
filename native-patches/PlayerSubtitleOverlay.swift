@@ -1,141 +1,196 @@
 import SwiftUI
 
+// A presenter reports cached/published content, independently of playback gaps.
+// The parent only reserves space for a rail that has actual caption content.
+struct PlayerSubtitleRailAvailabilityKey: PreferenceKey {
+  static let defaultValue: Set<String> = []
+  static func reduce(value: inout Set<String>, nextValue: () -> Set<String>) {
+    value.formUnion(nextValue())
+  }
+}
+
 struct PlayerSubtitleOverlay: View {
   @EnvironmentObject private var subtitles: SubtitleManager
   let track: Track
   let currentTime: TimeInterval
   let language: SubtitleLanguage
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  var height: CGFloat = 150
 
   private var segments: [SubtitleSegment] { subtitles.segments(for: track) }
   private var activeIndex: Int? { subtitles.activeIndex(for: track, time: currentTime) }
 
   var body: some View {
-    Group {
+    ZStack {
+      Color.clear
       if let activeIndex, segments.indices.contains(activeIndex) {
-        let current = segments[activeIndex]
-        let previous = activeIndex > 0 ? segments[activeIndex - 1] : nil
-        let next = activeIndex + 1 < segments.count ? segments[activeIndex + 1] : nil
-
-        VStack(alignment: .trailing, spacing: 7) {
-          if let previous {
-            Text(previous.ar)
-              .font(.system(size: 12))
-              .foregroundStyle(.white.opacity(0.28))
-              .lineLimit(1)
-          }
-
-          Text(current.ar)
-            .font(.system(size: 20, weight: .semibold))
-            .multilineTextAlignment(.trailing)
-            .foregroundStyle(.white)
-            .lineLimit(2)
-            .environment(\.layoutDirection, .rightToLeft)
-
-          if language != .arabic {
-            Text(current.text(for: language))
-              .font(.system(size: 10, weight: .medium))
-              .foregroundStyle(.white.opacity(0.78))
-              .multilineTextAlignment(.trailing)
-              .lineLimit(2)
-          }
-
-          if let next {
-            Text(next.ar)
-              .font(.system(size: 12))
-              .foregroundStyle(.white.opacity(0.43))
-              .lineLimit(1)
-          }
-        }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 13)
-        .frame(maxWidth: 196, alignment: .trailing)
-        .background(
-          LinearGradient(
-            colors: [.black.opacity(0.05), .black.opacity(0.38)],
-            startPoint: .leading,
-            endPoint: .trailing
-          ),
-          in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+        LegacySubtitleRail(
+          segments: segments, activeIndex: activeIndex, language: language, height: height
         )
-        .background(
-          .ultraThinMaterial.opacity(0.34),
-          in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-        )
-        .transition(.opacity.combined(with: .move(edge: .trailing)))
       }
     }
+    .frame(height: height)
     .allowsHitTesting(false)
-    .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: activeIndex)
+    .preference(key: PlayerSubtitleRailAvailabilityKey.self, value: segments.isEmpty ? [] : [track.id])
     .task(id: track.id) { subtitles.load(for: track) }
   }
 }
 
-
 struct AISubtitleExperience: View {
   @StateObject private var manager = AISubtitleManager()
+  @EnvironmentObject private var legacySubtitles: SubtitleManager
   @ObservedObject var timeline: PlaybackTimeline
   let track: Track
-  var compactWidth: CGFloat = 196
+  var compactWidth: CGFloat = 112
+  var compactHeight: CGFloat = 150
   @State private var language: AITranslationLanguage = .original
   @State private var expanded = false
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  private var hasContent: Bool {
+    !(manager.document?.segments.isEmpty ?? true) || !legacySubtitles.segments(for: track).isEmpty
+  }
 
   var body: some View {
     Button { expanded = true } label: {
       Group {
-        if manager.document?.activeIndex(at: timeline.snapshot.time) != nil {
-      VStack(alignment: .leading, spacing: 9) {
-        HStack(spacing: 5) {
-          Image(systemName: "captions.bubble.fill")
-          Text("Текст · AI").font(.caption2.weight(.semibold))
-          Spacer(minLength: 0)
-          Image(systemName: "arrow.up.left.and.arrow.down.right").font(.caption2)
-        }.foregroundStyle(.white.opacity(0.60))
-        if let doc = manager.document, let index = doc.activeIndex(at: timeline.snapshot.time) {
-          let segment = doc.segments[index]
-          AISubtitleLine(segment: segment, time: timeline.snapshot.time, rtl: doc.isRTL)
-            .font(.system(size: 19, weight: .semibold))
-            .lineLimit(3)
-            .id(segment.id)
-            .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 6)))
-          if let translated = manager.translations[language.rawValue]?.segments[segment.id] {
-            Text(translated).font(.caption).foregroundStyle(.white.opacity(0.75)).lineLimit(2)
+        if let document = manager.document,
+           let activeIndex = document.activeIndex(at: timeline.snapshot.time) {
+          SubtitleRail(count: document.segments.count, activeIndex: activeIndex, height: compactHeight) { index, active in
+            let segment = document.segments[index]
+            VStack(alignment: document.isRTL ? .trailing : .leading, spacing: 5) {
+              if active {
+                AISubtitleLine(segment: segment, time: timeline.snapshot.time, rtl: document.isRTL)
+                  .font(.system(size: 18, weight: .semibold))
+                  .lineLimit(compactHeight >= 130 ? 2 : 1)
+                if let translated = manager.translations[language.rawValue]?.segments[segment.id] {
+                  Text(translated)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .lineLimit(compactHeight >= 130 ? 2 : 1)
+                    .multilineTextAlignment(.leading)
+                    .environment(\.layoutDirection, .leftToRight)
+                }
+              } else {
+                Text(segment.original)
+                  .font(.system(size: 12, weight: .medium))
+                  .foregroundStyle(.white)
+                  .lineLimit(1)
+                  .multilineTextAlignment(document.isRTL ? .trailing : .leading)
+                  .environment(\.layoutDirection, document.isRTL ? .rightToLeft : .leftToRight)
+              }
+            }
+            .frame(maxWidth: .infinity, alignment: document.isRTL ? .trailing : .leading)
           }
-        } else {
-          Text(manager.isRecognizing ? "Распознаём оригинал…" : manager.error != nil ? "Открыть субтитры" : "Текст появится вместе с голосом")
-            .font(.caption).foregroundStyle(.white.opacity(0.72)).multilineTextAlignment(.leading)
-        }
-      }
-      .padding(13)
-      .frame(width: compactWidth, alignment: .leading)
-      .background(LinearGradient(colors: [.black.opacity(0.55), .black.opacity(0.86)], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 18))
-      .overlay(alignment: .leading) { Capsule().fill(Color(red: 0.73, green: 0.83, blue: 1)).frame(width: 2, height: 30).padding(.leading, 2) }
-        } else {
-          VStack(alignment: .trailing, spacing: 8) {
-            if manager.document == nil {
-              PlayerSubtitleOverlay(track: track, currentTime: timeline.snapshot.time,
-                language: SubtitleLanguage(rawValue: language.rawValue.uppercased()) ?? .arabic)
-            }
-            HStack(spacing: 7) {
-              if manager.isRecognizing { ProgressView().tint(.white) }
-              else { Image(systemName: "captions.bubble") }
-              Text(manager.isRecognizing ? "Обработка" : "Текст").font(.caption.weight(.semibold))
-            }
-            .padding(.horizontal, 14).frame(minHeight: 44)
-            .background(.black.opacity(0.76), in: Capsule())
+        } else if manager.document == nil {
+          if hasContent {
+            PlayerSubtitleOverlay(
+              track: track, currentTime: timeline.snapshot.time,
+              language: SubtitleLanguage(rawValue: language.rawValue.uppercased()) ?? .arabic,
+              height: compactHeight
+            )
+          } else {
+            statusView
           }
         }
       }
-
+      .frame(width: compactWidth, height: compactHeight)
+      .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
     .accessibilityLabel("AI-субтитры. Открыть полный текст")
-    .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: manager.document?.activeIndex(at: timeline.snapshot.time))
+    .accessibilityValue(manager.document != nil ? "Оригинальный текст доступен"
+      : hasContent ? "Обычные субтитры доступны"
+      : manager.isRecognizing ? "Загрузка текста" : "Текст пока недоступен")
+    .preference(key: PlayerSubtitleRailAvailabilityKey.self, value: hasContent ? [track.id] : [])
+    .task(id: track.id) { legacySubtitles.load(for: track) }
     .task(id: track.audioURL) { await manager.load(track) }
     .sheet(isPresented: $expanded) {
       AISubtitleReader(manager: manager, timeline: timeline, track: track, language: $language)
     }
+  }
+
+  private var statusView: some View {
+    HStack(spacing: 7) {
+      if manager.isRecognizing { ProgressView().tint(.white) }
+      else { Image(systemName: "captions.bubble") }
+      Text(manager.isRecognizing ? "Обработка" : "Текст")
+        .font(.caption.weight(.semibold))
+    }
+    .foregroundStyle(.white.opacity(0.66))
+    .frame(minHeight: 44)
+  }
+}
+
+private struct LegacySubtitleRail: View {
+  let segments: [SubtitleSegment]
+  let activeIndex: Int
+  let language: SubtitleLanguage
+  let height: CGFloat
+
+  var body: some View {
+    SubtitleRail(count: segments.count, activeIndex: activeIndex, height: height) { index, active in
+      let segment = segments[index]
+      VStack(alignment: .trailing, spacing: 5) {
+        Text(segment.ar)
+          .font(.system(size: active ? 18 : 12, weight: active ? .semibold : .medium))
+          .foregroundStyle(.white)
+          .lineLimit(active && height >= 130 ? 2 : 1)
+          .multilineTextAlignment(.trailing)
+          .environment(\.layoutDirection, .rightToLeft)
+        if active, language != .arabic {
+          Text(segment.text(for: language))
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(.white.opacity(0.78))
+            .lineLimit(height >= 130 ? 2 : 1)
+            .multilineTextAlignment(.leading)
+            .environment(\.layoutDirection, .leftToRight)
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+  }
+}
+
+// Both existing subtitle sources use the same transparent, vertically moving
+// rail. No material/card is painted over the artwork or player background.
+private struct SubtitleRail<Line: View>: View {
+  let count: Int
+  let activeIndex: Int
+  let height: CGFloat
+  let line: (Int, Bool) -> Line
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  init(count: Int, activeIndex: Int, height: CGFloat,
+       @ViewBuilder line: @escaping (Int, Bool) -> Line) {
+    self.count = count
+    self.activeIndex = activeIndex
+    self.height = height
+    self.line = line
+  }
+
+  private var window: [Int] {
+    let lower = max(0, activeIndex - 1)
+    let upper = min(count - 1, activeIndex + 1)
+    return lower <= upper ? Array(lower...upper) : []
+  }
+
+  var body: some View {
+    ZStack {
+      ForEach(window, id: \.self) { index in
+        let delta = index - activeIndex
+        line(index, delta == 0)
+          .scaleEffect(delta == 0 ? 1 : 0.88)
+          .opacity(delta == 0 ? 1 : 0.28)
+          .offset(y: CGFloat(delta) * min(62, height * 0.38))
+          .transition(reduceMotion ? .opacity : .asymmetric(
+            insertion: .opacity.combined(with: .offset(y: 28)),
+            removal: .opacity.combined(with: .offset(y: -28))
+          ))
+      }
+    }
+    .frame(maxWidth: .infinity)
+    .frame(height: height)
+    .clipped()
+    .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.92), value: activeIndex)
   }
 }
 

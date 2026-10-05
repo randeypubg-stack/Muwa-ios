@@ -7,6 +7,7 @@ private enum ArtworkGestureAxis: Equatable {
 }
 
 struct MorphingPlayerView: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @EnvironmentObject private var player: PlayerManager
   @EnvironmentObject private var library: LibraryStore
   @EnvironmentObject private var premium: PremiumManager
@@ -24,6 +25,7 @@ struct MorphingPlayerView: View {
   @State private var playlistCreatePresented = false
   @State private var subtitlesVisible = false
   @State private var aiSubtitlesVisible = false
+  @State private var subtitleContentTrackIDs: Set<String> = []
   @State private var subtitleLanguage: SubtitleLanguage = .arabic
   @State private var downloadError: String?
   @State private var dragStartExpansion: CGFloat?
@@ -148,6 +150,11 @@ struct MorphingPlayerView: View {
           progress: p,
           viewportWidth: viewportWidth,
           screenCenterX: artworkScreenX,
+          subtitleLeftSpace: max(0, artworkScreenX - safeSideInset),
+          subtitleRightSpace: max(0,
+            (geometry.controlsX > viewportWidth / 2 + 1
+              ? geometry.controlsX - geometry.controlsWidth / 2 - 12
+              : viewportWidth - safeSideInset) - artworkScreenX),
           expansionTravel: travel
         )
         .position(
@@ -282,6 +289,8 @@ struct MorphingPlayerView: View {
     progress: CGFloat,
     viewportWidth: CGFloat,
     screenCenterX: CGFloat,
+    subtitleLeftSpace: CGFloat,
+    subtitleRightSpace: CGFloat,
     expansionTravel: CGFloat
   ) -> some View {
     let leftEdgeTravel = max(1, screenCenterX + (size * 0.42))
@@ -312,7 +321,9 @@ struct MorphingPlayerView: View {
           size: size,
           cornerRadius: cornerRadius,
           showSubtitle: false,
-          progress: progress
+          progress: progress,
+          subtitleLeftSpace: subtitleLeftSpace,
+          subtitleRightSpace: subtitleRightSpace
         )
         .offset(x: incomingX)
         .scaleEffect(incomingScale)
@@ -324,19 +335,23 @@ struct MorphingPlayerView: View {
         size: size,
         cornerRadius: cornerRadius,
         showSubtitle: true,
-        progress: progress
+        progress: progress,
+        subtitleLeftSpace: subtitleLeftSpace,
+        subtitleRightSpace: subtitleRightSpace
       )
       .offset(x: coverSwipeDirection == 0 ? 0 : outgoingX)
       .scaleEffect(coverSwipeDirection == 0 ? 1 : currentScale)
       .opacity(Double(coverSwipeDirection == 0 ? 1 : currentOpacity))
     }
     .frame(width: size, height: size)
+    .onPreferenceChange(PlayerSubtitleRailAvailabilityKey.self) {
+      subtitleContentTrackIDs = $0
+    }
     .shadow(
       color: .black.opacity(Double(0.34 * smoothStep(progress))),
       radius: 28 * smoothStep(progress),
       y: 16 * smoothStep(progress)
     )
-    .contentShape(Rectangle())
     .allowsHitTesting((progress > 0.74 || artworkGestureActive) && !coverPaging)
     .highPriorityGesture(
       artworkDragGesture(
@@ -516,25 +531,57 @@ struct MorphingPlayerView: View {
     size: CGFloat,
     cornerRadius: CGFloat,
     showSubtitle: Bool,
-    progress: CGFloat
+    progress: CGFloat,
+    subtitleLeftSpace: CGFloat,
+    subtitleRightSpace: CGFloat
   ) -> some View {
-    ArtworkView(
-      url: pageTrack.artworkURL,
-      cornerRadius: cornerRadius,
-      placeholderSystemImage: "music.note"
+    let subtitleLayoutActive =
+      showSubtitle && (subtitlesVisible || aiSubtitlesVisible) && progress > 0.74
+      && subtitleContentTrackIDs.contains(pageTrack.id)
+    let subtitleLayout = PlayerSubtitleLayout(
+      size: size, leftSpace: subtitleLeftSpace, rightSpace: subtitleRightSpace,
+      active: subtitleLayoutActive
     )
-    .frame(width: size, height: size)
-    .overlay(alignment: .trailing) {
+    let railHeight = min(170, max(96, size * 0.72))
+    let showRail =
+      showSubtitle && progress > 0.74 && !coverPaging && abs(coverDragX) < 6
+
+    return ZStack {
+      ArtworkView(
+        url: pageTrack.artworkURL,
+        cornerRadius: cornerRadius,
+        placeholderSystemImage: "music.note"
+      )
+      .frame(width: size, height: size)
+      .scaleEffect(subtitleLayout.coverScale)
+      .offset(x: subtitleLayout.coverShift)
+
+      // Keep the presenter mounted while paging so its task/cache survives.
+      // Only the current cover owns captions; incoming covers never show stale text.
       if showSubtitle, aiSubtitlesVisible, progress > 0.74 {
-        AISubtitleExperience(timeline: player.timeline, track: pageTrack, compactWidth: min(196, size * 0.72))
-          .offset(x: min(24, size * 0.08))
-          .transition(.opacity)
+        AISubtitleExperience(
+          timeline: player.timeline, track: pageTrack,
+          compactWidth: subtitleLayout.railWidth, compactHeight: railHeight
+        )
+        .id(pageTrack.id)
+        .frame(width: subtitleLayout.railWidth, height: railHeight)
+        .offset(x: subtitleLayout.railOffset)
+        .opacity(showRail ? 1 : 0)
+        .allowsHitTesting(showRail)
+        .accessibilityHidden(!showRail)
       } else if showSubtitle, subtitlesVisible, progress > 0.74 {
-        ClockedSubtitleOverlay(timeline: player.timeline, track: pageTrack, language: subtitleLanguage)
-        .offset(x: min(46, size * 0.14))
-        .transition(.opacity)
+        ClockedSubtitleOverlay(
+          timeline: player.timeline, track: pageTrack, language: subtitleLanguage,
+          height: railHeight
+        )
+        .frame(width: subtitleLayout.railWidth, height: railHeight)
+        .offset(x: subtitleLayout.railOffset)
+        .opacity(showRail ? 1 : 0)
+        .accessibilityHidden(!showRail)
       }
     }
+    .frame(width: size, height: size)
+    .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.94), value: subtitleLayoutActive)
   }
 
   private func swipeNeighbor(direction: Int) -> Track? {
@@ -968,6 +1015,7 @@ struct MorphingPlayerView: View {
         }
       }
       .buttonStyle(.plain)
+      .accessibilityLabel(subtitlesVisible ? "Скрыть субтитры" : "Показать субтитры")
 
       Button {
         queuePresented = true
@@ -1162,6 +1210,33 @@ struct PlayerGeometry {
   }
 }
 
+// Fit the transparent caption rail beside the reduced cover, inside the safe
+// artwork column. The right boundary excludes transport controls in landscape.
+struct PlayerSubtitleLayout {
+  let coverScale: CGFloat
+  let coverShift: CGFloat
+  let railWidth: CGFloat
+  let railOffset: CGFloat
+
+  init(size: CGFloat, leftSpace: CGFloat, rightSpace: CGFloat, active: Bool) {
+    let availableWidth = max(0, leftSpace + rightSpace)
+    railWidth = min(116, max(78, size * 0.36), availableWidth * 0.40)
+    let gap = min(10, availableWidth * 0.04)
+    let coverWidth = min(size * 0.82, max(0, availableWidth - gap - railWidth))
+    if active {
+      coverScale = coverWidth / max(size, 1)
+      let leftBound = -leftSpace + coverWidth / 2
+      let rightBound = rightSpace - railWidth - gap - coverWidth / 2
+      coverShift = min(max(-size * 0.18, leftBound), rightBound)
+      railOffset = coverShift + coverWidth / 2 + gap + railWidth / 2
+    } else {
+      coverScale = 1
+      coverShift = 0
+      railOffset = min(size * 0.30, max(0, rightSpace - railWidth / 2))
+    }
+  }
+}
+
 
 private struct PlaybackScrubber: View {
   @ObservedObject var timeline: PlaybackTimeline
@@ -1200,7 +1275,8 @@ private struct ClockedSubtitleOverlay: View {
   @ObservedObject var timeline: PlaybackTimeline
   let track: Track
   let language: SubtitleLanguage
+  let height: CGFloat
   var body: some View {
-    PlayerSubtitleOverlay(track: track, currentTime: timeline.snapshot.time, language: language)
+    PlayerSubtitleOverlay(track: track, currentTime: timeline.snapshot.time, language: language, height: height)
   }
 }

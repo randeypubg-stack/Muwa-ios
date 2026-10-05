@@ -97,6 +97,63 @@ final class NativeInteractionTests: XCTestCase {
     XCTAssertTrue(app.staticTexts["Ваша библиотека"].waitForExistence(timeout: 10))
   }
 
+  func testShiftedSubtitleRailOpensAndClosesNativeReader() throws {
+    // The cached document is seeded only in the disposable review app. Omit
+    // --audit-ai-expanded: the production rail's own button must open the reader.
+    app.launchArguments = ["--audit-player", "--audit-ai"]
+    app.launch()
+    let rail = app.buttons["AI-субтитры. Открыть полный текст"].firstMatch
+    let reader = app.navigationBars["Оригинал и перевод"].firstMatch
+    let follow = app.switches["Следить"].firstMatch
+    XCTAssertTrue(rail.waitForExistence(timeout: 30))
+    let ready = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "value == %@", "Оригинальный текст доступен"), object: rail)
+    XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed,
+                   "The actual cached subtitle document did not populate the rail")
+    XCTAssertTrue(rail.isHittable)
+    XCTAssertFalse(reader.exists, "The fixture opened the reader without a real rail tap")
+    XCTAssertFalse(follow.exists)
+    let railFrame = rail.frame
+    XCTAssertGreaterThan(min(railFrame.width, railFrame.height), 20)
+    XCTAssertTrue(app.frame.insetBy(dx: -1, dy: -1).contains(railFrame),
+                  "The shifted caption rail moved outside the safe application viewport")
+    // The right edge exercises the part of the rail beyond the original square
+    // cover. A contentShape confined to that square used to swallow this tap.
+    let tapPoint = CGPoint(x: railFrame.minX + railFrame.width * 0.95,
+                           y: railFrame.midY)
+    shot("subtitle-rail-before-tap")
+    rail.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+    XCTAssertTrue(reader.waitForExistence(timeout: 10), "Tapping the actual rail did not open the native reader")
+    XCTAssertTrue(follow.waitForExistence(timeout: 10), "The native reader's playback-follow control is missing")
+    XCTAssertTrue(follow.isHittable)
+    shot("subtitle-reader-opened-by-tap")
+    let proof: [String: Any] = [
+      "method": "Native AI subtitle rail coordinate tap without auto-expanded fixture",
+      "launchArguments": app.launchArguments,
+      "railValue": rail.value as? String ?? "",
+      "railFrame": ["x": Double(railFrame.minX), "y": Double(railFrame.minY),
+                    "width": Double(railFrame.width), "height": Double(railFrame.height)],
+      "tapPoint": ["x": Double(tapPoint.x), "y": Double(tapPoint.y)],
+      "readerNavigationTitleVisible": reader.exists,
+      "followControlVisible": follow.exists && follow.isHittable,
+    ]
+    let data = try JSONSerialization.data(withJSONObject: proof, options: .sortedKeys)
+    let evidence = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
+    evidence.name = "subtitle-reader-opened-by-tap-proof"
+    evidence.lifetime = .keepAlways
+    add(evidence)
+    let done = reader.buttons["Готово"].firstMatch
+    XCTAssertTrue(done.waitForExistence(timeout: 5))
+    done.tap()
+    XCTAssertTrue(rail.waitForExistence(timeout: 10))
+    let closed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+      !reader.exists && !follow.exists && rail.isHittable
+    }, object: nil)
+    XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 10), .completed,
+                   "Closing the reader did not return to the native subtitle rail")
+    shot("subtitle-rail-after-reader-dismiss")
+  }
+
   private func rotationShot(_ name: String, landscape: Bool,
                             visibleElement: XCUIElement) throws {
     // XCUIScreen preserves the complete natural framebuffer and its own EXIF

@@ -75,5 +75,79 @@ struct AuditChecks {
       precondition(g.controlsX + g.controlsWidth / 2 <= w)
       print("PASS: geometry \(Int(w))x\(Int(h))")
     }
+
+    checkSubtitleGeometry()
+  }
+
+  private static func checkSubtitleGeometry() {
+    // Point-space inputs cover the native 1320x2868 Pro Max framebuffer,
+    // compact phones, both notch sides, and resizable iPad windows. Assertions
+    // use rendered bounds rather than repeating the layout's scale/shift formula.
+    let cases: [(name: String, width: CGFloat, height: CGFloat,
+                 top: CGFloat, bottom: CGFloat, leading: CGFloat,
+                 trailing: CGFloat, phone: Bool, padding: CGFloat,
+                 contentLimit: CGFloat, artworkLimit: CGFloat)] = [
+      ("iPhone 18 Pro Max portrait", 440, 956, 62, 34, 0, 0, true, 5, 430, 299),
+      ("small iPhone portrait", 320, 548, 20, 0, 0, 0, true, 5, 310, 210),
+      ("notched iPhone landscape left", 956, 440, 0, 21, 62, 0, true, 5, 946, 238),
+      ("notched iPhone landscape right", 956, 440, 0, 21, 0, 62, true, 5, 946, 238),
+      ("small iPhone landscape", 667, 355, 0, 0, 0, 0, true, 5, 657, 191),
+      ("iPad narrow portrait window", 375, 724, 24, 20, 0, 0, false, 18, 339, 255),
+      ("iPad narrow landscape window", 680, 400, 24, 20, 0, 0, false, 28, 624, 192),
+      ("iPad Pro 13 landscape", 1376, 1032, 24, 20, 0, 0, false, 40, 1180, 420),
+      ("iPad mini landscape", 1133, 744, 24, 20, 0, 0, false, 40, 1053, 357),
+    ]
+    let tolerance: CGFloat = 0.001
+    for c in cases {
+      let side = max(c.padding, max(c.leading, c.trailing))
+      let g = PlayerGeometry(width: c.width, height: c.height, safeTop: c.top,
+        chromeDrop: c.phone ? max(c.bottom - 5, 11) : 0, phone: c.phone,
+        contentWidth: min(c.contentLimit, c.width - side * 2), artworkLimit: c.artworkLimit)
+      let originalCover = CGRect(x: g.artworkX - g.artworkSize / 2,
+        y: g.artworkY - g.artworkSize / 2, width: g.artworkSize, height: g.artworkSize)
+      let controlsLeft = g.controlsX - g.controlsWidth / 2
+      let columnRight = g.controlsX > c.width / 2 + 1 ? controlsLeft - 12 : c.width - side
+      let column = CGRect(x: side, y: originalCover.minY,
+        width: columnRight - side, height: originalCover.height)
+      precondition(column.width > 0 && originalCover.width > 0, "Invalid artwork column: \(c.name)")
+
+      let active = PlayerSubtitleLayout(size: g.artworkSize,
+        leftSpace: g.artworkX - column.minX, rightSpace: column.maxX - g.artworkX, active: true)
+      let coverWidth = g.artworkSize * active.coverScale
+      let cover = CGRect(x: g.artworkX + active.coverShift - coverWidth / 2,
+        y: g.artworkY - coverWidth / 2, width: coverWidth, height: coverWidth)
+      let railHeight = min(170, max(96, g.artworkSize * 0.72))
+      let rail = CGRect(x: g.artworkX + active.railOffset - active.railWidth / 2,
+        y: g.artworkY - railHeight / 2, width: active.railWidth, height: railHeight)
+      precondition([active.coverScale, active.coverShift, active.railWidth, active.railOffset]
+        .allSatisfy { $0.isFinite }, "Non-finite subtitle geometry: \(c.name)")
+      precondition(active.coverScale > 0 && active.coverScale < 1,
+        "Captions must leave a visible, reduced cover: \(c.name)")
+      precondition(coverWidth >= g.artworkSize * 0.60,
+        "Caption layout shrank the cover excessively: \(c.name)")
+      precondition(active.railWidth >= 64 && active.railWidth <= 116,
+        "Caption rail is unreadably narrow or exceeds its width budget: \(c.name)")
+      precondition(column.insetBy(dx: -tolerance, dy: -tolerance).contains(cover),
+        "Reduced artwork escaped its safe column: \(c.name)")
+      precondition(column.insetBy(dx: -tolerance, dy: -tolerance).contains(rail),
+        "Subtitle rail escaped its safe column: \(c.name)")
+      precondition(rail.minX >= cover.maxX + 1,
+        "Subtitle rail overlaps the artwork: \(c.name)")
+      if g.controlsX > c.width / 2 + 1 {
+        precondition(rail.maxX <= controlsLeft - 12 + tolerance,
+          "Subtitle rail entered landscape transport controls: \(c.name)")
+      }
+
+      // The same inactive layout applies when captions are hidden, the player
+      // is collapsed, or no text exists: preserve the original artwork frame.
+      let inactive = PlayerSubtitleLayout(size: g.artworkSize,
+        leftSpace: g.artworkX - column.minX, rightSpace: column.maxX - g.artworkX, active: false)
+      let unchangedCover = CGRect(x: g.artworkX + inactive.coverShift - g.artworkSize * inactive.coverScale / 2,
+        y: g.artworkY - g.artworkSize * inactive.coverScale / 2,
+        width: g.artworkSize * inactive.coverScale, height: g.artworkSize * inactive.coverScale)
+      precondition(unchangedCover == originalCover,
+        "Hidden or unavailable captions changed original artwork geometry: \(c.name)")
+      print("PASS: subtitle safe bounds, separation and unchanged inactive artwork · \(c.name)")
+    }
   }
 }

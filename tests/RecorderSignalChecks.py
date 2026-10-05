@@ -8,7 +8,7 @@ import sys
 import tempfile
 import time
 
-from capture_launch_ios import parse_home_proof, start_recording
+from capture_launch_ios import finish_recording, parse_home_proof, start_recording
 
 
 with tempfile.TemporaryDirectory() as folder:
@@ -51,6 +51,36 @@ while True: time.sleep(0.05)
             process.wait(timeout=5)
         if terminal is not None:
             os.close(terminal)
+
+# Motion and launch share the same owned-group finalizer. Exercise the real
+# child rather than assuming a successful signal also finalized its output.
+with tempfile.TemporaryDirectory() as folder:
+    logpath = Path(folder) / "shared-recorder.log"
+    status = {}
+    with logpath.open("w") as logfile:
+        process, terminal = start_recording([sys.executable, "-c", child], logfile)
+        deadline = time.monotonic() + 5
+        while "recording" not in logpath.read_text():
+            assert process.poll() is None, logpath.read_text()
+            assert time.monotonic() < deadline, "Shared recorder did not become ready"
+            time.sleep(0.01)
+        def run(*command, timeout):
+            return subprocess.check_output(command, text=True, timeout=timeout)
+        try:
+            finish_recording(process, terminal, run, status)
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=5)
+    assert status["recorder_exit_code"] == 0
+    assert logpath.read_text().splitlines() == ["recording", "finalized"]
+    try:
+        os.fstat(terminal)
+    except OSError:
+        pass
+    else:
+        raise AssertionError("Shared finalizer left the terminal open")
+    print("PASS: owned recorder finalized via shared SIGINT helper, terminal closed")
 
 # Observed hosted Vision driver output must not corrupt a valid native proof.
 frame = {"homeVisible": True, "width": 1206, "height": 2622, "lines": ["Главная", "Нашиды без музыки"]}

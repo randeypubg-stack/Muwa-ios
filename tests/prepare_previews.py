@@ -134,6 +134,194 @@ p=root/'Sources/Views/Player/FullPlayerView.swift'
 s=p.read_text().replace('    .onChange(of: expansion)', '    .task { if ProcessInfo.processInfo.arguments.contains("--audit-queue") { queuePresented = true } }\n    .onChange(of: expansion)',1)
 p.write_text(s)
 
+# Restore the ordinary, free caption rail's native motion review. All mutations
+# below are confined to this disposable Debug source, after Release packaging.
+# The fixture never opts into AI or calls a subtitle recognition provider.
+p=root/'Sources/Services/SubtitleManager.swift'
+s=p.read_text()
+needle='  func load(for track: Track) {'
+assert s.count(needle) == 1, 'Manual-caption review must modify the existing manager'
+s=s.replace(needle, needle+'''
+    if ProcessInfo.processInfo.arguments.contains("--audit-subtitle-motion") {
+      revisions[track.id] = track.captionsRevision ?? 0
+      segmentsByTrack[track.id] = [
+        SubtitleSegment(start: 0, end: 5, ar: "السلام عليكم", ru: "Мир вам", en: "Peace be upon you", words: nil),
+        SubtitleSegment(start: 5, end: 10, ar: "ورحمة الله", ru: "И милость Аллаха", en: "And Allah's mercy", words: nil),
+        SubtitleSegment(start: 10, end: 15, ar: "نور في القلب", ru: "Свет в сердце", en: "Light in the heart", words: nil),
+        SubtitleSegment(start: 15, end: 20, ar: "سيروا في سلام", ru: "Идите с миром", en: "Walk in peace", words: nil),
+        SubtitleSegment(start: 20, end: 25, ar: "رحمة وسكينة", ru: "Милость и покой", en: "Mercy and calm", words: nil)
+      ]
+      stateByTrack[track.id] = .ready
+      return
+    }
+''',1)
+p.write_text(s)
+
+p=root/'Sources/Views/Player/FullPlayerView.swift'
+s=p.read_text()
+needle='    .onChange(of: expansion)'
+assert s.count(needle) == 1, 'Motion review must use the real full-player presenter'
+s=s.replace(needle, '''    .task {
+      if ProcessInfo.processInfo.arguments.contains("--audit-subtitle-motion") {
+        aiSubtitlesVisible = false
+        subtitlesVisible = true
+        subtitleLanguage = .russian
+      }
+    }
+'''+needle,1)
+p.write_text(s)
+
+p=root/'Sources/Views/Player/PlayerSubtitleOverlay.swift'
+s=p.read_text()
+needle='private struct SubtitleRail<Line: View>: View {'
+assert s.count(needle) == 1, 'Motion review must observe the shared production rail'
+s=s.replace(needle, needle+'\n  @EnvironmentObject private var reviewPlayer: PlayerManager\n  @EnvironmentObject private var reviewSubtitles: SubtitleManager',1)
+needle='    .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.92), value: activeIndex)'
+assert s.count(needle) == 1, 'Motion review must observe the actual rail active index'
+s=s.replace(needle, needle+'''
+    .background(GeometryReader { proxy in
+      Color.clear.onAppear {
+        ReviewSubtitleMotion.recordFrame(proxy.frame(in: .global))
+      }
+      .onChange(of: proxy.frame(in: .global)) { _, frame in
+        ReviewSubtitleMotion.recordFrame(frame)
+      }
+    })
+    .onAppear {
+      ReviewSubtitleMotion.sample(index: activeIndex, count: count,
+                                 time: reviewPlayer.timeline.snapshot.time,
+                                 reduceMotion: reduceMotion, manager: reviewSubtitles,
+                                 track: reviewPlayer.currentTrack)
+    }
+    .onChange(of: activeIndex) { _, index in
+      ReviewSubtitleMotion.sample(index: index, count: count,
+                                 time: reviewPlayer.timeline.snapshot.time,
+                                 reduceMotion: reduceMotion, manager: reviewSubtitles,
+                                 track: reviewPlayer.currentTrack)
+    }
+''',1)
+p.write_text(s)
+
+p=root/'Sources/Services/PlayerManager.swift'
+s=p.read_text()
+needle='        guard let self, let player, self.player === player else { return }\n        let actual = player.currentItem?.duration.seconds ?? self.duration'
+assert s.count(needle) == 1, 'Motion driver must isolate only the periodic review clock'
+s=s.replace(needle, '        if ProcessInfo.processInfo.arguments.contains("--audit-subtitle-motion") { return }\n'+needle,1)
+p.write_text(s)
+
+p=root/'Sources/App/RootView.swift'
+s=p.read_text()
+needle='        playerExpansion = 1'
+assert s.count(needle) == 1, 'Motion review must drive the mounted real player'
+s=s.replace(needle, needle+'''
+        if args.contains("--audit-subtitle-motion") {
+          Task { @MainActor in await ReviewSubtitleMotion.drive(player) }
+        }
+''',1)
+s += '''
+#if DEBUG
+// One bounded clock driver shared by the mounted production rail and capture
+// harness. PID-scoped atomic handshakes make slow simctl captures deterministic.
+@MainActor
+enum ReviewSubtitleMotion {
+  private static let pid = ProcessInfo.processInfo.processIdentifier
+  private static let directory = URL.documentsDirectory
+  private static var events: [[String: Any]] = []
+
+  private static func write(_ name: String, _ value: [String: Any]) {
+    guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]) else { return }
+    try? data.write(to: directory.appendingPathComponent(name), options: .atomic)
+  }
+
+  private static func append(_ name: String, _ value: [String: Any]) {
+    guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+          let line = String(data: data, encoding: .utf8) else { return }
+    let url = directory.appendingPathComponent(name)
+    let previous = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+    try? (previous + line + "\\n").write(to: url, atomically: true, encoding: .utf8)
+  }
+
+  static func recordFrame(_ frame: CGRect) {
+    guard ProcessInfo.processInfo.arguments.contains("--audit-subtitle-motion") else { return }
+    write("subtitle-motion-frame.json", ["pid": pid, "x": frame.minX, "y": frame.minY,
+      "width": frame.width, "height": frame.height,
+      "screenWidth": UIScreen.main.bounds.width, "screenHeight": UIScreen.main.bounds.height])
+  }
+
+  static func sample(index: Int, count: Int, time: Double, reduceMotion: Bool,
+                     manager: SubtitleManager, track: Track?) {
+    guard ProcessInfo.processInfo.arguments.contains("--audit-subtitle-motion") else { return }
+    let managerIndex = track.flatMap { manager.activeIndex(for: $0, time: time) } ?? -1
+    let event: [String: Any] = ["pid": pid, "activeIndex": index, "count": count,
+                               "time": time, "reduceMotion": reduceMotion,
+                               "managerActiveIndex": managerIndex,
+                               "source": "ordinary-manual-captions", "aiOptIn": false]
+    events.append(event)
+    append("subtitle-motion-rail.jsonl", event)
+    write("subtitle-motion-mounted.json", event)
+  }
+
+  private static func waitFor(_ name: String, seconds: Double) async -> Bool {
+    let deadline = Date().addingTimeInterval(seconds)
+    let url = directory.appendingPathComponent(name)
+    while Date() < deadline {
+      if (try? String(contentsOf: url, encoding: .utf8)) == String(pid) { return true }
+      try? await Task.sleep(for: .milliseconds(50))
+      if Task.isCancelled { return false }
+    }
+    write("subtitle-motion-error.json", ["pid": pid, "error": "Timed out waiting for " + name])
+    return false
+  }
+
+  static func drive(_ player: PlayerManager) async {
+    player.duration = 25
+    player.timeline.update(time: 0, duration: 25)
+    let deadline = Date().addingTimeInterval(30)
+    while events.isEmpty && Date() < deadline {
+      try? await Task.sleep(for: .milliseconds(50))
+    }
+    guard !events.isEmpty else {
+      write("subtitle-motion-error.json", ["pid": pid, "error": "Ordinary rail never mounted"])
+      return
+    }
+    write("subtitle-motion-ready.json", ["pid": pid, "duration": 25, "count": 5,
+                                        "source": "ordinary-manual-captions", "aiOptIn": false])
+    guard await waitFor("subtitle-motion-start.txt", seconds: 60) else { return }
+    var broadNotifications = 0
+    var tickNotifications = 0
+    let observation = player.objectWillChange.sink { broadNotifications += 1 }
+    for tick in 0...124 {
+      let before = broadNotifications
+      player.timeline.update(time: Double(tick) * 0.2, duration: 25)
+      let delta = broadNotifications - before
+      tickNotifications += delta
+      append("subtitle-motion-clock.jsonl", ["pid": pid, "tick": tick,
+        "time": player.timeline.snapshot.time, "duration": player.timeline.snapshot.duration,
+        "broadNotificationsDuringTick": delta, "trackId": player.currentTrack?.id ?? "",
+        "isPlaying": player.isPlaying])
+      precondition(delta == 0, "Motion clock invalidated the global PlayerManager")
+      if [5, 30, 55, 80, 105].contains(tick) {
+        let index = (tick - 5) / 25
+        write("subtitle-motion-checkpoint-\\(index).json", ["pid": pid,
+          "time": player.timeline.snapshot.time, "expectedIndex": index])
+        guard await waitFor("subtitle-motion-captured-\\(index).txt", seconds: 25) else {
+          observation.cancel()
+          return
+        }
+      }
+      try? await Task.sleep(for: .milliseconds(60))
+    }
+    observation.cancel()
+    write("subtitle-motion-finished.json", ["pid": pid, "ticks": 125,
+      "time": player.timeline.snapshot.time, "duration": player.timeline.snapshot.duration,
+      "broadNotificationsDuringTicks": tickNotifications, "source": "ordinary-manual-captions",
+      "aiOptIn": false, "isPlaying": player.isPlaying])
+  }
+}
+#endif
+'''
+p.write_text(s)
+
 # Confirm queue presentation, rather than accepting a still-visible Home screen.
 p=root/'Sources/Views/Player/QueueView.swift'
 s=p.read_text()

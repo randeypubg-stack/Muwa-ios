@@ -98,6 +98,56 @@ def validate_video(path):
 
 
 
+def finish_recording(recorder, recorder_input, run, status):
+    """Finalize only the recorder we started; share ownership with all captures.
+
+    The caller clears its references after this function, including on failure.
+    The terminal descriptor is closed exactly once even if encoder flush fails.
+    """
+    if recorder is None:
+        return
+    try:
+        def signal_group(value):
+            try:
+                os.killpg(recorder.pid, value)
+            except ProcessLookupError:
+                # The process can finish between poll() and delivery.
+                pass
+            except PermissionError:
+                # Hosted macOS can elevate simctl after exec. The caller then
+                # cannot interrupt it, even though we created its private group.
+                # Signal only that owned group; never stop unrelated simulators.
+                status["recorder_privileged_signal"] = True
+                run("sudo", "-n", "/bin/kill", "-s",
+                    signal.Signals(value).name.removeprefix("SIG"), "--",
+                    str(-recorder.pid), timeout=10)
+        if recorder.poll() is None:
+            if os.getpgid(recorder.pid) != recorder.pid:
+                raise RuntimeError("Recorder no longer belongs to its owned process group")
+            status["recorder_process"] = run("ps", "-o", "pid=,pgid=,uid=,comm=",
+                                            "-p", str(recorder.pid), timeout=10)
+            # SIGINT is the documented Ctrl-C stop. A terminal-generated signal
+            # alone cannot stop an elevated simctl on the hosted macOS runner.
+            signal_group(signal.SIGINT)
+            try:
+                # Hosted Simulator encoders may need longer than the recording
+                # itself to flush frames and write the MP4's final moov atom.
+                # Terminating early produces an unplayable recording.
+                recorder.wait(timeout=60)
+            except subprocess.TimeoutExpired:
+                signal_group(signal.SIGTERM)
+                try:
+                    recorder.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    signal_group(signal.SIGKILL)
+                    recorder.wait(timeout=5)
+                raise RuntimeError("Simulator recorder did not finish after SIGINT")
+        status["recorder_exit_code"] = recorder.returncode
+    finally:
+        if recorder_input is not None:
+            os.close(recorder_input)
+
+
 def parse_home_proof(output):
     # Preserve command diagnostics but accept exactly one successful frame proof.
     proofs = []
@@ -160,45 +210,10 @@ def main():
 
     def stop_recording():
         nonlocal recorder, recorder_input
-        if recorder is None:
-            return
-        def signal_group(value):
-            try:
-                os.killpg(recorder.pid, value)
-            except ProcessLookupError:
-                # The process can finish between poll() and delivery.
-                pass
-            except PermissionError:
-                # Hosted macOS can elevate simctl after exec. The caller then
-                # cannot interrupt it, even though we created its private group.
-                # Signal only that owned group; never stop unrelated simulators.
-                status["recorder_privileged_signal"] = True
-                run("sudo", "-n", "/bin/kill", "-s",
-                    signal.Signals(value).name.removeprefix("SIG"), "--",
-                    str(-recorder.pid), timeout=10)
-        if recorder.poll() is None:
-            status["recorder_process"] = run("ps", "-o", "pid=,pgid=,uid=,comm=",
-                                            "-p", str(recorder.pid), timeout=10)
-            # SIGINT is the documented Ctrl-C stop. A terminal-generated signal
-            # alone cannot stop an elevated simctl on the hosted macOS runner.
-            signal_group(signal.SIGINT)
-            try:
-                # Hosted Simulator encoders may need longer than the recording
-                # itself to flush frames and write the MP4's final moov atom.
-                # Terminating early produces an unplayable recording.
-                recorder.wait(timeout=60)
-            except subprocess.TimeoutExpired:
-                signal_group(signal.SIGTERM)
-                try:
-                    recorder.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    signal_group(signal.SIGKILL)
-                    recorder.wait(timeout=5)
-                raise RuntimeError("Simulator recorder did not finish after SIGINT")
-        status["recorder_exit_code"] = recorder.returncode
-        recorder = None
-        if recorder_input is not None:
-            os.close(recorder_input)
+        try:
+            finish_recording(recorder, recorder_input, run, status)
+        finally:
+            recorder = None
             recorder_input = None
 
     try:
