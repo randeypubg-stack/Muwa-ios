@@ -14,18 +14,17 @@ on:
       source_run_id:
         description: Verified native build run ID
         type: string
-        default: "37126355145"
+        default: "37289636605"
         required: true
       source_artifact_name:
         description: Full-source artifact from that build
         type: string
-        default: Muwa-Full-Source-104
+        default: Muwa-Full-Source-117
         required: true
   push:
     branches: [feat/muwa-native-build35]
     paths:
       - tests/capture_carplay.py
-      - tests/locate_carplay_app.swift
       - tests/verify_native_snapshot.py
 
 permissions:
@@ -46,8 +45,8 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ${{ inputs.source_artifact_name || 'Muwa-Full-Source-104' }}
-          run-id: ${{ inputs.source_run_id || '37126355145' }}
+          name: ${{ inputs.source_artifact_name || 'Muwa-Full-Source-117' }}
+          run-id: ${{ inputs.source_run_id || '37289636605' }}
           github-token: ${{ github.token }}
           path: build/carplay-source
       - name: Build CarPlay review with Xcode simulator signing
@@ -63,11 +62,16 @@ jobs:
       - name: Require a connected Muwa CarPlay scene and native screenshot
         run: |
           if ! command -v cliclick >/dev/null; then brew install cliclick; fi
+          if ! command -v tesseract >/dev/null; then brew install tesseract; fi
+          mkdir -p build/previews/carplay
+          python3 tests/verify_home_frame.py --prepare-models > build/previews/carplay/ocr-models.json
+          python3 tests/capture_carplay.py --self-test
           python3 tests/capture_carplay.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: Muwa-CarPlay-review
+          overwrite: true
           path: |
             build/previews/carplay
             build/carplay-xcodebuild.log
