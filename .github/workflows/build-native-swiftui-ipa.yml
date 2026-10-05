@@ -567,15 +567,3 @@ jobs:
             build/interaction-proof/package-summary.json
             build/interaction-devices.json
           if-no-files-found: error
-
-      - name: Upload original screen framebuffer references
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
-        with:
-          name: Muwa-build44-rotation-raw-${{ matrix.device }}
-          overwrite: true
-          path: |
-            build/interaction-proof/raw
-            build/interaction-proof/package-summary.json
-            build/interaction-devices.json
-          if-no-files-found: error

@@ -239,6 +239,11 @@ def review_device(adb):
     source = Path(__file__).resolve().parents[1] / "android/app/build.gradle.kts"
     configuration = {key: int(re.search(rf"\b{key}\s*=\s*(\d+)", source.read_text()).group(1))
                      for key in ["compileSdk", "targetSdk", "minSdk", "versionCode"]}
+    fixture_root = source.parent / "src/debug/assets"
+    fixture = json.loads((fixture_root / "review-audio.json").read_text())
+    audio = fixture_root / fixture["file"]
+    assert hashlib.sha256(audio.read_bytes()).hexdigest() == fixture["sha256"], "Review MP3 differs from its recorded fixture"
+    assert audio.stat().st_size == fixture["bytes"], "Review MP3 fixture size changed"
     device = {
         "kind": "Android emulator", "physicalDeviceVerified": False,
         "geometryDescription": "Native emulator pixels; display overrides do not change the hardware model",
@@ -259,6 +264,7 @@ def review_device(adb):
         "pageSizeBytes": int(adb("shell", "getconf", "PAGESIZE").strip()),
         "display": display_state(size, density), "size": size, "density": density,
         "sourceConfiguration": configuration, "sourceCommit": os.environ.get("GITHUB_SHA"),
+        "reviewPlaybackFixture": fixture,
         "requestedAPI": os.environ.get("MUWA_ANDROID_API"),
         "requestedSystemImage": os.environ.get("MUWA_ANDROID_SYSTEM_IMAGE"),
     }

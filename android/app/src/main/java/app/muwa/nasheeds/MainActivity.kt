@@ -40,10 +40,12 @@ class MainActivity : ComponentActivity() {
         // Explicit debug review routes need data even after instrumentation
         // uninstalls its target APK. The fixture asset is absent from release.
         if (reviewRoute != null && AppGraph.library.catalog.isEmpty()) {
-            val rows = JSONArray(assets.open("review-catalog.json").bufferedReader().use { it.readText() })
+            val rows =
+                JSONArray(assets.open("review-catalog.json").bufferedReader().use { it.readText() })
             AppGraph.library.updateCatalog(JSONObject().put("version", 1).put("tracks", rows))
             AppGraph.library.replaceQueue(AppGraph.library.catalog.map { it.id })
         }
+        AppGraph.reviewPlaybackEnabled = BuildConfig.DEBUG && reviewRoute != null
         // A cold process can receive a saved Activity bundle from Recents. Process
         // ownership, rather than bundle presence, decides whether launch has played.
         val showIntro = (reviewRoute == null || reviewRoute == "launch") && !launchHasPlayed

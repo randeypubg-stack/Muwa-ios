@@ -57,6 +57,16 @@ button bounds against the real system-bar/cutout insets in both orientations,
 then opens Queue, opens Subtitles and closes/reopens the player through native
 controls. Screen review also captures the player with the enlarged system font.
 
+An explicit `review.route` in the debug APK prepares a bundled, real silent MP3
+for the first review track. A paused Media3 player still loads/prepares its source;
+using the historical CDN made layout captures depend on network errors. The
+existing media-item resolver selects the fixture only when both debug and review
+mode are active. Normal debug use and release preserve remote/offline playback
+and error handling. The asset is absent from release. Its hash, actual probed
+duration and scope are recorded in device manifests; instrumentation requires a
+real prepared, paused Media3 player with the matching duration. These captures
+prove native layout/local preparation, not the availability of a remote catalog.
+
 Release evidence: https://developer.android.com/jetpack/androidx/releases/test#espresso-3.7.0
 
 Run the evidence regression checks with:

@@ -128,11 +128,11 @@ class AppleReviewDeviceChecks(unittest.TestCase):
                 self.assertFalse(status['opened'])
                 self.assertEqual(status['launchErrorType'], 'CalledProcessError')
 
-    def test_explicit_boot_waits_and_rechecks_exact_runtime_and_udid(self):
+    def test_explicit_boot_verifies_exact_runtime_then_waits_for_same_udid(self):
         device = select_devices(self.records, 'large-phone')[0]
         def live(state):
             return json.dumps({'devices':{device['runtimeIdentifier']:[{'udid':device['udid'],'isAvailable':True,'state':state}]}})
-        with patch('select_apple_review_devices.command', side_effect=[live('Shutdown'), '', 'ready', live('Booted')]) as commands:
+        with patch('select_apple_review_devices.command', side_effect=[live('Shutdown'), '', 'ready']) as commands:
             status = boot_selected_device(device)
             self.assertEqual(status['udid'], device['udid'])
             self.assertEqual(status['runtimeIdentifier'], device['runtimeIdentifier'])
@@ -143,7 +143,8 @@ class AppleReviewDeviceChecks(unittest.TestCase):
             self.assertEqual(commands.call_args_list[1].args, ('xcrun','simctl','boot',device['udid']))
             self.assertEqual(commands.call_args_list[2].args, ('xcrun','simctl','bootstatus',device['udid'],'-b'))
             self.assertEqual(commands.call_args_list[2].kwargs, {'timeout':240})
-            self.assertEqual(commands.call_args_list[3].args, ('xcrun','simctl','list','devices',device['udid'],'--json'))
+            self.assertEqual(commands.call_count, 3)
+            self.assertEqual(status['stateVerification'], 'Selected UDID bootstatus -b completed successfully')
 
     def test_explicit_boot_rejects_runtime_substitution(self):
         device = select_devices(self.records, 'large-phone')[0]

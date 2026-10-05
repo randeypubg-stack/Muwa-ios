@@ -27,7 +27,6 @@ def launch_ready(udid, args):
 
 kind = os.environ.get('MUWA_REVIEW_DEVICE')
 selected, inventory = load_selection(kind, os.environ.get('MUWA_REQUESTED_DEVICE'), os.environ.get('MUWA_REQUESTED_IOS'), os.environ.get('MUWA_REVIEW_RUNTIME_VERSION'))
-run('xcrun', 'simctl', 'shutdown', 'all')
 app=next(Path('build/PreviewDerivedData/Build/Products/Debug-iphonesimulator').glob('*.app'))
 out=Path('build/previews'); out.mkdir(parents=True,exist_ok=True)
 (out/'device-inventory.json').write_text(json.dumps(inventory, ensure_ascii=False, indent=2))
@@ -46,33 +45,16 @@ for i,d in enumerate(selected):
     udid=d['udid']
     print('Capture device:', d['name'], flush=True)
     (out/f'{i}-device.txt').write_text(d['name'])
-    # shutdown all above invalidates the states from the original device list.
-    run('xcrun','simctl','boot',udid)
-    preparation = {'gui':open_simulator_gui(udid), 'appearanceAttempts':0, 'recoveredOnce':False}
+    # Preserve the selected runtime. A fresh hosted job does not need to stop
+    # other simulators or change system appearance: the production WindowGroup
+    # already applies preferredColorScheme(.dark).
+    if d['state'] != 'Booted':
+        run('xcrun','simctl','boot',udid)
+    preparation = {'gui':open_simulator_gui(udid),
+                   'appearanceSource':'Production Muwa preferredColorScheme(.dark)'}
     run('xcrun','simctl','bootstatus',udid,'-b')
     preparation['bootstatusCompleted'] = True
-    preparation_path = out/f'{i}-simulator-preparation.json'
-    # simctl bootstatus succeeded but appearance timed out before Muwa install
-    # on the cold iOS 27 mini runner. Warm the GUI, bound that command, and allow
-    # one explicit restart of this selected device before declaring a failure.
-    for attempt in range(2):
-        preparation['appearanceAttempts'] = attempt + 1
-        preparation_path.write_text(json.dumps(preparation, ensure_ascii=False, indent=2))
-        try:
-            run('xcrun','simctl','ui',udid,'appearance','dark',timeout=60)
-            preparation['appearanceConfigured'] = True
-            break
-        except subprocess.TimeoutExpired as error:
-            preparation['appearanceTimeout'] = {'command':error.cmd,'seconds':error.timeout}
-            preparation_path.write_text(json.dumps(preparation, ensure_ascii=False, indent=2))
-            if attempt:
-                raise
-            run('xcrun','simctl','shutdown',udid,timeout=60)
-            run('xcrun','simctl','boot',udid)
-            open_simulator_gui(udid)
-            run('xcrun','simctl','bootstatus',udid,'-b')
-            preparation['recoveredOnce'] = True
-    preparation_path.write_text(json.dumps(preparation, ensure_ascii=False, indent=2))
+    (out/f'{i}-simulator-preparation.json').write_text(json.dumps(preparation, ensure_ascii=False, indent=2))
     manifest[i]['simulatorPreparation'] = preparation
     run('xcrun','simctl','install',udid,str(app))
     for label,args in [('home',[]),('settings',['--audit-profile','--audit-settings']),('search',['--audit-search']),('queue',['--audit-player','--audit-queue']),('profile',['--audit-profile']),('premium',['--audit-profile','--audit-premium']),('promo',['--audit-profile','--audit-promo']),('owner-premium',['--audit-profile','--audit-premium','--audit-owner']),('owner-promo',['--audit-profile','--audit-promo','--audit-owner']),('ai-unavailable',['--audit-player','--audit-ai-unavailable']),('player',['--audit-player']),('library-empty',['--audit-library-empty']),('playlist-create',['--audit-playlist-create']),('library',['--audit-library']),('landscape',['--audit-player','--audit-landscape']),('ai',['--audit-player','--audit-ai']),('ai-reader',['--audit-player','--audit-ai','--audit-ai-expanded'])]:

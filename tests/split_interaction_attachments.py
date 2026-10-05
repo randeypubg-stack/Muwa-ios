@@ -1,4 +1,4 @@
-"""Package native XCTest PNGs separately from raw screen references and videos.
+"""Package native XCTest PNGs and proofs separately from test videos.
 
 Usage: python3 tests/split_interaction_attachments.py --input SOURCE --output OUTPUT
 SOURCE is the actual directory produced by `xcresulttool export attachments`.
@@ -52,7 +52,7 @@ def package_attachments(source, output, inventory=None):
     if output.exists() and any(output.iterdir()):
         raise ValueError("Output must be empty; preserve earlier review packages separately")
 
-    groups = {name: output / name for name in ("primary", "raw")}
+    groups = {"primary": output / "primary"}
     mappings = {name: [] for name in groups}
     used = {name: {"manifest.json", "provenance.json", "interaction-devices.json"} for name in groups}
     excluded = []
@@ -86,9 +86,7 @@ def package_attachments(source, output, inventory=None):
             if suffix not in (".png", ".json"):
                 excluded.append({**provenance, "reason": "Video or non-PNG/non-JSON attachment; retained in original xcresult/export"})
                 continue
-            # JSON proofs describe both captures; include their original bytes in
-            # each package. A raw screen's name is assigned by the actual test.
-            destinations = list(groups) if suffix == ".json" else ["raw" if "-raw-screen" in label else "primary"]
+            destinations = ["primary"]
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
             for group in destinations:
                 name = unique_name(label, path, used[group])
@@ -100,7 +98,7 @@ def package_attachments(source, output, inventory=None):
     for group, directory in groups.items():
         report = {
             "schemaVersion": 1, "group": group,
-            "scope": "Unmodified native application screenshots" if group == "primary" else "Unmodified XCUIScreen natural framebuffer references",
+            "scope": "Unmodified native XCTest screenshots; rotation follows original PNG EXIF",
             "originalExportManifest": {"packageFile": "manifest.json", "sha256": manifest_digest} if manifest_exists else None,
             "exportManifestAvailable":manifest_exists,
             "captureAvailable":any(item['packageFile'].endswith('.png') for item in mappings[group]),

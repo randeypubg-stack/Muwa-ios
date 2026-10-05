@@ -198,11 +198,13 @@ def boot_selected_device(device):
     print('Waiting for selected Simulator bootstatus: ' + device['udid'], file=sys.stderr, flush=True)
     boot_output = command('xcrun', 'simctl', 'bootstatus', device['udid'], '-b', timeout=240)
     print('Selected Simulator bootstatus completed:\n' + boot_output, file=sys.stderr, flush=True)
-    current = live_device()
-    if current['state'] != 'Booted':
-        raise ValueError(f"Selected Simulator did not become Booted: {device['udid']}")
+    # The selected UDID/runtime was verified immediately before boot. The
+    # blocking bootstatus command verifies this same immutable device directly.
+    # A repeated inventory RPC after boot deadlocks on some headless Xcode 27
+    # hosts; do not replace successful bootstatus with an unrelated list query.
     return {'udid':device['udid'], 'runtimeIdentifier':device['runtimeIdentifier'],
-            'state':current['state'], 'bootRequested':requested_boot, 'bootstatusCompleted':True,
+            'state':'Booted', 'stateVerification':'Selected UDID bootstatus -b completed successfully',
+            'bootRequested':requested_boot, 'bootstatusCompleted':True,
             'bootstatusOutput':boot_output}
 
 

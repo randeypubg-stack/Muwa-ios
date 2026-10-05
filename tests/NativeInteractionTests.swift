@@ -99,9 +99,9 @@ final class NativeInteractionTests: XCTestCase {
 
   private func rotationShot(_ name: String, landscape: Bool,
                             visibleElement: XCUIElement) throws {
-    // Rotate the actual device and capture the actual application through XCTest.
-    // XCUIScreen may retain the display's natural portrait framebuffer even when
-    // the app is visibly horizontal; keep that raw reference alongside the app.
+    // XCUIScreen preserves the complete natural framebuffer and its own EXIF
+    // orientation. XCUIApplication.screenshot cropped that rotated framebuffer
+    // incorrectly on the iOS 27 runner; do not clip or rewrite the native pixels.
     let frameReady = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
       let frame = self.app.frame
       return min(frame.width, frame.height) > 100
@@ -111,8 +111,10 @@ final class NativeInteractionTests: XCTestCase {
     let frame = app.frame
     let deviceOrientation = XCUIDevice.shared.orientation
     let controlVisible = visibleElement.exists && visibleElement.isHittable
-    let screenshot = app.screenshot()
-    let rawScreen = XCUIScreen.main.screenshot()
+    let controlFrame = visibleElement.frame
+    let controlFullyInside = min(controlFrame.width, controlFrame.height) > 0
+      && frame.insetBy(dx: -1, dy: -1).contains(controlFrame)
+    let screenshot = XCUIScreen.main.screenshot()
     func keepPNG(_ screenshot: XCUIScreenshot, _ label: String) {
       let attachment = XCTAttachment(data: screenshot.pngRepresentation,
                                      uniformTypeIdentifier: "public.png")
@@ -123,7 +125,6 @@ final class NativeInteractionTests: XCTestCase {
     // Preserve original bytes and provenance before assertions can terminate the
     // test, so an orientation failure is reviewable instead of losing its PNG.
     keepPNG(screenshot, name)
-    keepPNG(rawScreen, name + "-raw-screen")
     func pixelInfo(_ screenshot: XCUIScreenshot) throws -> [String: Int] {
       let png = screenshot.pngRepresentation
       guard png.count >= 24,
@@ -146,17 +147,21 @@ final class NativeInteractionTests: XCTestCase {
               "displayHeight":transposed ? encodedWidth : encodedHeight]
     }
     let pixels = try pixelInfo(screenshot)
-    let rawPixels = try pixelInfo(rawScreen)
     let width = pixels["displayWidth"]!
     let height = pixels["displayHeight"]!
+    let imageRatio = Double(width) / Double(height)
+    let frameRatio = Double(frame.width) / Double(frame.height)
     let proof: [String: Any] = [
-      "method": "XCUIDevice.orientation and unmodified XCUIApplication.screenshot PNG",
+      "method": "XCUIDevice.orientation and unmodified XCUIScreen PNG with its own EXIF orientation",
       "screen": name, "landscape": landscape, "width": width, "height": height,
       "deviceOrientation": deviceOrientation.rawValue,
       "appFrameWidth": Double(frame.width), "appFrameHeight": Double(frame.height),
       "nativeControlVisible": controlVisible,
-      "applicationPNG": pixels, "rawScreenPNG": rawPixels,
-      "rawScreenSource": "Unmodified XCUIScreen.main.screenshot natural framebuffer reference",
+      "controlFrame": ["x":Double(controlFrame.minX), "y":Double(controlFrame.minY),
+                       "width":Double(controlFrame.width), "height":Double(controlFrame.height)],
+      "controlFullyInsideApp":controlFullyInside,
+      "unmodifiedPNG": pixels, "captureSource":"XCUIScreen.main.screenshot",
+      "displayAspectRatio":imageRatio, "appFrameAspectRatio":frameRatio,
       "frameOrientationReady": waitResult == .completed,
     ]
     let data = try JSONSerialization.data(withJSONObject: proof, options: .sortedKeys)
@@ -166,6 +171,9 @@ final class NativeInteractionTests: XCTestCase {
     add(evidence)
     XCTAssertEqual(waitResult, .completed, "Muwa did not adopt the actual device orientation")
     XCTAssertTrue(controlVisible, "The native screen control disappeared after rotation")
+    XCTAssertTrue(controlFullyInside, "The native screen control moved outside the application")
+    XCTAssertEqual(imageRatio, frameRatio, accuracy: 0.01,
+                   "The native PNG display aspect must match the actual application frame")
     XCTAssertGreaterThan(min(width, height), 100)
     if landscape {
       XCTAssertTrue(deviceOrientation == .landscapeLeft || deviceOrientation == .landscapeRight,

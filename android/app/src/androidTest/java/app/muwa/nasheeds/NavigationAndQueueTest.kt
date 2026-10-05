@@ -6,6 +6,8 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.ViewModelProvider
+import androidx.media3.common.Player
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
@@ -77,6 +79,36 @@ class NavigationAndQueueTest {
                                 (it.width > it.height) ==
                                     (orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
                             } == true
+                        }
+                        var ready = false
+                        compose.waitUntil(timeoutMillis = 20_000) {
+                            scenario.onActivity {
+                                val controller =
+                                    ViewModelProvider(it)[MuwaModel::class.java].controller
+                                ready =
+                                    controller?.playbackState == Player.STATE_READY &&
+                                        controller.playerError == null &&
+                                        !controller.playWhenReady &&
+                                        controller.duration in 296_000L..298_000L
+                            }
+                            ready
+                        }
+                        scenario.onActivity {
+                            assertEquals(
+                                "asset:///review-audio.mp3",
+                                AppGraph.mediaItem(track).localConfiguration?.uri?.toString(),
+                            )
+                            val reviewMode = AppGraph.reviewPlaybackEnabled
+                            try {
+                                AppGraph.reviewPlaybackEnabled = false
+                                assertTrue(
+                                    "Ordinary debug use must retain the real audio source",
+                                    AppGraph.mediaItem(track).localConfiguration?.uri?.scheme !=
+                                        "asset",
+                                )
+                            } finally {
+                                AppGraph.reviewPlaybackEnabled = reviewMode
+                            }
                         }
                         val viewport =
                             compose.onNodeWithTag("player.screen").getUnclippedBoundsInRoot()

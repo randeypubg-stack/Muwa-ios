@@ -16,14 +16,43 @@ import kotlinx.coroutines.*
 import androidx.compose.runtime.*
 
 object AppGraph {
-    lateinit var library: Library; private set
-    lateinit var downloads: Downloads; private set
-    lateinit var backend: Backend; private set
-    fun init(context: Context) { backend = Backend(context); library = Library(context); downloads = Downloads(context, backend.mediaClient) }
-    fun mediaItem(track: Track): MediaItem = MediaItem.Builder().setMediaId(track.id)
-        .setUri(downloads.local(track)?.toURI()?.toString() ?: track.audio)
-        .setMediaMetadata(MediaMetadata.Builder().setTitle(track.title).setArtist(track.artist).setArtworkUri(android.net.Uri.parse(track.artwork)).build()).build()
+    lateinit var library: Library
+        private set
+
+    lateinit var downloads: Downloads
+        private set
+
+    lateinit var backend: Backend
+        private set
+
+    // Only an explicit DEBUG review route enables the bundled, real MP3.
+    // Ordinary debug/release use keeps the catalog and offline source resolver.
+    internal var reviewPlaybackEnabled = false
+
+    fun init(context: Context) {
+        backend = Backend(context)
+        library = Library(context)
+        downloads = Downloads(context, backend.mediaClient)
+    }
+
+    fun mediaItem(track: Track): MediaItem =
+        MediaItem.Builder()
+            .setMediaId(track.id)
+            .setUri(
+                if (BuildConfig.DEBUG && reviewPlaybackEnabled && track.id == "muwa-01")
+                    "asset:///review-audio.mp3"
+                else downloads.local(track)?.toURI()?.toString() ?: track.audio
+            )
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(track.title)
+                    .setArtist(track.artist)
+                    .setArtworkUri(android.net.Uri.parse(track.artwork))
+                    .build()
+            )
+            .build()
 }
+
 @androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 object SleepTimer {
     var endAt by mutableStateOf<Long?>(null); private set

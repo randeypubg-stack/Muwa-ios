@@ -226,7 +226,10 @@ def main():
             run("xcrun", "simctl", "boot", udid)
             booted_here = True
         run("xcrun", "simctl", "bootstatus", udid, "-b", timeout=240)
-        run("xcrun", "simctl", "ui", udid, "appearance", "dark")
+        # Muwa applies preferredColorScheme(.dark) to its production WindowGroup.
+        # Changing Simulator's global appearance is unnecessary and can deadlock
+        # the GUI-backed RPC on the headless Xcode 27 runner before app install.
+        status["appearanceSource"] = "Production Muwa preferredColorScheme(.dark)"
         run("xcrun", "simctl", "install", udid, app, timeout=180)
 
         # A warm, idle Simulator avoids recording SpringBoard animations as Muwa.
