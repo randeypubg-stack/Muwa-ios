@@ -48,6 +48,15 @@ record the switch to `getSystemService`. These are test APK dependencies; the
 application's Compose dependencies and SDK target stay unchanged. Functional
 navigation and queue assertions are retained.
 
+The full player shares the Activity's edge-to-edge viewport instead of opening a
+second Dialog window. Its background covers the screen while controls consume
+safe-drawing insets once. Text and Queue stay below a scrollable player body and
+above the system navigation bar. Short landscape controls can scroll without
+hiding those actions. Instrumentation checks the full viewport and unclipped
+button bounds against the real system-bar/cutout insets in both orientations,
+then opens Queue, opens Subtitles and closes/reopens the player through native
+controls. Screen review also captures the player with the enlarged system font.
+
 Release evidence: https://developer.android.com/jetpack/androidx/releases/test#espresso-3.7.0
 
 Run the evidence regression checks with:

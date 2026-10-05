@@ -1,18 +1,27 @@
 package app.muwa.nasheeds
 
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
+import java.io.File
 import org.junit.Assert.assertEquals
-import org.junit.Rule
+import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 
 class NavigationAndQueueTest {
-    @Before fun loadReviewCatalog() { installReviewCatalog() }
+    @Before
+    fun loadReviewCatalog() {
+        installReviewCatalog()
+    }
+
     @get:Rule val compose = createEmptyComposeRule()
 
     @Test
@@ -28,6 +37,153 @@ class NavigationAndQueueTest {
                 UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
                 compose.onNodeWithTag("home.screen").assertExists()
             }
+    }
+
+    @Test
+    fun playerActionsStayInsideSafeAreaAndNavigateInBothOrientations() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.stopService(Intent(context, PlaybackService::class.java))
+        instrumentation.waitForIdleSync()
+        // Navigate through the real cached/manual reader without requesting
+        // recognition or depending on a paid provider during a layout check.
+        val track = AppGraph.library.catalog.first()
+        val captionFile =
+            File(
+                context.cacheDir,
+                if (track.captionsRevision > 0)
+                    "subtitles-${track.id}-r${track.captionsRevision}.json"
+                else "subtitles-${track.id}.json",
+            )
+        val savedCaptions = captionFile.takeIf { it.exists() }?.readBytes()
+        captionFile.writeText(
+            """{"segments":[{"start":0,"end":5,"ar":"نص محفوظ","ru":"Сохранённый текст"}]}"""
+        )
+        try {
+            ActivityScenario.launch<MainActivity>(
+                    Intent(context, MainActivity::class.java).putExtra("review.route", "player")
+                )
+                .use { scenario ->
+                    for (orientation in
+                        listOf(
+                            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+                        )) {
+                        scenario.onActivity { it.requestedOrientation = orientation }
+                        compose.waitUntil(timeoutMillis = 20_000) {
+                            val nodes =
+                                compose.onAllNodesWithTag("player.screen").fetchSemanticsNodes()
+                            nodes.singleOrNull()?.boundsInRoot?.let {
+                                (it.width > it.height) ==
+                                    (orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
+                            } == true
+                        }
+                        val viewport =
+                            compose.onNodeWithTag("player.screen").getUnclippedBoundsInRoot()
+                        val safeContent =
+                            compose.onNodeWithTag("player.safe-content").getUnclippedBoundsInRoot()
+                        scenario.onActivity { activity ->
+                            val view = activity.window.decorView
+                            val density = activity.resources.displayMetrics.density
+                            val insets =
+                                ViewCompat.getRootWindowInsets(view)!!.getInsets(
+                                    WindowInsetsCompat.Type.systemBars() or
+                                        WindowInsetsCompat.Type.displayCutout()
+                                )
+                            assertEquals(
+                                "Player must cover the Activity from the left edge",
+                                0f,
+                                viewport.left.value,
+                                .5f,
+                            )
+                            assertEquals(
+                                "Player must cover the Activity from the top edge",
+                                0f,
+                                viewport.top.value,
+                                .5f,
+                            )
+                            assertEquals(
+                                "Player must end at the Activity right edge",
+                                view.width / density,
+                                viewport.right.value,
+                                .5f,
+                            )
+                            assertEquals(
+                                "Player must end at the Activity bottom edge",
+                                view.height / density,
+                                viewport.bottom.value,
+                                .5f,
+                            )
+                            assertTrue(
+                                "Player content overlaps a left cutout",
+                                safeContent.left.value >= insets.left / density,
+                            )
+                            assertTrue(
+                                "Player content overlaps the status bar",
+                                safeContent.top.value >= insets.top / density,
+                            )
+                            assertTrue(
+                                "Player content exceeds the right safe edge",
+                                safeContent.right.value <= (view.width - insets.right) / density,
+                            )
+                            assertTrue(
+                                "Player content overlaps the navigation bar",
+                                safeContent.bottom.value <= (view.height - insets.bottom) / density,
+                            )
+                        }
+                        for (tag in
+                            listOf(
+                                "player.close",
+                                "player.toggle",
+                                "player.subtitles",
+                                "player.queue",
+                            )) {
+                            val action =
+                                compose
+                                    .onNodeWithTag(tag)
+                                    .assertIsDisplayed()
+                                    .assertHasClickAction()
+                            // Unclipped bounds reject a partially visible button, which
+                            // assertIsDisplayed alone would accept at the gesture bar.
+                            val bounds = action.getUnclippedBoundsInRoot()
+                            assertTrue(
+                                "$tag is clipped on the left",
+                                bounds.left >= safeContent.left,
+                            )
+                            assertTrue(
+                                "$tag is clipped on the right",
+                                bounds.right <= safeContent.right,
+                            )
+                            assertTrue("$tag is clipped at the top", bounds.top >= safeContent.top)
+                            assertTrue(
+                                "$tag is clipped at the bottom",
+                                bounds.bottom <= safeContent.bottom,
+                            )
+                        }
+                        compose.onNodeWithTag("home.screen").assertDoesNotExist()
+                        compose.onNodeWithTag("player.queue").performClick()
+                        compose.onNodeWithTag("queue.screen").assertIsDisplayed()
+                        compose.onNodeWithTag("player.screen").assertDoesNotExist()
+                        compose.onNodeWithTag("mini-player").performClick()
+                        compose.onNodeWithTag("player.subtitles").performClick()
+                        compose.onNodeWithText("Субтитры").assertIsDisplayed()
+                        compose.waitUntil(timeoutMillis = 10_000) {
+                            compose
+                                .onAllNodesWithText("Субтитры доступны бесплатно.")
+                                .fetchSemanticsNodes()
+                                .isNotEmpty()
+                        }
+                        compose.onNodeWithTag("player.screen").assertDoesNotExist()
+                        compose.onNodeWithTag("mini-player").performClick()
+                        compose.onNodeWithTag("player.close").performClick()
+                        compose.onNodeWithText("Субтитры").assertIsDisplayed()
+                        compose.onNodeWithTag("mini-player").performClick()
+                    }
+                }
+        } finally {
+            if (savedCaptions == null) captionFile.delete()
+            else captionFile.writeBytes(savedCaptions)
+        }
     }
 
     @Test

@@ -212,10 +212,10 @@ def main():
         status["version"] = info.get("CFBundleShortVersionString")
         status["build"] = info.get("CFBundleVersion")
 
-        devices = json.loads(run("xcrun", "simctl", "list", "devices", "available", "--json"))["devices"]
+        requested = os.environ.get("MUWA_LAUNCH_DEVICE")
+        devices = json.loads(run("xcrun", "simctl", "list", "devices", requested or "available", "--json"))["devices"]
         phones = [device for group in devices.values() for device in group
                   if device.get("isAvailable") and device["name"].startswith("iPhone")]
-        requested = os.environ.get("MUWA_LAUNCH_DEVICE")
         phone = next((device for device in phones
                       if not requested or requested in (device["name"], device["udid"])), None)
         if phone is None:

@@ -71,11 +71,11 @@ assert len(manifest['screens']) == len(ROUTES) * 2
 try:
     lock_rotation(0)
     adb('shell', 'settings', 'put', 'system', 'font_scale', '1.45')
-    for route in ['home', 'queue']:
+    for route in ['home', 'queue', 'player']:
         adb('shell', 'am', 'force-stop', PACKAGE)
         result = adb('shell', 'am', 'start', '-W', '-n', f'{PACKAGE}/.MainActivity', '--es', 'review.route', route)
         assert 'Error:' not in result, result
-        time.sleep(3)
+        time.sleep(5 if route == 'player' else 3)
         path = out / 'large-text' / f'{route}.png'
         path.parent.mkdir(parents=True, exist_ok=True)
         screenshot, width, height, retries = capture_oriented(0, out / 'diagnostics' / f'{route}-large-text.png')

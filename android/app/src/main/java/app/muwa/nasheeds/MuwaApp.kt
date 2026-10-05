@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -81,6 +82,7 @@ fun MuwaApp(
     Box(Modifier.fillMaxSize()) {
         MuwaAmbientBackground(Modifier.fillMaxSize())
         Scaffold(
+            modifier = if (expanded) Modifier.clearAndSetSemantics {} else Modifier,
             containerColor = Color.Transparent,
             bottomBar = {
                 Column(
@@ -302,22 +304,22 @@ fun MuwaApp(
                 }
             }
         }
+        if (expanded && model.track != null)
+            PlayerSheet(
+                model,
+                onClose = { expanded = false },
+                onQueue = {
+                    expanded = false
+                    route = "queue"
+                },
+                onSubtitles = {
+                    model.loadSubtitles()
+                    expanded = false
+                    route = "subtitles"
+                },
+                onPlaylist = { addingTrack = model.track },
+            )
     }
-    if (expanded && model.track != null)
-        PlayerSheet(
-            model,
-            onClose = { expanded = false },
-            onQueue = {
-                expanded = false
-                route = "queue"
-            },
-            onSubtitles = {
-                model.loadSubtitles()
-                expanded = false
-                route = "subtitles"
-            },
-            onPlaylist = { addingTrack = model.track },
-        )
     if (model.error != null)
         AlertDialog(
             onDismissRequest = { model.error = null },

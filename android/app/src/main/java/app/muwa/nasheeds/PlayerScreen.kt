@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -11,13 +12,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.Player
 import app.muwa.nasheeds.ui.components.Cover
 import kotlin.math.abs
@@ -32,132 +33,147 @@ fun PlayerSheet(
     onPlaylist: () -> Unit,
 ) {
     val track = model.track ?: return
-    // Read the activity's insets before entering the separate Dialog window.
-    // The dialog may report zero navigation-bar insets on older Android versions.
-    val safeInsets = WindowInsets.safeDrawing.asPaddingValues()
     var slider by remember { mutableStateOf<Float?>(null) }
     var menu by remember { mutableStateOf(false) }
-    Dialog(
-        onDismissRequest = onClose,
-        properties =
-            DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-    ) {
-        // This dialog has a custom background rather than a Material Surface;
-        // provide its foreground explicitly instead of inheriting default black.
-        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-            BoxWithConstraints(
-                Modifier.fillMaxSize()
-                    .background(Color(0xFF080D16))
-                    .padding(safeInsets)
-                    .padding(16.dp)
-            ) {
-                val wide = maxWidth > maxHeight || maxWidth > 700.dp
-                val artworkSize =
-                    if (wide) minOf(maxHeight - 130.dp, maxWidth * .4f)
-                    else minOf(maxWidth - 48.dp, maxHeight * .39f)
-                Column(Modifier.fillMaxSize()) {
-                    Row(
-                        Modifier.fillMaxWidth().pointerInput(Unit) {
-                            detectDragGestures { change, amount ->
-                                if (amount.y > 10) onClose()
-                                change.consume()
-                            }
-                        },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconButton(onClick = onClose) {
-                            Icon(Icons.Default.KeyboardArrowDown, "Закрыть плеер")
+    // Share the Activity's viewport and consume its insets exactly once. A
+    // separate Dialog window is shifted by Android 17's edge-to-edge handling.
+    // The background covers system bars; all controls stay in safeDrawing.
+    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+        BoxWithConstraints(
+            Modifier.fillMaxSize()
+                .testTag("player.screen")
+                .background(Color(0xFF080D16))
+                .clipToBounds()
+                .pointerInput(Unit) { detectTapGestures {} }
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            val wide = maxWidth > maxHeight || maxWidth > 700.dp
+            val compactControls = wide && maxHeight < 400.dp
+            Column(Modifier.fillMaxSize().testTag("player.safe-content")) {
+                Row(
+                    Modifier.fillMaxWidth().pointerInput(Unit) {
+                        detectDragGestures { change, amount ->
+                            if (amount.y > 10) onClose()
+                            change.consume()
                         }
-                        Text("Сейчас играет", Modifier.weight(1f), color = Color.Gray)
-                        Box {
-                            IconButton(onClick = { menu = true }) {
-                                Icon(Icons.Default.MoreVert, "Меню плеера")
+                    },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onClose, modifier = Modifier.testTag("player.close")) {
+                        Icon(Icons.Default.KeyboardArrowDown, "Закрыть плеер")
+                    }
+                    Text("Сейчас играет", Modifier.weight(1f), color = Color.Gray)
+                    Box {
+                        IconButton(onClick = { menu = true }) {
+                            Icon(Icons.Default.MoreVert, "Меню плеера")
+                        }
+                        DropdownMenu(menu, { menu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Добавить в плейлист") },
+                                onClick = {
+                                    menu = false
+                                    onPlaylist()
+                                },
+                            )
+                            listOf(15, 30, 45, 60).forEach { minutes ->
+                                DropdownMenuItem(
+                                    text = { Text("Таймер сна · $minutes минут") },
+                                    onClick = {
+                                        SleepTimer.start(minutes)
+                                        menu = false
+                                    },
+                                )
                             }
-                            DropdownMenu(menu, { menu = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("Добавить в плейлист") },
-                                    onClick = {
-                                        menu = false
-                                        onPlaylist()
-                                    },
-                                )
-                                listOf(15, 30, 45, 60).forEach { minutes ->
-                                    DropdownMenuItem(
-                                        text = { Text("Таймер сна · $minutes минут") },
-                                        onClick = {
-                                            SleepTimer.start(minutes)
-                                            menu = false
-                                        },
-                                    )
-                                }
-                                DropdownMenuItem(
-                                    text = { Text("После текущего нашида") },
-                                    onClick = {
-                                        SleepTimer.afterCurrent()
-                                        menu = false
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Отменить таймер") },
-                                    onClick = {
-                                        SleepTimer.cancel()
-                                        menu = false
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            if (track.id in model.downloads.downloaded)
-                                                "Удалить загрузку"
-                                            else "Скачать MP3"
-                                        )
-                                    },
-                                    onClick = {
-                                        menu = false
+                            DropdownMenuItem(
+                                text = { Text("После текущего нашида") },
+                                onClick = {
+                                    SleepTimer.afterCurrent()
+                                    menu = false
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Отменить таймер") },
+                                onClick = {
+                                    SleepTimer.cancel()
+                                    menu = false
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
                                         if (track.id in model.downloads.downloaded)
-                                            runCatching { model.downloads.remove(track) }
-                                                .onFailure { model.error = it.message }
-                                        else
-                                            model.downloads.download(track) {
-                                                model.error = it.message
-                                            }
+                                            "Удалить загрузку"
+                                        else "Скачать MP3"
+                                    )
+                                },
+                                onClick = {
+                                    menu = false
+                                    if (track.id in model.downloads.downloaded)
+                                        runCatching { model.downloads.remove(track) }
+                                            .onFailure { model.error = it.message }
+                                    else
+                                        model.downloads.download(track) { model.error = it.message }
+                                },
+                            )
+                            if (model.downloads.progress.containsKey(track.id))
+                                DropdownMenuItem(
+                                    text = { Text("Отменить скачивание") },
+                                    onClick = {
+                                        model.downloads.cancel(track)
+                                        menu = false
                                     },
                                 )
-                                if (model.downloads.progress.containsKey(track.id))
-                                    DropdownMenuItem(
-                                        text = { Text("Отменить скачивание") },
-                                        onClick = {
-                                            model.downloads.cancel(track)
-                                            menu = false
-                                        },
-                                    )
-                            }
                         }
                     }
-                    val controls: @Composable () -> Unit = {
-                        Column(
-                            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        track.title,
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        maxLines = 2,
-                                    )
-                                    Text(track.artist, color = Color.Gray)
-                                }
-                                IconButton(onClick = { model.library.like(track) }) {
-                                    Icon(
-                                        if (track.id in model.library.favorites)
-                                            Icons.Default.Favorite
-                                        else Icons.Default.FavoriteBorder,
-                                        "Избранное",
-                                    )
-                                }
+                }
+                val controls: @Composable (Modifier) -> Unit = { modifier ->
+                    Column(
+                        modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement =
+                            Arrangement.spacedBy(
+                                if (wide) 4.dp else 8.dp,
+                                Alignment.CenterVertically,
+                            ),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    track.title,
+                                    style =
+                                        if (wide) MaterialTheme.typography.titleLarge
+                                        else MaterialTheme.typography.headlineSmall,
+                                    maxLines = if (wide) 1 else 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    track.artist,
+                                    color = Color.Gray,
+                                    style =
+                                        if (compactControls) MaterialTheme.typography.bodySmall
+                                        else MaterialTheme.typography.bodyLarge,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
+                            IconButton(onClick = { model.library.like(track) }) {
+                                Icon(
+                                    if (track.id in model.library.favorites) Icons.Default.Favorite
+                                    else Icons.Default.FavoriteBorder,
+                                    "Избранное",
+                                )
+                            }
+                        }
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (compactControls)
+                                Text(
+                                    formatTime(model.position),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
                             Slider(
                                 value =
                                     slider
@@ -170,8 +186,15 @@ fun PlayerSheet(
                                     slider?.let { model.seek((it * model.duration).toLong()) }
                                     slider = null
                                 },
-                                modifier = Modifier.testTag("player.seek"),
+                                modifier = Modifier.weight(1f).testTag("player.seek"),
                             )
+                            if (compactControls)
+                                Text(
+                                    formatTime(model.duration),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                        }
+                        if (!compactControls)
                             Row(
                                 Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -179,88 +202,113 @@ fun PlayerSheet(
                                 Text(formatTime(model.position))
                                 Text(formatTime(model.duration))
                             }
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly,
-                                verticalAlignment = Alignment.CenterVertically,
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            IconButton(onClick = model::toggleShuffle) {
+                                Icon(
+                                    Icons.Default.Shuffle,
+                                    "Перемешать",
+                                    tint =
+                                        if (model.shuffle) MaterialTheme.colorScheme.primary
+                                        else Color.Gray,
+                                )
+                            }
+                            IconButton(onClick = model::previous) {
+                                Icon(Icons.Default.SkipPrevious, "Предыдущий")
+                            }
+                            FilledIconButton(
+                                onClick = model::toggle,
+                                modifier =
+                                    Modifier.size(if (wide) 56.dp else 62.dp)
+                                        .testTag("player.toggle"),
                             ) {
-                                IconButton(onClick = model::toggleShuffle) {
-                                    Icon(
-                                        Icons.Default.Shuffle,
-                                        "Перемешать",
-                                        tint =
-                                            if (model.shuffle) MaterialTheme.colorScheme.primary
-                                            else Color.Gray,
-                                    )
-                                }
-                                IconButton(onClick = model::previous) {
-                                    Icon(Icons.Default.SkipPrevious, "Предыдущий")
-                                }
-                                FilledIconButton(
-                                    onClick = model::toggle,
-                                    modifier = Modifier.size(62.dp).testTag("player.toggle"),
-                                ) {
-                                    Icon(
-                                        if (model.playing) Icons.Default.Pause
-                                        else Icons.Default.PlayArrow,
-                                        "Воспроизведение",
-                                    )
-                                }
-                                IconButton(onClick = model::next) {
-                                    Icon(Icons.Default.SkipNext, "Следующий")
-                                }
-                                IconButton(onClick = model::cycleRepeat) {
-                                    Icon(
-                                        if (model.repeat == Player.REPEAT_MODE_ONE)
-                                            Icons.Default.RepeatOne
-                                        else Icons.Default.Repeat,
-                                        "Повтор",
-                                        tint =
-                                            if (model.repeat == Player.REPEAT_MODE_OFF) Color.Gray
-                                            else MaterialTheme.colorScheme.primary,
-                                    )
-                                }
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                TextButton(onClick = onSubtitles) { Text("Текст") }
-                                TextButton(onClick = onQueue) { Text("Очередь") }
-                            }
-                            if (model.buffering) LinearProgressIndicator(Modifier.fillMaxWidth())
-                            model.downloads.progress[track.id]?.let {
-                                LinearProgressIndicator(
-                                    progress = { it },
-                                    modifier = Modifier.fillMaxWidth(),
+                                Icon(
+                                    if (model.playing) Icons.Default.Pause
+                                    else Icons.Default.PlayArrow,
+                                    "Воспроизведение",
                                 )
                             }
-                            if (SleepTimer.endAt != null || SleepTimer.afterTrack)
-                                Text(
-                                    if (SleepTimer.afterTrack) "Таймер: после текущего нашида"
-                                    else "Таймер сна включён",
-                                    color = Color.Gray,
+                            IconButton(onClick = model::next) {
+                                Icon(Icons.Default.SkipNext, "Следующий")
+                            }
+                            IconButton(onClick = model::cycleRepeat) {
+                                Icon(
+                                    if (model.repeat == Player.REPEAT_MODE_ONE)
+                                        Icons.Default.RepeatOne
+                                    else Icons.Default.Repeat,
+                                    "Повтор",
+                                    tint =
+                                        if (model.repeat == Player.REPEAT_MODE_OFF) Color.Gray
+                                        else MaterialTheme.colorScheme.primary,
                                 )
-                            if (model.error != null)
-                                TextButton(onClick = model::retry) {
-                                    Text("Повторить воспроизведение")
-                                }
+                            }
                         }
+                        if (model.buffering) LinearProgressIndicator(Modifier.fillMaxWidth())
+                        model.downloads.progress[track.id]?.let {
+                            LinearProgressIndicator(
+                                progress = { it },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        if (SleepTimer.endAt != null || SleepTimer.afterTrack)
+                            Text(
+                                if (SleepTimer.afterTrack) "Таймер: после текущего нашида"
+                                else "Таймер сна включён",
+                                color = Color.Gray,
+                            )
+                        if (model.error != null)
+                            TextButton(onClick = model::retry) { Text("Повторить воспроизведение") }
                     }
+                }
+                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                    // Reserve a measured body below the header and above
+                    // the fixed actions. Short screens can scroll this body,
+                    // including status/errors, without moving its actions
+                    // beneath the navigation bar.
+                    val artworkSize =
+                        if (wide) minOf((maxHeight - 16.dp).coerceAtLeast(72.dp), maxWidth * .4f)
+                        else minOf(maxWidth - 48.dp, maxHeight * .43f).coerceAtLeast(72.dp)
                     if (wide)
-                        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            Modifier.fillMaxSize(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                                 SwipeCover(model, artworkSize, onClose)
                             }
-                            Box(Modifier.weight(1f)) { controls() }
+                            controls(
+                                Modifier.weight(1f)
+                                    .fillMaxHeight()
+                                    .verticalScroll(rememberScrollState())
+                            )
                         }
                     else
                         Column(
-                            Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                            Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.SpaceEvenly,
+                            verticalArrangement =
+                                Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
                         ) {
                             SwipeCover(model, artworkSize, onClose)
-                            Spacer(Modifier.height(12.dp))
-                            controls()
+                            controls(Modifier)
                         }
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    TextButton(
+                        onClick = onSubtitles,
+                        modifier = Modifier.testTag("player.subtitles"),
+                    ) {
+                        Text("Текст")
+                    }
+                    TextButton(onClick = onQueue, modifier = Modifier.testTag("player.queue")) {
+                        Text("Очередь")
+                    }
                 }
             }
         }

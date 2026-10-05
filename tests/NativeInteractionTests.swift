@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import ImageIO
 
 final class NativeInteractionTests: XCTestCase {
   private let app = XCUIApplication(bundleIdentifier: "app.muwa.nasheeds")
@@ -98,48 +99,82 @@ final class NativeInteractionTests: XCTestCase {
 
   private func rotationShot(_ name: String, landscape: Bool,
                             visibleElement: XCUIElement) throws {
-    // The app frame must follow the physical Simulator device, not a fixture's
-    // requested window geometry. Then verify the unmodified device PNG itself.
+    // Rotate the actual device and capture the actual application through XCTest.
+    // XCUIScreen may retain the display's natural portrait framebuffer even when
+    // the app is visibly horizontal; keep that raw reference alongside the app.
     let frameReady = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
       let frame = self.app.frame
       return min(frame.width, frame.height) > 100
         && (landscape ? frame.width > frame.height : frame.height > frame.width)
     }, object: nil)
-    XCTAssertEqual(XCTWaiter.wait(for: [frameReady], timeout: 30), .completed,
-                   "Muwa did not adopt the actual device orientation")
-    XCTAssertTrue(visibleElement.exists && visibleElement.isHittable,
-                  "The native screen control disappeared after rotation")
-    let screenshot = XCUIScreen.main.screenshot()
-    let png = screenshot.pngRepresentation
-    guard png.count >= 24,
-          png.prefix(8) == Data([137, 80, 78, 71, 13, 10, 26, 10]) else {
-      XCTFail("Expected an actual device PNG")
-      return
+    let waitResult = XCTWaiter.wait(for: [frameReady], timeout: 30)
+    let frame = app.frame
+    let deviceOrientation = XCUIDevice.shared.orientation
+    let controlVisible = visibleElement.exists && visibleElement.isHittable
+    let screenshot = app.screenshot()
+    let rawScreen = XCUIScreen.main.screenshot()
+    func keepPNG(_ screenshot: XCUIScreenshot, _ label: String) {
+      let attachment = XCTAttachment(data: screenshot.pngRepresentation,
+                                     uniformTypeIdentifier: "public.png")
+      attachment.name = label
+      attachment.lifetime = .keepAlways
+      add(attachment)
     }
-    let width = png[16..<20].reduce(0) { ($0 << 8) | Int($1) }
-    let height = png[20..<24].reduce(0) { ($0 << 8) | Int($1) }
-    XCTAssertGreaterThan(min(width, height), 100)
-    if landscape {
-      XCTAssertGreaterThan(width, height, "A portrait PNG cannot prove landscape")
-    } else {
-      XCTAssertGreaterThan(height, width, "Expected a portrait device framebuffer")
+    // Preserve original bytes and provenance before assertions can terminate the
+    // test, so an orientation failure is reviewable instead of losing its PNG.
+    keepPNG(screenshot, name)
+    keepPNG(rawScreen, name + "-raw-screen")
+    func pixelInfo(_ screenshot: XCUIScreenshot) throws -> [String: Int] {
+      let png = screenshot.pngRepresentation
+      guard png.count >= 24,
+            png.prefix(8) == Data([137, 80, 78, 71, 13, 10, 26, 10]),
+            let source = CGImageSourceCreateWithData(png as CFData, nil),
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] else {
+        throw NSError(domain: "MuwaRotationVerification", code: 1,
+                      userInfo: [NSLocalizedDescriptionKey: "Expected an unmodified native PNG"])
+      }
+      let encodedWidth = png[16..<20].reduce(0) { ($0 << 8) | Int($1) }
+      let encodedHeight = png[20..<24].reduce(0) { ($0 << 8) | Int($1) }
+      let orientation = (properties[kCGImagePropertyOrientation as String] as? NSNumber)?.intValue ?? 1
+      // EXIF 5-8 explicitly transpose the encoded axes. This uses the PNG's own
+      // metadata; never infer a pixel rotation from the requested device state.
+      let transposed = (5...8).contains(orientation)
+      return ["encodedWidth":encodedWidth, "encodedHeight":encodedHeight,
+              "exifOrientation":orientation,
+              "uiImageOrientation":screenshot.image.imageOrientation.rawValue,
+              "displayWidth":transposed ? encodedHeight : encodedWidth,
+              "displayHeight":transposed ? encodedWidth : encodedHeight]
     }
-    let attachment = XCTAttachment(screenshot: screenshot)
-    attachment.name = name
-    attachment.lifetime = .keepAlways
-    add(attachment)
+    let pixels = try pixelInfo(screenshot)
+    let rawPixels = try pixelInfo(rawScreen)
+    let width = pixels["displayWidth"]!
+    let height = pixels["displayHeight"]!
     let proof: [String: Any] = [
-      "method": "XCUIDevice.orientation and unmodified device framebuffer",
+      "method": "XCUIDevice.orientation and unmodified XCUIApplication.screenshot PNG",
       "screen": name, "landscape": landscape, "width": width, "height": height,
-      "deviceOrientation": XCUIDevice.shared.orientation.rawValue,
-      "appFrameWidth": app.frame.width, "appFrameHeight": app.frame.height,
-      "nativeControlVisible": visibleElement.exists && visibleElement.isHittable,
+      "deviceOrientation": deviceOrientation.rawValue,
+      "appFrameWidth": Double(frame.width), "appFrameHeight": Double(frame.height),
+      "nativeControlVisible": controlVisible,
+      "applicationPNG": pixels, "rawScreenPNG": rawPixels,
+      "rawScreenSource": "Unmodified XCUIScreen.main.screenshot natural framebuffer reference",
+      "frameOrientationReady": waitResult == .completed,
     ]
     let data = try JSONSerialization.data(withJSONObject: proof, options: .sortedKeys)
     let evidence = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
     evidence.name = name + "-proof"
     evidence.lifetime = .keepAlways
     add(evidence)
+    XCTAssertEqual(waitResult, .completed, "Muwa did not adopt the actual device orientation")
+    XCTAssertTrue(controlVisible, "The native screen control disappeared after rotation")
+    XCTAssertGreaterThan(min(width, height), 100)
+    if landscape {
+      XCTAssertTrue(deviceOrientation == .landscapeLeft || deviceOrientation == .landscapeRight,
+                    "The actual device must be in landscape")
+      XCTAssertGreaterThan(width, height, "A portrait application PNG cannot prove landscape")
+    } else {
+      XCTAssertEqual(deviceOrientation, .portrait)
+      XCTAssertGreaterThan(height, width, "Expected a portrait native application PNG")
+    }
   }
 
   func testHomeAndPlayerFollowActualDeviceRotation() throws {

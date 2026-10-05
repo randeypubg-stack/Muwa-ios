@@ -107,6 +107,9 @@ struct PremiumView: View {
       .navigationTitle("Muwa")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
+        ToolbarItem(placement: .principal) {
+          Text("Muwa").font(.headline).accessibilityIdentifier("premium.title")
+        }
         ToolbarItem(placement: .topBarTrailing) {
           Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }.accessibilityLabel("Закрыть")
         }
@@ -193,7 +196,14 @@ struct MuwaPromoView: View {
         }
       }
       .navigationTitle("Промокод").navigationBarTitleDisplayMode(.inline)
-      .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Готово") { if createdCode != nil { confirmDiscard = true } else { dismiss() } }.disabled(busy) } }
+      .toolbar {
+        ToolbarItem(placement: .principal) {
+          Text("Промокод").font(.headline).accessibilityIdentifier("promo.title")
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+          Button("Готово") { if createdCode != nil { confirmDiscard = true } else { dismiss() } }.disabled(busy)
+        }
+      }
       .task {
         await premium.refreshAccount()
         if premium.canManageCodes { run(["action": "list"]) }
