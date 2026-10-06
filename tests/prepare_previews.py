@@ -286,7 +286,9 @@ enum ReviewSubtitleMotion {
     }
     write("subtitle-motion-ready.json", ["pid": pid, "duration": 25, "count": 5,
                                         "source": "ordinary-manual-captions", "aiOptIn": false])
-    guard await waitFor("subtitle-motion-start.txt", seconds: 60) else { return }
+    // The host resolves simctl (up to 180 s) and starts its recorder (45 s)
+    // before acknowledging. Keep the fixture deadline outside that bound.
+    guard await waitFor("subtitle-motion-start.txt", seconds: 240) else { return }
     var broadNotifications = 0
     var tickNotifications = 0
     let observation = player.objectWillChange.sink { broadNotifications += 1 }
@@ -304,7 +306,9 @@ enum ReviewSubtitleMotion {
         let index = (tick - 5) / 25
         write("subtitle-motion-checkpoint-\\(index).json", ["pid": pid,
           "time": player.timeline.snapshot.time, "expectedIndex": index])
-        guard await waitFor("subtitle-motion-captured-\\(index).txt", seconds: 25) else {
+        // A real framebuffer capture can take up to 180 s on a hosted runner.
+        // Retain a bounded handshake with time for validation/atomic file I/O.
+        guard await waitFor("subtitle-motion-captured-\\(index).txt", seconds: 210) else {
           observation.cancel()
           return
         }

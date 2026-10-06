@@ -45,9 +45,20 @@ final class NativeInteractionTests: XCTestCase {
     XCTAssertTrue(handle.exists)
     let start = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
     let end = thirdCell.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.95))
-    start.press(forDuration: 0.7, thenDragTo: end)
+    start.press(forDuration: 0.7, thenDragTo: end, withVelocity: .slow,
+                thenHoldForDuration: 0.5)
+    let expected = [before[1], before[2], before[0]]
+    // A spring-backed List commits its new accessibility order asynchronously.
+    // Wait for the actual drop rather than inspecting the previous snapshot;
+    // retain the real gesture and exact order/persistence assertions.
+    let moved = XCTNSPredicateExpectation(predicate: NSPredicate { [self] _, _ in
+      Array(queueButtons.map(\.identifier).prefix(3)) == expected
+    }, object: nil)
+    let dropResult = XCTWaiter.wait(for: [moved], timeout: 10)
+    shot("queue-after-drop")
+    XCTAssertEqual(dropResult, .completed, "Native row drag did not commit the expected order")
     let reordered = queueButtons.map(\.identifier)
-    XCTAssertEqual(Array(reordered.prefix(3)), [before[1], before[2], before[0]])
+    XCTAssertEqual(Array(reordered.prefix(3)), expected)
     XCTAssertTrue(app.staticTexts["На паузе"].exists, "Moving a row started playback")
     shot("queue-after-move")
     app.terminate()

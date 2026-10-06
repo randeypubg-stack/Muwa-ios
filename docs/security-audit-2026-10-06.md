@@ -111,11 +111,26 @@ once. Preparing the actual full source locally verified it; production image
 loading and security limits were preserved. Recorder readiness now uses one shared
 bounded acknowledgement wait; an exited recorder or missing acknowledgement still
 fails. The obsolete interface run was cancelled after publishing the correction.
-CI124's large-phone and iPad-mini screenshot jobs and mini interaction/rotation job
-passed. Both caption-motion jobs and the iPad-Pro screenshot job timed out during
-Simulator installation, before launching Muwa. The iPhone queue drag test observed
-unchanged order after its gesture; this needs a focused repeat/investigation and
-is not counted as passing. The other native jobs, including both iPad interaction/rotation jobs and cold
-launch on iPhone18Pro, passed. A focused retry of the four failed leaf jobs is
-running at this report snapshot, with the same native source/binaries.
-Compilation and security-test success do not imply those jobs pass.
+CI124 passed all static iOS screen groups on iPhone18Pro/ProMax, iPad mini A17Pro
+and iPad Pro13 M5; the Pro13 group succeeded on a focused repeat after its first
+Simulator-install timeout. Both iPad native interaction/rotation jobs and iPhone
+cold launch also passed. The first phone queue gesture returned the original order;
+its focused repeat is not yet complete. It is not counted as passing.
+
+On the repeat, tablet caption capture again timed out installing the app. The phone
+caption job launched and captured real images, but exposed a third error in my
+review fixture: the native capture acknowledgement expired after 25 seconds while
+the host's framebuffer command was allowed 180 seconds. The disposable clock now
+allows 210 seconds for capture acknowledgement and 240 seconds for recorder startup
+(180-second tool discovery + 45-second recorder acknowledgement). Every wait stays
+bounded and the original PID, five-caption, 125-tick, zero-global-invalidation,
+viewport and actual-image/video assertions remain. Local full-source preparation
+and all 16 motion-proof self checks passed; this change still needs a new native
+review build. The phone gesture test now performs a controlled slow lift/drop,
+waits for the exact committed row order, and preserves before/after diagnostics
+and restart/playback assertions. No production queue implementation was replaced
+to work around a failing test.
+
+Release security fixes are already compiled/tested in CI124. Those later disposable
+review-tool changes do not change production native source. They do not establish
+successful motion or phone queue interaction until the new review jobs pass.
