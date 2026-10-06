@@ -22,7 +22,8 @@ import subprocess
 import time
 
 from capture_launch_ios import (command_output_summary, finish_recording,
-                                start_recording, validate_png, validate_video)
+                                start_recording, validate_png, validate_video,
+                                wait_recording_ready)
 from select_apple_review_devices import KINDS, load_selection
 
 
@@ -250,11 +251,7 @@ def main():
         recorder, recorder_input = start_recording(command, recorder_log)
         status["recordingCommand"] = command
         status["recordingStopMethod"] = "Shared owned-recorder SIGINT finalizer"
-        deadline = time.monotonic() + 15
-        while "Recording started" not in recording_log_path.read_text():
-            if recorder.poll() is not None or time.monotonic() >= deadline:
-                raise RuntimeError(f"Native recorder did not become ready: {recording_log_path.read_text()}")
-            time.sleep(0.05)
+        wait_recording_ready(recorder, recording_log_path)
         recording_start = time.monotonic()
         acknowledge("subtitle-motion-start.txt", pid)
         for index in range(5):

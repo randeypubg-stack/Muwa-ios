@@ -345,7 +345,10 @@ p.write_text(s)
 # response, independently of live CDN availability. Screen artwork remains the
 # actual catalogue URL or its normal fallback; the test image is never a track.
 p=root/'Sources/Views/Components/ArtworkView.swift'
-s=p.read_text().replace('URLSession.shared.data(from: url)', 'ReviewArtworkProtocol.session.data(from: url)')
+s=p.read_text()
+needle='BackendConfig.boundedData(for: URLRequest(url: url), using: .shared)'
+assert s.count(needle) == 1, "Artwork review must intercept the current bounded network loader"
+s=s.replace(needle, 'BackendConfig.boundedData(for: URLRequest(url: url), using: ReviewArtworkProtocol.session)', 1)
 s += '''
 private final class ReviewArtworkProtocol: URLProtocol, @unchecked Sendable {
   static let session: URLSession = {

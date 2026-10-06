@@ -67,6 +67,19 @@ def validate_png(path):
     return {"width": width, "height": height}
 
 
+def wait_recording_ready(process, log_path, seconds=45):
+    """Wait for simctl's real readiness acknowledgement before advancing the app.
+
+    Cold hosted Simulators can take longer than 10–15 seconds to attach their
+    recorder. The deadline stays bounded and an exited recorder fails immediately.
+    """
+    deadline = time.monotonic() + seconds
+    while "Recording started" not in log_path.read_text():
+        if process.poll() is not None or time.monotonic() >= deadline:
+            raise RuntimeError(f"Native recorder did not become ready: {log_path.read_text()}")
+        time.sleep(0.1)
+
+
 def validate_video(path):
     """Reject unfinished MP4/QuickTime files even when ffmpeg is unavailable."""
     length = path.stat().st_size
@@ -267,13 +280,7 @@ def main():
         status["recording_stop_method"] = "SIGINT to the owned recorder group"
         status["recording_command"] = recording_command
         # Launch only once simctl confirms that the screen recording is active.
-        ready_deadline = time.monotonic() + 10
-        while "Recording started" not in log_path.read_text():
-            if recorder.poll() is not None:
-                raise RuntimeError(f"Simulator recorder exited before launch: {log_path.read_text()}")
-            if time.monotonic() >= ready_deadline:
-                raise RuntimeError(f"Simulator recorder never became ready: {log_path.read_text()}")
-            time.sleep(0.1)
+        wait_recording_ready(recorder, log_path)
         data_container = Path(run("xcrun", "simctl", "get_app_container", udid, PACKAGE, "data").strip())
         for name in ["launch-home-mounted.txt", "launch-auth-pending.txt", "launch-auth-finished.txt"]:
             (data_container / "Documents" / name).unlink(missing_ok=True)
