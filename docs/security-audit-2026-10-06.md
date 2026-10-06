@@ -141,5 +141,11 @@ were compared byte-for-byte with CI124 and are identical; fixture deadlines affe
 only the disposable Debug review source. On its focused repeat both subtitle-motion
 jobs passed with five original PNGs, finalized MP4, indices 0...4, 125 ticks and zero
 broad PlayerManager notifications. The mini static review and CarPlay external-display
-review also passed. The phone interaction job remains pending at this snapshot; no
-successful phone queue gesture is claimed.
+review also passed. The final focused phone job passed playlist creation/persistence, actual rotation
+and subtitle-reader tap/dismiss checks, but the queue drag still returned unchanged
+order and failed the exact committed-order assertion. The UI matrix is therefore
+not fully passing (13 of 14 jobs passed). Model-level queue ordering checks passed;
+that does not prove the drag is usable. Screenshots and the failure log are retained.
+No further speculative production queue rewrite was made; physical-device
+reproduction has been requested from the owner. The known interaction remains
+unresolved, independently of the passing security/compilation checks.
