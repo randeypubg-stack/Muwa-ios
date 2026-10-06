@@ -21,6 +21,28 @@ from muwa_telegram_import.state import State
 
 
 class OwnerSetupTests(unittest.TestCase):
+    def test_failed_setup_preserves_an_inactive_watcher_and_original_config(self):
+        spec = importlib.util.spec_from_file_location('owner_setup', Path(__file__).resolve().parents[1] / 'setup-owner.py')
+        setup = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(setup)
+        for previous in [None, b'previous-private-fixture']:
+            with self.subTest(previousExists=previous is not None), tempfile.TemporaryDirectory() as folder:
+                config = Path(folder) / 'config.json'
+                if previous is not None:
+                    config.write_bytes(previous)
+                with patch.object(setup, 'CONFIG', config), patch.object(setup.subprocess, 'run', return_value=SimpleNamespace(returncode=3)) as run:
+                    with self.assertRaises(RuntimeError):
+                        with setup.pause_watcher():
+                            setup.write_config(b'new-private-fixture')
+                            raise RuntimeError('Fixture service start failed')
+                    self.assertEqual(config.read_bytes() if config.exists() else None, previous)
+                    self.assertEqual([call.args[0] for call in run.call_args_list], [
+                        ['systemctl', 'is-active', '--quiet', setup.SERVICE],
+                        ['systemctl', 'is-enabled', '--quiet', setup.SERVICE],
+                        ['systemctl', 'stop', setup.SERVICE],
+                        ['systemctl', 'disable', setup.SERVICE],
+                    ])
+
     def test_setup_accepts_only_the_selected_owner_backend_and_channel(self):
         spec = importlib.util.spec_from_file_location('owner_setup', Path(__file__).resolve().parents[1] / 'setup-owner.py')
         setup = importlib.util.module_from_spec(spec)
@@ -136,7 +158,14 @@ class ExportTests(unittest.TestCase):
                         "-metadata", "title=عنوان من الملف", "-metadata", "artist=فنان من الملف", "-disposition:v", "attached_pic", str(path)],
                        check=True, capture_output=True, timeout=30)
         cover = self.root / "embedded.jpg"
-        media = inspect_audio(path, {"title": "Telegram title", "performer": "Telegram artist"}, "ar", cover)
+        with patch.dict(os.environ, {"MUWA_IMPORT_PASSWORD": "private-fixture-only", "TELEGRAM_API_HASH": "private-fixture-only"}), \
+             patch('muwa_telegram_import.media.subprocess.run', wraps=subprocess.run) as run:
+            media = inspect_audio(path, {"title": "Telegram title", "performer": "Telegram artist"}, "ar", cover)
+            self.assertEqual([call.args[0][0] for call in run.call_args_list], ['ffprobe', 'ffmpeg'])
+            for call in run.call_args_list:
+                environment = call.kwargs.get('env')
+                self.assertIsNotNone(environment, 'Decoder inherited the importer credential environment')
+                self.assertFalse(any(key.startswith(('MUWA_', 'TELEGRAM_', 'LD_', 'DYLD_')) for key in environment))
         self.assertEqual(media["title"], "عنوان من الملف")
         self.assertEqual(media["artist"], "فنان من الملف")
         self.assertEqual(media["audioType"], "audio/mpeg")

@@ -2,6 +2,7 @@
 import hashlib
 import json
 import math
+import os
 import subprocess
 from pathlib import Path, PureWindowsPath
 
@@ -10,6 +11,9 @@ MAX_COVER = 10 * 1024 * 1024
 # Demuxers may fetch nested URLs while probing, before format_name is checked.
 # Accept only the containers we publish and local, non-network input protocols.
 INPUT_POLICY = ["-protocol_whitelist", "file,pipe", "-format_whitelist", "mp3,wav,mov", "-max_alloc", "33554432"]
+# Decoder subprocesses need no Telegram/backend credentials from the importer.
+# A fixed environment also prevents inherited loader/preload configuration.
+MEDIA_ENVIRONMENT = {"PATH": os.defpath, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}
 
 
 class InvalidMedia(ValueError):
@@ -48,7 +52,7 @@ def inspect_audio(path: Path, hints: dict, language: str, cover_target: Path) ->
         raise InvalidMedia("Аудио должно быть не больше 100 МиБ.")
     try:
         process = subprocess.run(["ffprobe", "-v", "error", *INPUT_POLICY, "-show_format", "-show_streams", "-of", "json", str(path)],
-                                 capture_output=True, timeout=30, check=True)
+                                 capture_output=True, timeout=30, check=True, env=MEDIA_ENVIRONMENT)
         probe = json.loads(process.stdout)
         info = probe["format"]
         streams = probe["streams"]
@@ -88,7 +92,7 @@ def inspect_audio(path: Path, hints: dict, language: str, cover_target: Path) ->
         try:
             subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", *INPUT_POLICY, "-i", str(path), "-map", "0:" + str(attached["index"]),
                             "-frames:v", "1", "-vf", "scale=w='min(1024,iw)':h='min(1024,ih)':force_original_aspect_ratio=decrease", str(cover_target)],
-                           capture_output=True, check=True, timeout=30)
+                           capture_output=True, check=True, timeout=30, env=MEDIA_ENVIRONMENT)
             cover_type(cover_target)
             cover = cover_target
         except (subprocess.SubprocessError, InvalidMedia):

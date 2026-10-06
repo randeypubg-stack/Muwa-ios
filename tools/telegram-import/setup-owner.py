@@ -65,7 +65,8 @@ def write_config(data):
 @contextmanager
 def pause_watcher():
     was_active = subprocess.run(['systemctl', 'is-active', '--quiet', SERVICE]).returncode == 0
-    previous = CONFIG.read_bytes() if was_active else None
+    was_enabled = subprocess.run(['systemctl', 'is-enabled', '--quiet', SERVICE]).returncode == 0
+    previous = CONFIG.read_bytes() if CONFIG.exists() else None
     if was_active:
         subprocess.run(['systemctl', 'stop', SERVICE], check=True)
     try:
@@ -73,8 +74,14 @@ def pause_watcher():
     except BaseException:
         # A cancelled/failed login must not silently disable an existing import.
         # Restore the previous private credential if committing setup failed.
-        if was_active:
+        subprocess.run(['systemctl', 'stop', SERVICE], check=True)
+        if previous is not None:
             write_config(previous)
+        else:
+            CONFIG.unlink(missing_ok=True)
+        if not was_enabled:
+            subprocess.run(['systemctl', 'disable', SERVICE], check=True)
+        if was_active:
             subprocess.run(['systemctl', 'start', SERVICE], check=True)
         raise
 
