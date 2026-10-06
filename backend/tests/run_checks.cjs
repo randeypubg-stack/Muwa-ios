@@ -33,6 +33,7 @@ async function main() {
       "adminValidation.tsx",
       "adminValidation.spec.tsx",
       "runtimeConfig.ts",
+      "runtimeConfig.spec.tsx",
       "requestSecurity.tsx",
       "requestSecurity.spec.tsx",
     ];
@@ -72,6 +73,9 @@ async function main() {
       fs.writeFileSync(path.join(helpers, name.replace(/\.tsx?$/, ".js")), code);
     }
     if (databaseTests) {
+      // Disposable importer fixtures explicitly provision their owner. Missing
+      // production configuration still denies everyone.
+      process.env.MUWA_TELEGRAM_OWNER_ID = "1";
       for (const name of [
         "publicationUpload_POST.ts",
         "publicationUpload_POST.schema.ts",
@@ -165,8 +169,8 @@ async function main() {
         const {NotAuthenticatedError} = require('./getSetServerSession');
         exports.getServerUserSession = async request => {
           const id = Number(request.headers.get('x-fixture-user'));
-          if (![1,2,3].includes(id)) throw new NotAuthenticatedError();
-          return {user: {id,role:id===1?"admin":"user"}, session: {lastAccessed: new Date()}};
+          if (![1,2,3,4].includes(id)) throw new NotAuthenticatedError();
+          return {user: {id,role:id===1||id===4?"admin":"user"}, session: {lastAccessed: new Date()}};
         };
       `,
       );

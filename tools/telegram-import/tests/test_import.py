@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import io
+import importlib.util
 import json
 import os
 import stat
@@ -16,6 +17,22 @@ from muwa_telegram_import.cli import arguments, run_export
 from muwa_telegram_import.media import channel_id, inspect_audio, local_export_file, InvalidMedia
 from muwa_telegram_import.sources import export_items, download_telegram
 from muwa_telegram_import.state import State
+
+
+class OwnerSetupTests(unittest.TestCase):
+    def test_setup_accepts_only_the_selected_owner_backend_and_channel(self):
+        spec = importlib.util.spec_from_file_location('owner_setup', Path(__file__).resolve().parents[1] / 'setup-owner.py')
+        setup = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(setup)
+        config = {'TELEGRAM_API_ID': '12345', 'TELEGRAM_API_HASH': 'a' * 32,
+                  'MUWA_IMPORT_BACKEND': setup.BACKEND, 'MUWA_IMPORT_EMAIL': setup.EMAIL,
+                  'MUWA_IMPORT_PASSWORD': 'local-fixture-only', 'MUWA_IMPORT_CHANNEL': setup.CHANNEL}
+        self.assertEqual(setup.validate_config(config), config)
+        for key, wrong in [('TELEGRAM_API_ID', '0'), ('TELEGRAM_API_HASH', 'invalid'),
+                           ('MUWA_IMPORT_CHANNEL', '@other'), ('MUWA_IMPORT_EMAIL', 'other@example.invalid'),
+                           ('MUWA_IMPORT_BACKEND', 'https://other.invalid'), ('MUWA_IMPORT_PASSWORD', 'line\nbreak')]:
+            with self.assertRaises(ValueError): setup.validate_config(dict(config, **{key: wrong}))
+        with self.assertRaises(ValueError): setup.validate_config(dict(config, unexpected='x'))
 
 
 def wav(path):

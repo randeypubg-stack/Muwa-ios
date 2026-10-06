@@ -1,0 +1,35 @@
+[Unit]
+Description=Muwa owner-only Telegram channel ingestion
+Wants=network-online.target
+After=network-online.target muwa-api.service
+ConditionPathExists=/etc/muwa/telegram-import.json
+
+[Service]
+Type=simple
+User=muwa-import
+Group=muwa-import
+WorkingDirectory=/var/lib/muwa-telegram-import
+UMask=0077
+LoadCredential=import-config:/etc/muwa/telegram-import.json
+ExecStart=/srv/muwa/telegram-import/.venv/bin/python /srv/muwa/telegram-import/setup-owner.py --run
+Restart=no
+TimeoutStopSec=60
+KillSignal=SIGINT
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/muwa-telegram-import
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LimitCORE=0
+MemoryMax=384M
+CPUQuota=50%
+TasksMax=64
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

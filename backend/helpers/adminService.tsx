@@ -26,6 +26,7 @@ import {
   validPublicationKey,
 } from "./uploadSecurity";
 import { cleanupExpiredUploads } from "./uploadCleanup";
+import { telegramImportOwnerAllowed } from "./runtimeConfig";
 import {
   findTelegramSource,
   findAudioDuplicate,
@@ -855,6 +856,12 @@ async function handle(request: Request, method: "GET" | "POST") {
       );
       if (!parsed.success)
         fail(parsed.error.issues[0]?.message ?? "Проверьте данные.");
+      if (
+        (parsed.data.action === "lookup-telegram-import" ||
+          parsed.data.action === "import-telegram-track") &&
+        !telegramImportOwnerAllowed(user.id)
+      )
+        fail("Импорт из Telegram доступен только владельцу Muwa.", 403);
       output = await execute(parsed.data, user.id);
     } else {
       const parsed = adminValidation.query.safeParse(

@@ -126,7 +126,7 @@ describe("Telegram import in the existing catalogue", () => {
     );
     storage.files.clear();
   });
-  it("requires the same verified admin session and cannot auto-publish", async () => {
+  it("requires the verified owner session and cannot auto-publish", async () => {
     expect(
       (await request({ action: "lookup-telegram-import", source }, 0)).status,
     ).toBe(401);
@@ -149,6 +149,21 @@ describe("Telegram import in the existing catalogue", () => {
       (await testPool.query("select count(*)::int as n from catalog_tracks"))
         .rows[0].n,
     ).toBe(0);
+  });
+  it("denies other administrators, including client claims to own the app", async () => {
+    expect((await request({ action: "lookup-telegram-import", source, ownerId: 1, email: "randey.pubg@gmail.com" }, 4)).status).toBe(403);
+    expect((await request({ action: "import-telegram-track", source, uploadId: randomUUID(), ...metadata }, 4)).status).toBe(403);
+    expect((await testPool.query("select count(*)::int as n from catalog_telegram_sources")).rows[0].n).toBe(0);
+  });
+  it("fails closed without configured owner and never consumes an upload", async () => {
+    const configured = process.env.MUWA_TELEGRAM_OWNER_ID;
+    try {
+      delete process.env.MUWA_TELEGRAM_OWNER_ID;
+      expect((await request({ action: "lookup-telegram-import", source })).status).toBe(403);
+      expect((await request({ action: "import-telegram-track", source, uploadId: randomUUID(), ...metadata })).status).toBe(403);
+    } finally {
+      process.env.MUWA_TELEGRAM_OWNER_ID = configured;
+    }
   });
   it("imports one draft and recovers a lost acknowledgement after lease consumption/expiry", async () => {
     const p = await plan(),

@@ -12,7 +12,7 @@ if(!connection)throw new Error('A disposable audit database is required');
 const target=new URL(connection);
 if(!['127.0.0.1','localhost'].includes(target.hostname)||target.pathname!=='/muwa_audit')throw new Error('Refusing to reset a non-audit database');
 const root=await fs.mkdtemp(path.join(process.env.MUWA_AUDIT_STORAGE_BASE??os.tmpdir(),'muwa-runtime-'));
-Object.assign(process.env,{MUWA_DATABASE_URL:connection,MUWA_PUBLIC_ORIGIN:'http://127.0.0.1:1',MUWA_RUNTIME_TEST:'1',MUWA_STORAGE_ROOT:root,MUWA_STORAGE_SECRET:randomBytes(48).toString('hex'),JWT_SECRET:randomBytes(48).toString('hex'),MUWA_BETA_USER_IDS:'1'});
+Object.assign(process.env,{MUWA_DATABASE_URL:connection,MUWA_PUBLIC_ORIGIN:'http://127.0.0.1:1',MUWA_RUNTIME_TEST:'1',MUWA_STORAGE_ROOT:root,MUWA_STORAGE_SECRET:randomBytes(48).toString('hex'),JWT_SECRET:randomBytes(48).toString('hex'),MUWA_BETA_USER_IDS:'1',MUWA_TELEGRAM_OWNER_ID:'1'});
 const sql=postgres(connection,{max:1,prepare:false,onnotice:()=>{}});
 let checks=0;
 const {createApp}=await import('../runtime/app');
@@ -46,6 +46,11 @@ try {
  const login=await request('auth/login_with_password',{email:'owner@muwa.invalid',password},{cookie:'',superjson:true});assert.equal(login.status,200);await login.arrayBuffer();checks++;
  await status('auth/login_with_password',{email:'owner@muwa.invalid',password:'incorrect-password' },401,{cookie:'',superjson:true});
  const empty=await request('catalog/tracks');assert.deepEqual((await empty.json()).tracks,[]);assert.match(empty.headers.get('cache-control')!,/no-store/);checks++;
+ const importSource={channelId:'-1000000012345',messageId:1};
+ await status('admin/action',{action:'lookup-telegram-import',source:importSource},200);
+ delete process.env.MUWA_TELEGRAM_OWNER_ID;
+ await status('admin/action',{action:'lookup-telegram-import',source:importSource},403);
+ process.env.MUWA_TELEGRAM_OWNER_ID='1';
  // A valid one-second PCM WAV tests real container bytes, not a fake media URL.
  const audio=Buffer.alloc(16044);audio.write('RIFF',0);audio.writeUInt32LE(audio.length-8,4);audio.write('WAVEfmt ',8);audio.writeUInt32LE(16,16);audio.writeUInt16LE(1,20);audio.writeUInt16LE(1,22);audio.writeUInt32LE(8000,24);audio.writeUInt32LE(16000,28);audio.writeUInt16LE(2,32);audio.writeUInt16LE(16,34);audio.write('data',36);audio.writeUInt32LE(16000,40);
  const prep=await request('admin/action',{action:'prepare-upload',files:[{part:'audio',contentType:'audio/wav',sizeBytes:audio.length}]});assert.equal(prep.status,200);const plan=await prep.json();assert.equal(plan.files.length,1);
@@ -71,6 +76,15 @@ try {
  const session=randomBytes(32).toString('hex'),now=new Date();await sql`insert into sessions(id,user_id,expires_at) values(${session},${user.id},now()+interval '1 hour')`;
  const {setServerSession}=await import('../helpers/getSetServerSession');const response=new Response();await setServerSession(response,{id:session,createdAt:now.getTime(),lastAccessed:now.getTime()});
  await status('catalog/tracks',undefined,403,{cookie:response.headers.get('set-cookie')!.split(';')[0]});
+ // General administrators still cannot use owner-only Telegram ingestion,
+ // even when they are permitted into the beta and claim the owner's ID/email.
+ await sql`update users set role='admin' where id=${user.id}`;
+ process.env.MUWA_BETA_USER_IDS='1,'+user.id;
+ const otherCookie=response.headers.get('set-cookie')!.split(';')[0];
+ await status('admin/state',undefined,200,{cookie:otherCookie});
+ await status('admin/action',{action:'lookup-telegram-import',source:importSource,ownerId:1,email:'owner@muwa.invalid'},403,{cookie:otherCookie});
+ await status('admin/action',{action:'import-telegram-track',source:{...importSource,audioSha256:createHash('sha256').update(audio).digest('hex')},uploadId:randomUUID(),title:'Denied',artist:'Other',language:'und',duration:1,status:'draft'},403,{cookie:otherCookie});
+ process.env.MUWA_BETA_USER_IDS='1';
  await status('auth/logout',{},200,{superjson:true});
  await status('catalog/tracks',undefined,401);
  console.log(JSON.stringify({runtimeChecks:checks,result:'passed',productionDatabaseTouched:false}));

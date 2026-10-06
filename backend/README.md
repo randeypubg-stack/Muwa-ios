@@ -12,6 +12,13 @@ See [the importer and deployment instructions](../tools/telegram-import/README.m
 The handlers and migration are deployed to the fresh Beget database. No live
 Telegram channel import has occurred; channel access is a separate step.
 
+Telegram lookup/import actions additionally require the single authenticated
+user ID in `MUWA_TELEGRAM_OWNER_ID` on the server. An admin role alone never
+grants import; missing or invalid configuration denies everyone. Other admin
+actions retain their existing authorization. The owner-operated Beget setup
+for @muwa144 is documented in the importer README; secrets stay outside Git
+and are supplied to its non-root service using systemd credentials.
+
 ## Current deployment — 4 October 2026
 
 The existing endpoint implementation runs as a standalone Node/Hono service on
