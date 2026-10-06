@@ -3,6 +3,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import json
 
 class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
     redirect_hits = 0
     def log_message(self, *args): pass
     def do_POST(self):
@@ -18,16 +19,15 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if self.path == '/redirect-target': Handler.redirect_hits += 1
             self.send_response(200)
-            if self.path == '/declared-large':
-                self.send_header('Content-Length', str(11 * 1024 * 1024))
+            if self.path in {'/declared-large', '/chunked-large'}:
+                chunked = self.path == '/chunked-large'
+                self.send_header('Transfer-Encoding', 'chunked') if chunked else self.send_header('Content-Length', str(11 * 1024 * 1024))
                 self.end_headers()
-                return
-            if self.path == '/chunked-large':
-                self.send_header('Transfer-Encoding', 'chunked')
-                self.end_headers()
+                # Send real bytes: declaring a length and closing an empty body
+                # tests connection loss, not the client's size boundary.
                 for _ in range(176):
-                    self.wfile.write(b'10000\r\n' + b'x' * 65536 + b'\r\n')
-                self.wfile.write(b'0\r\n\r\n')
+                    self.wfile.write((b'10000\r\n' if chunked else b'') + b'x' * 65536 + (b'\r\n' if chunked else b''))
+                if chunked: self.wfile.write(b'0\r\n\r\n')
                 return
             body = json.dumps({'cookie': self.headers.get('Cookie', '')} if self.path == '/cookie' else {'redirectHits': Handler.redirect_hits}).encode()
             self.send_header('Content-Length', str(len(body)))

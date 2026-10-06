@@ -36,9 +36,10 @@ are preserved. No production database reset or attack against unrelated hosts.
 - Gitleaks: no findings in all local Git refs or tracked working source, including
   nested archives. This is evidence from a scanner, not a guarantee that no secret exists.
 - npm audit: zero production advisories for backend; zero panel advisories after update.
-- OSV query: no advisories returned for the 15 explicitly versioned Android Maven
-  coordinates checked. Compose BOM-resolved/transitive packages were not covered by
-  this query alone.
+- OSV query: no advisories returned for all 81 resolved Android release-runtime
+  Maven coordinates, including BOM-selected/transitive dependencies. Pinned httpx
+  and Telethon coordinates also returned no advisories.
+- Android build 46: debug/release compilation, seven unit checks and lint passed.
 - Build 46 mobile changes require new binaries. Earlier build-45 IPA/build-42 APKs
   do not contain these fixes. CI results and deployment are tracked separately;
   this document does not claim pending checks passed.
@@ -48,7 +49,8 @@ are preserved. No production database reset or attack against unrelated hosts.
 Verified: PostgreSQL and API bind only to loopback, public firewall exposes 22/80/443,
 Fail2ban is active, TLS 1.2/1.3, query-free access logs, login throttling and eight
 connections per IP. API runs as muwa with a read-only system, private temp directory,
-resource caps, and root-owned mode-0600 environment. Telegram runs as a separate
+resource caps, zero Linux capabilities, disabled core dumps, private devices, protected
+kernel settings/logs/clock, and root-owned mode-0600 environment. Telegram runs as a separate
 non-login UID with a private state directory and systemd credentials.
 
 Root SSH password login is still enabled. It must be replaced after a separate SSH-key
@@ -66,3 +68,14 @@ This audit does not prove absence of every vulnerability, resistance to volumetr
 DDoS, physical-device security, production StoreKit behavior or 10,000-user capacity.
 External Strix review was unavailable because its connection requires reauthentication;
 no paid scan was started. Local inspection, dependency scans and regression checks ran.
+
+Deployment: backend/admin panel/importer changes were installed in
+`/srv/muwa/releases/security-20261006`; HTTPS health, anonymous admin rejection and
+oversized-login rejection passed. Runtime node_modules were pruned to production
+packages; npm audit there reports zero vulnerabilities. systemd hardening was verified
+and activated; health stayed good. Private account/DB/config/state were preserved.
+
+The first iOS CI run caught an error in my new fixture: its advertised oversized
+response had no body, producing connection loss instead of exercising the size limit.
+The fixture now sends actual oversized bytes with HTTP/1.1 for both known and unknown
+length. Redirect and upload-cookie checks had already passed; a new run is required.
