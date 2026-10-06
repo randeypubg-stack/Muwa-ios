@@ -75,9 +75,11 @@ access remains privileged. Off-host encrypted backups are not configured. A real
 local backup was restored into an isolated temporary database: all 21 tables and
 the owner were verified, and the temporary database was dropped. Production was
 not restored or reset. Same-disk backups do not protect against loss of the VPS.
-The OS reports that a reboot is required. Kernel activation must be scheduled with
-an access-recovery path; this review did not restart the host or claim the running
-kernel is fully updated.
+After verifying SSH socket, remote access and API/DB startup, the host was rebooted
+onto the already installed security kernel 7.0.0-34 (previously running 7.0.0-31).
+Remote access returned automatically; HTTPS health/admin rejection, service hardening,
+all 21 tables and the owner were verified afterward. The reboot-required flag cleared.
+This does not claim every optional distribution update was installed.
 
 The schema-generation **development** tool kysely-codegen still pulls braces 3.0.3
 (GHSA-vfj7-8cjw-p6xm). The registry offers no patched braces version at review time.
@@ -109,5 +111,11 @@ once. Preparing the actual full source locally verified it; production image
 loading and security limits were preserved. Recorder readiness now uses one shared
 bounded acknowledgement wait; an exited recorder or missing acknowledgement still
 fails. The obsolete interface run was cancelled after publishing the correction.
-CI124's wider interface/rotation/motion/CarPlay matrix is still running at this
-report snapshot; compilation and security-test success do not imply those jobs pass.
+CI124's large-phone and iPad-mini screenshot jobs and mini interaction/rotation job
+passed. Both caption-motion jobs and the iPad-Pro screenshot job timed out during
+Simulator installation, before launching Muwa. The iPhone queue drag test observed
+unchanged order after its gesture; this needs a focused repeat/investigation and
+is not counted as passing. The other native jobs, including both iPad interaction/rotation jobs and cold
+launch on iPhone18Pro, passed. A focused retry of the four failed leaf jobs is
+running at this report snapshot, with the same native source/binaries.
+Compilation and security-test success do not imply those jobs pass.
