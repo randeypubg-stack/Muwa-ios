@@ -38,7 +38,7 @@ are preserved. No production database reset or attack against unrelated hosts.
   against a disposable PostgreSQL database. Production DB was not reset.
 - Importer: 20 tests passed using real ffmpeg/ffprobe, including network isolation,
   cancellation rollback, duplicate identity and upload-cookie isolation.
-- Gitleaks: no findings across 320 commits in all local Git refs or tracked working source, including
+- Gitleaks: no findings across 323 scanned commits in all local Git refs or tracked working source, including
   nested archives. This is evidence from a scanner, not a guarantee that no secret exists.
 - npm audit: zero production advisories for backend; zero panel advisories after update.
 - OSV query: no advisories returned for all 81 resolved Android release-runtime
@@ -134,3 +134,12 @@ to work around a failing test.
 Release security fixes are already compiled/tested in CI124. Those later disposable
 review-tool changes do not change production native source. They do not establish
 successful motion or phone queue interaction until the new review jobs pass.
+
+CI125 (`0ae478d`, run 37438291880) also passed all Swift/network checks, Release
+arm64 packaging and Simulator compilation. All 56 assembled production Swift files
+were compared byte-for-byte with CI124 and are identical; fixture deadlines affect
+only the disposable Debug review source. On its focused repeat both subtitle-motion
+jobs passed with five original PNGs, finalized MP4, indices 0...4, 125 ticks and zero
+broad PlayerManager notifications. The mini static review and CarPlay external-display
+review also passed. The phone interaction job remains pending at this snapshot; no
+successful phone queue gesture is claimed.
