@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Owner-operated setup; secrets are entered on the VPS terminal, never in argv."""
 import argparse
+from contextlib import contextmanager
 import getpass
 import json
 import logging
@@ -9,6 +10,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 
 CONFIG = Path('/etc/muwa/telegram-import.json')
 STATE = Path('/var/lib/muwa-telegram-import')
@@ -44,6 +46,39 @@ def run_service():
           '--state-dir', str(STATE), '--language', 'und', '--batch-size', '100'])
 
 
+def write_config(data):
+    CONFIG.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=CONFIG.parent, prefix='.telegram-config-', delete=False) as stream:
+            temporary = Path(stream.name)
+            os.chmod(temporary, 0o600)
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, CONFIG)
+    finally:
+        if temporary:
+            temporary.unlink(missing_ok=True)
+
+
+@contextmanager
+def pause_watcher():
+    was_active = subprocess.run(['systemctl', 'is-active', '--quiet', SERVICE]).returncode == 0
+    previous = CONFIG.read_bytes() if was_active else None
+    if was_active:
+        subprocess.run(['systemctl', 'stop', SERVICE], check=True)
+    try:
+        yield
+    except BaseException:
+        # A cancelled/failed login must not silently disable an existing import.
+        # Restore the previous private credential if committing setup failed.
+        if was_active:
+            write_config(previous)
+            subprocess.run(['systemctl', 'start', SERVICE], check=True)
+        raise
+
+
 def configure():
     if os.geteuid() != 0 or not sys.stdin.isatty() or not sys.stderr.isatty():
         raise ValueError('Открой эту команду в своём интерактивном Termius под root.')
@@ -66,16 +101,15 @@ def configure():
                     'source': {'channelId': '-1000000012345', 'messageId': 1}})
     finally:
         api.close()
-    if subprocess.run(['systemctl', 'is-active', '--quiet', SERVICE]).returncode == 0:
-        subprocess.run(['systemctl', 'stop', SERVICE], check=True)
-    environment = dict(os.environ, **values)
-    # Phone, OTP and optional Telegram 2FA stay inside the user's own terminal.
-    subprocess.run(['runuser', '-u', 'muwa-import', '--', str(Path(sys.executable)),
-                    '-m', 'muwa_telegram_import', 'telegram-login', '--state-dir', str(STATE)],
-                   env=environment, check=True)
-    # Confirm selected broadcast channel access without storing or importing
-    # messages. A wrong/non-accessible channel cannot start the watcher.
-    check = '''import asyncio, os
+    with pause_watcher():
+        environment = dict(os.environ, **values)
+        # Phone, OTP and optional Telegram 2FA stay inside the user's own terminal.
+        subprocess.run(['runuser', '-u', 'muwa-import', '--', str(Path(sys.executable)),
+                        '-m', 'muwa_telegram_import', 'telegram-login', '--state-dir', str(STATE)],
+                       env=environment, check=True)
+        # Confirm selected broadcast channel access without storing or importing
+        # messages. A wrong/non-accessible channel cannot start the watcher.
+        check = '''import asyncio, os
 from muwa_telegram_import.cli import telegram_client
 from muwa_telegram_import.state import State
 from telethon import types
@@ -92,21 +126,11 @@ async def verify():
         state.close()
 asyncio.run(verify())
 '''
-    environment['MUWA_SETUP_STATE'] = str(STATE)
-    subprocess.run(['runuser', '-u', 'muwa-import', '--', str(Path(sys.executable)), '-c', check],
-                   env=environment, check=True)
-    CONFIG.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
-    temporary = CONFIG.with_suffix('.json.new')
-    if temporary.exists():
-        raise ValueError('Обнаружен незавершённый файл настройки; требуется проверка.')
-    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        json.dump(values, stream)
-        stream.write('\n')
-        stream.flush()
-        os.fsync(stream.fileno())
-    os.replace(temporary, CONFIG)
-    subprocess.run(['systemctl', 'enable', '--now', SERVICE], check=True)
+        environment['MUWA_SETUP_STATE'] = str(STATE)
+        subprocess.run(['runuser', '-u', 'muwa-import', '--', str(Path(sys.executable)), '-c', check],
+                       env=environment, check=True)
+        write_config((json.dumps(values) + '\n').encode())
+        subprocess.run(['systemctl', 'enable', '--now', SERVICE], check=True)
     print('Импорт запущен. Черновики: ' + BACKEND + '/admin')
     print('Остановить: systemctl stop ' + SERVICE)
     print('Статус: systemctl status ' + SERVICE + ' --no-pager')

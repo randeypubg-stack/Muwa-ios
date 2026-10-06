@@ -186,7 +186,8 @@ actor ArtworkImageStore {
         return UIImage(cgImage: result)
       }
       do {
-        let (data, response) = try await URLSession.shared.data(from: url)
+        guard url.scheme == "https" else { return nil }
+        let (data, response) = try await BackendConfig.boundedData(for: URLRequest(url: url), using: .shared)
         guard let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode),
           let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
           let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, [

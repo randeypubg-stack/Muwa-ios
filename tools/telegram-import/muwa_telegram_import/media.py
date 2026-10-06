@@ -7,6 +7,9 @@ from pathlib import Path, PureWindowsPath
 
 MAX_AUDIO = 100 * 1024 * 1024
 MAX_COVER = 10 * 1024 * 1024
+# Demuxers may fetch nested URLs while probing, before format_name is checked.
+# Accept only the containers we publish and local, non-network input protocols.
+INPUT_POLICY = ["-protocol_whitelist", "file,pipe", "-format_whitelist", "mp3,wav,mov", "-max_alloc", "33554432"]
 
 
 class InvalidMedia(ValueError):
@@ -44,7 +47,7 @@ def inspect_audio(path: Path, hints: dict, language: str, cover_target: Path) ->
     if not 0 < size <= MAX_AUDIO:
         raise InvalidMedia("Аудио должно быть не больше 100 МиБ.")
     try:
-        process = subprocess.run(["ffprobe", "-v", "error", "-show_format", "-show_streams", "-of", "json", str(path)],
+        process = subprocess.run(["ffprobe", "-v", "error", *INPUT_POLICY, "-show_format", "-show_streams", "-of", "json", str(path)],
                                  capture_output=True, timeout=30, check=True)
         probe = json.loads(process.stdout)
         info = probe["format"]
@@ -79,10 +82,12 @@ def inspect_audio(path: Path, hints: dict, language: str, cover_target: Path) ->
         raise InvalidMedia("Пустые метаданные аудио.")
     cover = None
     attached = next((s for s in streams if s.get("disposition", {}).get("attached_pic")), None)
+    if attached and (not 0 < attached.get("width", 0) <= 8192 or not 0 < attached.get("height", 0) <= 8192 or attached["width"] * attached["height"] > 25_000_000):
+        raise InvalidMedia("Обложка превышает допустимые размеры.")
     if attached:
         try:
-            subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(path), "-map", "0:" + str(attached["index"]),
-                            "-frames:v", "1", "-vf", "scale=w='min(1024,iw)':h=-1", str(cover_target)],
+            subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", *INPUT_POLICY, "-i", str(path), "-map", "0:" + str(attached["index"]),
+                            "-frames:v", "1", "-vf", "scale=w='min(1024,iw)':h='min(1024,ih)':force_original_aspect_ratio=decrease", str(cover_target)],
                            capture_output=True, check=True, timeout=30)
             cover_type(cover_target)
             cover = cover_target

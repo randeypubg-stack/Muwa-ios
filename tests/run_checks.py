@@ -45,3 +45,14 @@ for executable, sources, check in [
         *[str(root/'Sources'/source) for source in sources], str(build/'AuditDiagnostics.swift'),
         *(['tests/FixtureCatalog.swift'] if 'Models/Track.swift' in sources else []), check], check=True)
     subprocess.run([str(build/executable)], check=True)
+
+subprocess.run(['swiftc', '-parse-as-library', '-o', str(build/'network-policy-checks'),
+    str(root/'Sources/Services/BackendConfig.swift'), 'tests/NetworkPolicyChecks.swift'], check=True)
+fixture = subprocess.Popen([sys.executable, 'tests/network_policy_fixture.py'], stdout=subprocess.PIPE, text=True)
+try:
+    origin = fixture.stdout.readline().strip()
+    if not origin.startswith('http://127.0.0.1:'): raise RuntimeError('Loopback networking fixture did not start')
+    subprocess.run([str(build/'network-policy-checks'), origin], check=True, timeout=60)
+finally:
+    fixture.terminate()
+    fixture.wait(timeout=5)

@@ -37,7 +37,7 @@ actor AuthService: AuthServing {
     configuration.httpCookieStorage = .shared
     configuration.timeoutIntervalForRequest = 30
     configuration.timeoutIntervalForResource = 60
-    self.session = URLSession(configuration: configuration)
+    self.session = BackendConfig.makeAPISession(configuration)
   }
 
   func restoreSession() async throws -> AuthUser? {
@@ -46,7 +46,7 @@ actor AuthService: AuthServing {
     request.httpMethod = "GET"
     request.httpShouldHandleCookies = true
     request.setValue("application/json", forHTTPHeaderField: "Accept")
-    let (data, response) = try await session.data(for: request)
+    let (data, response) = try await BackendConfig.boundedData(for: request, using: session)
     guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
     if http.statusCode == 401 { return nil }
     guard (200..<300).contains(http.statusCode) else {
@@ -82,7 +82,7 @@ actor AuthService: AuthServing {
     request.httpShouldHandleCookies = true
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.httpBody = try JSONEncoder().encode(Envelope(json: EmptyBody()))
-    let (data, response) = try await session.data(for: request)
+    let (data, response) = try await BackendConfig.boundedData(for: request, using: session)
     guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
     if !(200..<300).contains(http.statusCode) && http.statusCode != 401 {
       throw authError(data: data, status: http.statusCode, fallback: "Не удалось выйти из аккаунта.")
@@ -108,7 +108,7 @@ actor AuthService: AuthServing {
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.setValue("application/json", forHTTPHeaderField: "Accept")
     request.httpBody = try JSONEncoder().encode(Envelope(json: body))
-    let (data, response) = try await session.data(for: request)
+    let (data, response) = try await BackendConfig.boundedData(for: request, using: session)
     guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
     guard (200..<300).contains(http.statusCode) else {
       let fallback = http.statusCode == 409 ? "Аккаунт с такой почтой уже существует."

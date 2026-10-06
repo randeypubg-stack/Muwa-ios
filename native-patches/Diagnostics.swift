@@ -87,7 +87,7 @@ final class Diagnostics: NSObject, ObservableObject, MXMetricManagerSubscriber {
       request.httpMethod = "POST"; request.httpBody = data; request.timeoutInterval = 20
       request.setValue("application/json", forHTTPHeaderField: "Content-Type")
       do {
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await BackendConfig.boundedData(for: request)
         guard !Task.isCancelled, uploadRevision == revision, accountId == id, remoteEnabled else { return }
         if (response as? HTTPURLResponse)?.statusCode == 200 {
           let ids = Set(batch.map(\.id)); pending.removeAll { ids.contains($0.id) }; persistPending(); nextAttempt = Date().addingTimeInterval(30)

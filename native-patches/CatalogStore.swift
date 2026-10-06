@@ -21,7 +21,7 @@ final class CatalogStore: ObservableObject {
     let audio: String; let artwork: String?; let captionsRevision: Int
   }
 
-  init(defaults: UserDefaults = .standard, session: URLSession = .shared, baseURL: URL = BackendConfig.apiBaseURL) {
+  init(defaults: UserDefaults = .standard, session: URLSession = BackendConfig.authenticatedSession, baseURL: URL = BackendConfig.apiBaseURL) {
     self.session = session; self.baseURL = baseURL
     self.defaults = defaults
     let cached = defaults.data(forKey: cacheKey).flatMap { try? JSONDecoder().decode(Cache.self, from: $0) }
@@ -46,7 +46,7 @@ final class CatalogStore: ObservableObject {
     do {
       var request = URLRequest(url: baseURL.appending(path: "_api/catalog/tracks"))
       request.timeoutInterval = 20
-      let (data, response) = try await session.data(for: request)
+      let (data, response) = try await BackendConfig.boundedData(for: request, using: session)
       guard let http = response as? HTTPURLResponse, http.statusCode == 200, data.count <= 10 * 1024 * 1024 else { throw URLError(.badServerResponse) }
       let document = try JSONDecoder().decode(Document.self, from: data)
       guard document.version == 1, document.tracks.count <= 10000 else { throw URLError(.cannotParseResponse) }

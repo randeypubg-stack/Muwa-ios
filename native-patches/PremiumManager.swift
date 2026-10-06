@@ -226,7 +226,7 @@ enum MuwaPremiumAPI {
     let config = URLSessionConfiguration.ephemeral
     config.httpCookieStorage = nil
     config.httpShouldSetCookies = false
-    return URLSession(configuration: config)
+    return BackendConfig.makeAPISession(config)
   }()
 
   static func date(_ value: String) -> Date? {
@@ -253,7 +253,7 @@ enum MuwaPremiumAPI {
     }
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.httpBody = try JSONSerialization.data(withJSONObject: body)
-    let (data, response) = try await session.data(for: request)
+    let (data, response) = try await BackendConfig.boundedData(for: request, using: session)
     guard let http = response as? HTTPURLResponse else { throw error("Нет ответа сервера.") }
     guard (200..<300).contains(http.statusCode) else {
       let payload = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]

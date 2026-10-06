@@ -8,6 +8,7 @@ import stat
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 import wave
 from pathlib import Path
 from types import SimpleNamespace
@@ -33,6 +34,23 @@ class OwnerSetupTests(unittest.TestCase):
                            ('MUWA_IMPORT_BACKEND', 'https://other.invalid'), ('MUWA_IMPORT_PASSWORD', 'line\nbreak')]:
             with self.assertRaises(ValueError): setup.validate_config(dict(config, **{key: wrong}))
         with self.assertRaises(ValueError): setup.validate_config(dict(config, unexpected='x'))
+
+    def test_failed_reconfiguration_restores_private_config_and_running_watcher(self):
+        spec = importlib.util.spec_from_file_location('owner_setup', Path(__file__).resolve().parents[1] / 'setup-owner.py')
+        setup = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(setup)
+        with tempfile.TemporaryDirectory() as folder:
+            config = Path(folder) / 'config.json'
+            config.write_bytes(b'previous-private-fixture')
+            with patch.object(setup, 'CONFIG', config), patch.object(setup.subprocess, 'run', return_value=SimpleNamespace(returncode=0)) as run:
+                with self.assertRaises(KeyboardInterrupt):
+                    with setup.pause_watcher():
+                        setup.write_config(b'new-private-fixture')
+                        raise KeyboardInterrupt()
+                self.assertEqual(config.read_bytes(), b'previous-private-fixture')
+                self.assertEqual(stat.S_IMODE(config.stat().st_mode), 0o600)
+                self.assertEqual(run.call_args.args[0], ['systemctl', 'start', setup.SERVICE])
+                self.assertEqual(list(Path(folder).iterdir()), [config])
 
 
 def wav(path):
@@ -82,6 +100,28 @@ class ExportTests(unittest.TestCase):
             (self.root / "link.wav").symlink_to(outside)
             for name in ["../outside.wav", str(outside), "C:\\private\\secret.wav", "link.wav", "missing.wav"]:
                 with self.assertRaises(InvalidMedia): local_export_file(self.root, name)
+
+    def test_disguised_playlist_cannot_fetch_nested_network_urls(self):
+        import http.server
+        import threading
+        requests = []
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                requests.append(self.path)
+                self.send_response(404)
+                self.end_headers()
+            def log_message(self, *args): pass
+        with http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler) as server:
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                playlist = self.root / 'disguised.mp3'
+                playlist.write_text(f'#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXTINF:1,\nhttp://127.0.0.1:{server.server_port}/private.ts\n#EXT-X-ENDLIST\n')
+                with self.assertRaises(InvalidMedia): inspect_audio(playlist, {}, 'und', self.root / 'cover.jpg')
+                self.assertEqual(requests, [], 'Demuxer contacted a URL before rejecting the input')
+            finally:
+                server.shutdown()
+                thread.join(timeout=3)
 
     def test_corrupt_file_and_unknown_container_are_not_ready(self):
         bad = self.root / "bad.mp3"

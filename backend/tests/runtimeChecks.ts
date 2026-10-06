@@ -45,6 +45,15 @@ try {
  await status('auth/owner_setup',{token,password},403);
  const login=await request('auth/login_with_password',{email:'owner@muwa.invalid',password},{cookie:'',superjson:true});assert.equal(login.status,200);await login.arrayBuffer();checks++;
  await status('auth/login_with_password',{email:'owner@muwa.invalid',password:'incorrect-password' },401,{cookie:'',superjson:true});
+ // Prove bcrypt's 72-byte alias cannot become a valid login credential.
+ const {hash}=await import('bcryptjs');
+ const boundary='p'.repeat(72);
+ await sql`update user_passwords set password_hash=${await hash(boundary,10)} where user_id=1`;
+ await status('auth/login_with_password',{email:'owner@muwa.invalid',password:boundary+'suffix'},400,{cookie:'',superjson:true});
+ await status('auth/login_with_password',{email:'owner@muwa.invalid',password:'я'.repeat(37)},400,{cookie:'',superjson:true});
+ await status('auth/login_with_password',{email:'owner@muwa.invalid',password:boundary},200,{cookie:'',superjson:true});
+ await sql`update user_passwords set password_hash=${await hash(password,10)} where user_id=1`;
+
  const empty=await request('catalog/tracks');assert.deepEqual((await empty.json()).tracks,[]);assert.match(empty.headers.get('cache-control')!,/no-store/);checks++;
  const importSource={channelId:'-1000000012345',messageId:1};
  await status('admin/action',{action:'lookup-telegram-import',source:importSource},200);

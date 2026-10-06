@@ -106,7 +106,10 @@ class PlaybackService : MediaSessionService() {
         }
     }
     private fun currentTrack() = player.currentMediaItem?.mediaId?.let(AppGraph.library::track)
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
+    // Keep our app, notification controls, Bluetooth and trusted system clients;
+    // an arbitrary installed app must not supply URLs or change the queue.
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
+        session.takeIf { controllerInfo.uid == applicationInfo.uid || controllerInfo.isTrusted }
     override fun onTaskRemoved(rootIntent: Intent?) { if (!player.playWhenReady || player.mediaItemCount == 0) stopSelf() }
     override fun onDestroy() { scope.cancel(); SleepTimer.cancel(); SleepTimer.attach(null); session?.release(); player.release(); super.onDestroy() }
 }

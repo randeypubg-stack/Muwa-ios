@@ -171,7 +171,7 @@ actor PublicationUploadService {
       let data: Data
       let response: URLResponse
       do {
-        (data, response) = try await URLSession.shared.data(for: request)
+        (data, response) = try await BackendConfig.boundedData(for: request)
       } catch {
         lastTransportError = error
         if index < bases.count - 1 { continue }
@@ -220,10 +220,11 @@ actor PublicationUploadService {
     guard let url = URL(string: presigned), url.scheme == "https" else { throw URLError(.badURL) }
     var request = URLRequest(url: url)
     request.httpMethod = "PUT"
+    request.httpShouldHandleCookies = false
     request.setValue(contentType, forHTTPHeaderField: "Content-Type")
     for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
     request.timeoutInterval = 300
-    let (_, response) = try await URLSession.shared.upload(for: request, fromFile: file)
+    let (_, response) = try await BackendConfig.uploadSession.upload(for: request, fromFile: file)
     guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
       throw NSError(
         domain: "Muwa.Publication", code: 2,
@@ -235,10 +236,11 @@ actor PublicationUploadService {
     guard let url = URL(string: presigned), url.scheme == "https" else { throw URLError(.badURL) }
     var request = URLRequest(url: url)
     request.httpMethod = "PUT"
+    request.httpShouldHandleCookies = false
     request.setValue(contentType, forHTTPHeaderField: "Content-Type")
     for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
     request.timeoutInterval = 60
-    let (_, response) = try await URLSession.shared.upload(for: request, from: data)
+    let (_, response) = try await BackendConfig.uploadSession.upload(for: request, from: data)
     guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
       throw NSError(
         domain: "Muwa.Publication", code: 3,

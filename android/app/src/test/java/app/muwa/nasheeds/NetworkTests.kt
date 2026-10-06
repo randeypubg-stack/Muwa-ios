@@ -38,4 +38,45 @@ class NetworkTests {
             assertTrue("HTTP socket continued after coroutine cancellation", call.isCanceled())
         }
     }
+    @Test fun oversizedChunkedApiResponseIsRejectedWhileReading() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setChunkedBody("x".repeat(4096), 128))
+            val call = OkHttpClient().newCall(Request.Builder().url(server.url("/api")).build())
+            try { call.awaitResult { it.body!!.boundedText(1024) }; fail("Unbounded response accepted") }
+            catch (expected: IllegalArgumentException) { }
+        }
+    }
+
+    @Test fun oversizedChunkedAudioNeverWritesPastTheLimit() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setChunkedBody("x".repeat(4096), 128))
+            val partial = java.io.File.createTempFile("muwa-bounded-audio", ".part")
+            try {
+                val call = OkHttpClient().newCall(Request.Builder().url(server.url("/audio")).build())
+                try { call.awaitResult { transferAudio(it.body!!, partial, maximumBytes = 1024) }; fail("Oversized audio accepted") }
+                catch (expected: IllegalStateException) { }
+                assertTrue(partial.length() <= 1024)
+            } finally { partial.delete() }
+        }
+    }
+
+    @Test fun audioTransferAcceptsCompleteBodyAndRejectsCancellation() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("real transfer fixture"))
+            server.enqueue(MockResponse().setBody("cancelled fixture"))
+            val partial = java.io.File.createTempFile("muwa-cancel-audio", ".part")
+            try {
+                val client = OkHttpClient()
+                client.newCall(Request.Builder().url(server.url("/audio")).build()).awaitResult { transferAudio(it.body!!, partial) }
+                assertEquals("real transfer fixture", partial.readText())
+                try {
+                    client.newCall(Request.Builder().url(server.url("/audio")).build()).awaitResult {
+                        transferAudio(it.body!!, partial, checkActive = { throw CancellationException() })
+                    }
+                    fail("Cancelled transfer succeeded")
+                } catch (expected: CancellationException) { }
+            } finally { partial.delete() }
+        }
+    }
+
 }

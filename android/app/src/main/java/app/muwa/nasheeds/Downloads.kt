@@ -8,6 +8,7 @@ import okhttp3.Request
 import java.io.File
 
 class Downloads(context: Context, private val client: OkHttpClient) {
+    companion object { internal const val MAXIMUM_BYTES = 100 * 1024 * 1024L }
     private val prefs = context.getSharedPreferences("muwa.download.sources", Context.MODE_PRIVATE)
     private val folder = File(context.filesDir, "OfflineAudio").apply { mkdirs() }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -29,6 +30,7 @@ class Downloads(context: Context, private val client: OkHttpClient) {
     fun remove(track: Track) { if (jobs.containsKey(track.id)) { cancel(track); return }; check(File(folder, "${track.id}.mp3").let { !it.exists() || it.delete() }) { "Не удалось удалить файл." }; downloaded = downloaded - track.id; prefs.edit().remove(track.id).apply() }
     fun download(track: Track, onError: (Throwable) -> Unit) {
         if (local(track) != null || jobs.containsKey(track.id)) return
+        if (jobs.size >= 3) { onError(IllegalStateException("Дождитесь завершения текущих загрузок.")); return }
         progress[track.id] = 0f
         jobs[track.id] = scope.launch {
             val partial = File(folder, "${track.id}.part")
@@ -42,20 +44,15 @@ class Downloads(context: Context, private val client: OkHttpClient) {
                             check(response.isSuccessful) { "Не удалось скачать (${response.code})." }
                             val mime = response.header("Content-Type").orEmpty()
                             check(!mime.contains("html") && !mime.contains("json")) { "Сервер вернул файл неверного формата." }
-                            val body = requireNotNull(response.body); val total = body.contentLength(); var done = 0L; var last = 0L
-                            partial.outputStream().use { out -> body.byteStream().use { input ->
-                                val buffer = ByteArray(64 * 1024)
-                                while (true) {
-                                    downloadContext.ensureActive(); val count = input.read(buffer); if (count < 0) break
-                                    out.write(buffer, 0, count); done += count
-                                    if (System.currentTimeMillis() - last > 200) {
-                                        last = System.currentTimeMillis()
-                                        val value = if (total > 0) (done.toFloat() / total).coerceIn(0f,1f) else 0f
-                                        scope.launch { if (jobs[track.id] === owner && owner?.isActive == true) progress[track.id] = value }
-                                    }
-                                }
-                            } }
-                            check(done > 0) { "Скачан пустой файл." }
+                            val body = requireNotNull(response.body)
+                            transferAudio(body, partial, checkActive = { downloadContext.ensureActive() }) { value ->
+                                scope.launch { if (jobs[track.id] === owner && owner?.isActive == true) progress[track.id] = value }
+                            }
+                            val metadata = android.media.MediaMetadataRetriever()
+                            try {
+                                metadata.setDataSource(partial.absolutePath)
+                                check(metadata.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes") { "Файл не содержит аудио." }
+                            } finally { metadata.release() }
                         }
                         ensureActive()
                         check(partial.renameTo(File(folder, "${track.id}.mp3"))) { "Не удалось сохранить файл." }
@@ -68,4 +65,32 @@ class Downloads(context: Context, private val client: OkHttpClient) {
             finally { partial.delete(); progress.remove(track.id); jobs.remove(track.id) }
         }
     }
+}
+
+// Bounded streaming keeps cancellation active while the body is read. The caller
+// owns temporary-file cleanup and only publishes media after decoder validation.
+internal fun transferAudio(body: okhttp3.ResponseBody, partial: File,
+                           maximumBytes: Long = Downloads.MAXIMUM_BYTES,
+                           checkActive: () -> Unit = {}, onProgress: (Float) -> Unit = {}) {
+    val total = body.contentLength()
+    val reserve = 64 * 1024 * 1024L
+    check(total <= maximumBytes && partial.parentFile!!.usableSpace >= maxOf(total, 0) + reserve) { "Файл слишком большой или недостаточно места." }
+    var done = 0L
+    var last = 0L
+    partial.outputStream().use { out -> body.byteStream().use { input ->
+        val buffer = ByteArray(64 * 1024)
+        while (true) {
+            checkActive()
+            val count = input.read(buffer)
+            if (count < 0) break
+            check(done + count <= maximumBytes && partial.parentFile!!.usableSpace > count + reserve) { "Превышен размер файла или недостаточно места." }
+            out.write(buffer, 0, count)
+            done += count
+            if (System.currentTimeMillis() - last > 200) {
+                last = System.currentTimeMillis()
+                onProgress(if (total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else 0f)
+            }
+        }
+    } }
+    check(done > 0 && (total < 0 || done == total)) { "Файл пуст или загружен не полностью." }
 }

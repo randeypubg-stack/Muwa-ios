@@ -213,7 +213,7 @@ export async function handle(request: Request) {
         now.getTime() - RATE_LIMIT_CONFIG.lockoutWindowMinutes * 60 * 1000,
       );
       try {
-        const deleteResult = await db
+        await db
           .deleteFrom("loginAttempts")
           .where("attemptedAt", "<", cleanupBefore)
           .where("attemptedAt", "is not", null)

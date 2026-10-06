@@ -44,6 +44,6 @@ jobs:
         run: python -m unittest discover -s tools/telegram-import/tests -v
       - name: Check import transactions and existing backend contracts
         working-directory: backend
-        run: npm ci && npm test
+        run: npm ci && npm run typecheck && npm run build && npm audit --omit=dev && npm test && npm run test:runtime
         env:
           MUWA_TEST_DATABASE_URL: postgres://postgres:muwa-fixture-only@localhost:5432/muwa_audit

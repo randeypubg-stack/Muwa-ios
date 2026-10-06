@@ -88,7 +88,7 @@ final class SubtitleManager: ObservableObject {
     parts.queryItems = [URLQueryItem(name: "trackId", value: track.id)]
     var request = URLRequest(url: parts.url!); request.timeoutInterval = 20
     do {
-      let (data, response) = try await URLSession.shared.data(for: request)
+      let (data, response) = try await BackendConfig.boundedData(for: request)
       if (response as? HTTPURLResponse)?.statusCode == 200 {
         let result = try JSONDecoder().decode(ResponseBody.self, from: data)
         // A positive revision also represents an intentional removal of captions.
@@ -126,7 +126,7 @@ final class SubtitleManager: ObservableObject {
       let data: Data
       let response: URLResponse
       do {
-        (data, response) = try await URLSession.shared.data(for: request)
+        (data, response) = try await BackendConfig.boundedData(for: request)
       } catch {
         lastTransportError = error
         if index < bases.count - 1 { continue }
@@ -268,7 +268,7 @@ final class AISubtitleManager: ObservableObject {
     req.timeoutInterval = 240
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     req.httpBody = try JSONEncoder().encode(body)
-    let (data, response) = try await URLSession.shared.data(for: req)
+    let (data, response) = try await BackendConfig.boundedData(for: req)
     guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
     guard (200..<300).contains(http.statusCode) else {
       let payload = try? JSONDecoder().decode(AISubtitleAPIError.self, from: data)

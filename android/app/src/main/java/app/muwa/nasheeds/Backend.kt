@@ -37,6 +37,18 @@ internal suspend fun <T> Call.awaitResult(read: (Response) -> T): T = suspendCan
     })
 }
 
+internal fun ResponseBody.boundedText(maximumBytes: Long): String {
+    require(contentLength() <= maximumBytes) { "Ответ сервера слишком большой." }
+    val input = source()
+    val data = okio.Buffer()
+    while (true) {
+        val count = input.read(data, minOf(64 * 1024L, maximumBytes + 1 - data.size))
+        if (count < 0) break
+        require(data.size <= maximumBytes) { "Ответ сервера слишком большой." }
+    }
+    return data.readString(contentType()?.charset(Charsets.UTF_8) ?: Charsets.UTF_8)
+}
+
 private class SessionCookies(context: Context) : CookieJar {
     private val file = File(context.filesDir, "session.bin")
     private var cookies = mutableListOf<Cookie>()
@@ -73,14 +85,15 @@ class Backend(context: Context) {
         val url = okhttp3.HttpUrl.Builder().scheme("https").host("93.188.187.96").build()
     }
     private val cookies = SessionCookies(context)
-    private val client = OkHttpClient.Builder().cookieJar(cookies).connectTimeout(20, TimeUnit.SECONDS).readTimeout(45, TimeUnit.SECONDS).build()
-    internal val mediaClient = client.newBuilder().readTimeout(60, TimeUnit.SECONDS).build()
-    private val uploads = OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).readTimeout(300, TimeUnit.SECONDS).writeTimeout(300, TimeUnit.SECONDS).build()
+    private val client = OkHttpClient.Builder().cookieJar(cookies).followRedirects(false).followSslRedirects(false).connectTimeout(20, TimeUnit.SECONDS).readTimeout(45, TimeUnit.SECONDS).build()
+    // Catalogue audio redirects to a signed storage URL; TLS downgrades stay blocked.
+    internal val mediaClient = client.newBuilder().followRedirects(true).readTimeout(60, TimeUnit.SECONDS).build()
+    private val uploads = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).connectTimeout(20, TimeUnit.SECONDS).readTimeout(300, TimeUnit.SECONDS).writeTimeout(300, TimeUnit.SECONDS).build()
     suspend fun request(path: String, body: JSONObject? = null, envelope: Boolean = false): JSONObject = withContext(Dispatchers.IO) {
         val builder = Request.Builder().url("$base/_api/$path").header("Accept", "application/json")
         if (body != null) builder.post((if (envelope) JSONObject().put("json", body) else body).toString().toRequestBody("application/json".toMediaType()))
         client.newCall(builder.build()).awaitResult { response ->
-            val text = response.body?.string().orEmpty()
+            val text = response.body?.boundedText(10 * 1024 * 1024L).orEmpty()
             val raw = runCatching { JSONObject(text) }.getOrElse { throw IllegalStateException("Сервер вернул неверный ответ (${response.code}).") }
             val data = raw.optJSONObject("json") ?: raw
             if (!response.isSuccessful) throw ApiException(response.code, data.optString("error", data.optString("message", "Сервис недоступен. Повторите позже.")))

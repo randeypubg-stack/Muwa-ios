@@ -1,11 +1,21 @@
 import Foundation
 import Combine
+import AVFoundation
 
 private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
+  static let maximumBytes: Int64 = 100 * 1024 * 1024
+  private let lock = NSLock()
+  private var oversized = false
+  var exceededLimit: Bool { lock.lock(); defer { lock.unlock() }; return oversized }
   let onProgress: (Double) -> Void
   init(onProgress: @escaping (Double) -> Void) { self.onProgress = onProgress }
   func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
   func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+    if totalBytesWritten > Self.maximumBytes || totalBytesExpectedToWrite > Self.maximumBytes {
+      lock.lock(); oversized = true; lock.unlock()
+      downloadTask.cancel()
+      return
+    }
     guard totalBytesExpectedToWrite > 0 else { return }
     onProgress(min(1, max(0, Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))))
   }
@@ -70,6 +80,7 @@ final class DownloadManager: ObservableObject {
   func download(_ track: Track) async throws {
     if isDownloaded(track) { return }
     if let existing = tasks[track.id] { try await existing.value; return }
+    guard track.audioURL.scheme == "https", tasks.count < 3 else { throw URLError(.resourceUnavailable) }
     downloadingIDs.insert(track.id)
     progress[track.id] = 0
     lastError = nil
@@ -81,13 +92,22 @@ final class DownloadManager: ObservableObject {
             if self.downloadingIDs.contains(track.id) { self.progress[track.id] = value }
           }
         }
-        let (temp, response) = try await self.session.download(from: track.audioURL, delegate: delegate)
+        var request = URLRequest(url: track.audioURL)
+        request.timeoutInterval = 60
+        let result: (URL, URLResponse)
+        do { result = try await self.session.download(for: request, delegate: delegate) }
+        catch { if delegate.exceededLimit { throw URLError(.dataLengthExceedsMaximum) }; throw error }
+        let (temp, response) = result
         defer { try? self.fileManager.removeItem(at: temp) }
         try Task.checkCancellation()
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
           !(http.mimeType ?? "").contains("html"), !(http.mimeType ?? "").contains("json") else { throw URLError(.badServerResponse) }
         let size = (try temp.resourceValues(forKeys: [.fileSizeKey])).fileSize ?? 0
         guard size > 0 else { throw URLError(.zeroByteResource) }
+        guard size <= DownloadProgressDelegate.maximumBytes,
+          http.url?.scheme == "https",
+          response.expectedContentLength < 0 || response.expectedContentLength == Int64(size) || http.value(forHTTPHeaderField: "Content-Encoding") != nil else { throw URLError(.badServerResponse) }
+        guard try await AVURLAsset(url: temp).load(.isPlayable) else { throw URLError(.cannotDecodeContentData) }
         let destination = Self.destination(track, folder: self.folder)
         if self.fileManager.fileExists(atPath: destination.path) { try self.fileManager.removeItem(at: destination) }
         try self.fileManager.moveItem(at: temp, to: destination)

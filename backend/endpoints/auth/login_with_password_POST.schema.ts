@@ -4,7 +4,11 @@ import superjson from "superjson";
 
 export const schema = z.object({
   email: z.string().max(254).email("Email is required"),
-  password: z.string().min(1, "Password is required"),
+  // bcrypt ignores bytes after 72; reject them before comparing a credential.
+  password: z.string().min(1, "Password is required").max(72).refine(
+    value => new TextEncoder().encode(value).length <= 72,
+    "Password exceeds the supported byte length",
+  ),
 });
 
 export type OutputType = {
