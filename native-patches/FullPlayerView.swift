@@ -951,6 +951,7 @@ struct MorphingPlayerView: View {
         Image(systemName: "shuffle")
           .foregroundStyle(player.shuffleOn ? .white : .white.opacity(0.55))
           .frame(width: 44, height: 44)
+          .contentShape(Rectangle())
       }
       .accessibilityLabel("Перемешать")
       .accessibilityValue(player.shuffleOn ? "Включено" : "Выключено")
@@ -960,6 +961,7 @@ struct MorphingPlayerView: View {
         Image(systemName: "backward.fill")
           .font(.title2)
           .frame(width: sideSize, height: sideSize)
+          .contentShape(Rectangle())
       }
       .accessibilityLabel("Предыдущий нашид")
       .accessibilityIdentifier("player-previous")
@@ -978,6 +980,7 @@ struct MorphingPlayerView: View {
         Image(systemName: "forward.fill")
           .font(.title2)
           .frame(width: sideSize, height: sideSize)
+          .contentShape(Rectangle())
       }
       .accessibilityLabel("Следующий нашид")
       .accessibilityIdentifier("player-next")
@@ -988,6 +991,7 @@ struct MorphingPlayerView: View {
         Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
           .foregroundStyle(player.repeatOn ? .white : .white.opacity(0.55))
           .frame(width: 44, height: 44)
+          .contentShape(Rectangle())
       }
       .accessibilityLabel("Повтор")
       .accessibilityValue(player.repeatMode == .one ? "Один нашид" : player.repeatOn ? "Вся очередь" : "Выключено")

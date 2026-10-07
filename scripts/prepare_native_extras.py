@@ -36,6 +36,7 @@ files = {
     'ScreenHeader.swift': 'Views/Components',
     'HomeCollectionViews.swift': 'Views/Home',
     'QueueTrackRow.swift': 'Views/Player',
+    'QueueList.swift': 'Views/Player',
     'LibraryComponents.swift': 'Views/Library',
     'PlaylistDetailView.swift': 'Views/Library',
     'PlaylistCreateSheet.swift': 'Views/Library',

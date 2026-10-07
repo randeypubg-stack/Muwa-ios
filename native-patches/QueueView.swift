@@ -16,34 +16,19 @@ struct QueueView: View {
                                  description: Text("Добавьте нашиды через меню ⋮."))
             .foregroundStyle(MuwaPalette.secondary)
         } else {
-          List {
-            ForEach(library.queueTracks) { track in
-              QueueTrackRow(
-                track: track,
-                isCurrent: player.currentTrack?.id == track.id,
-                isPlaying: player.isPlaying,
-                play: { player.play(track); dismiss() },
-                remove: {
-                  withAnimation(reduceMotion ? nil : MuwaMotion.reorder) { library.removeFromQueue(track) }
-                },
-                move: { delta in moveBy(track.id, delta: delta) }
-              )
-              .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 12))
-              .listRowSeparator(.hidden)
-              .listRowBackground(Color.clear)
-              .accessibilityIdentifier("queue-row-" + track.id)
-            }
-            .onMove { source, destination in
-              withAnimation(reduceMotion ? nil : MuwaMotion.reorder) {
-                library.moveQueue(fromOffsets: source, toOffset: destination)
-              }
-            }
-          }
-          .listStyle(.plain)
-          .scrollContentBackground(.hidden)
-          .environment(\.editMode, .constant(.active))
-          .safeAreaPadding(.bottom, 20)
-
+          QueueList(
+            tracks: library.queueTracks,
+            currentID: player.currentTrack?.id,
+            isPlaying: player.isPlaying,
+            play: { player.play($0); dismiss() },
+            remove: { track in
+              withAnimation(reduceMotion ? nil : MuwaMotion.reorder) { library.removeFromQueue(track) }
+            },
+            move: { source, destination in
+              library.moveQueue(fromOffsets: source, toOffset: destination)
+            },
+            moveBy: moveBy
+          )
         }
       }
     }

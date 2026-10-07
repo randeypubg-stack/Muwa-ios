@@ -37,7 +37,12 @@ jobs:
   capture:
     name: Review CarPlay external display
     needs: source-security
-    runs-on: macos-15
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
+      MUWA_REVIEW_RUNTIME_VERSION: "27.0"
+      MUWA_REQUESTED_DEVICE: iPhone 18 Pro Max
+      MUWA_REQUESTED_IOS: "27.0"
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

@@ -37,6 +37,11 @@ class NavigationAndQueueTest {
                 compose.onNodeWithText("Все").performClick()
                 compose.onNodeWithText("Вся коллекция").assertExists()
                 UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
+                // UIAutomator returns after injecting Back, before Compose
+                // necessarily commits the destination on a busy emulator.
+                compose.waitUntil(timeoutMillis = 10_000) {
+                    compose.onAllNodesWithTag("home.screen").fetchSemanticsNodes().size == 1
+                }
                 compose.onNodeWithTag("home.screen").assertExists()
             }
     }

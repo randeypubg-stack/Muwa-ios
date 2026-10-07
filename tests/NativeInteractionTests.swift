@@ -23,7 +23,7 @@ final class NativeInteractionTests: XCTestCase {
   }
 
   private var queueQuery: XCUIElementQuery {
-    app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND NOT label BEGINSWITH %@", "queue-row-", "Удалить"))
+    app.cells.matching(NSPredicate(format: "identifier BEGINSWITH %@", "queue-row-"))
   }
   private var queueButtons: [XCUIElement] { queueQuery.allElementsBoundByIndex }
 
@@ -82,15 +82,15 @@ final class NativeInteractionTests: XCTestCase {
     XCTAssertGreaterThanOrEqual(before.count, 3)
     // Move the row containing artwork, metadata and controls using the system
     // reorder handle. This exercises UIKit's real lift/move/drop interaction.
-    let firstCell = app.cells.containing(.button, identifier: before[0]).firstMatch
-    let thirdCell = app.cells.containing(.button, identifier: before[2]).firstMatch
+    let firstCell = app.cells[before[0]]
+    let thirdCell = app.cells[before[2]]
     XCTAssertTrue(firstCell.exists && thirdCell.exists)
     shot("queue-before-move")
-    let handle = firstCell.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Reorder ")).firstMatch
+    let handle = firstCell.buttons.matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", "Reorder", "Reorder ")).firstMatch
     XCTAssertTrue(handle.exists)
     let start = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
     let end = thirdCell.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.95))
-    start.press(forDuration: 0.7, thenDragTo: end, withVelocity: .slow,
+    start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow,
                 thenHoldForDuration: 0.5)
     let expected = [before[1], before[2], before[0]]
     // A spring-backed List commits its new accessibility order asynchronously.
