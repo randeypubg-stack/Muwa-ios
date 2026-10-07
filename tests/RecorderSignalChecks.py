@@ -8,7 +8,8 @@ import sys
 import tempfile
 import time
 
-from capture_launch_ios import finish_recording, parse_home_proof, start_recording
+from capture_launch_ios import (finish_recording, parse_home_proof,
+                                start_recording, wait_recording_ready)
 
 
 with tempfile.TemporaryDirectory() as folder:
@@ -22,6 +23,7 @@ with tempfile.TemporaryDirectory() as folder:
         child = """
 import os, signal, sys, time
 assert os.isatty(0)
+assert os.isatty(1) and os.isatty(2)
 assert os.tcgetpgrp(0) == os.getpgrp() == os.getpid()
 assert signal.getsignal(signal.SIGINT) != signal.SIG_IGN
 assert not ({signal.SIGINT, signal.SIGTERM} & signal.pthread_sigmask(signal.SIG_BLOCK, set()))
@@ -41,6 +43,8 @@ while True: time.sleep(0.05)
                 time.sleep(0.01)
             os.write(terminal, b"\x03")
             assert process.wait(timeout=5) == 0
+            finish_recording(process, terminal, lambda *args, **kwargs: "", {})
+            terminal = None
         assert logpath.read_text().splitlines() == ["recording", "finalized"]
         print("Inherited SIGINT ignored and blocked: isolated recorder finalized via terminal Ctrl-C")
     finally:
@@ -81,6 +85,41 @@ with tempfile.TemporaryDirectory() as folder:
     else:
         raise AssertionError("Shared finalizer left the terminal open")
     print("PASS: owned recorder finalized via shared SIGINT helper, terminal closed")
+
+# Native C stdout is line buffered only on a terminal. Reproduce the missing
+# readiness message without a Python flush, then ensure large output cannot
+# block the recorder on a full PTY buffer.
+with tempfile.TemporaryDirectory() as folder:
+    logpath = Path(folder) / "buffered-recorder.log"
+    native_child = """
+import ctypes, signal, sys, time
+libc = ctypes.CDLL(None)
+def finish(signum, frame):
+    libc.printf(b'finalized\\n')
+    sys.exit(0)
+signal.signal(signal.SIGINT, finish)
+libc.printf(b'Recording started.\\n')
+libc.printf(b'x' * (512 * 1024) + b'\\n')
+while True: time.sleep(0.05)
+"""
+    status = {}
+    with logpath.open("w") as logfile:
+        process, terminal = start_recording([sys.executable, "-c", native_child], logfile)
+        try:
+            wait_recording_ready(process, logpath, seconds=5)
+            deadline = time.monotonic() + 5
+            while logpath.stat().st_size < 512 * 1024:
+                assert process.poll() is None
+                assert time.monotonic() < deadline, "Native output blocked on the PTY buffer"
+                time.sleep(0.01)
+        finally:
+            finish_recording(process, terminal,
+                             lambda *cmd, timeout: subprocess.check_output(cmd, text=True, timeout=timeout),
+                             status)
+    assert status["recorder_exit_code"] == 0
+    assert logpath.read_text().rstrip().endswith("finalized")
+    assert not process.muwa_output_reader.is_alive()
+    print("PASS: unflushed native readiness and large terminal output preserved")
 
 # Observed hosted Vision driver output must not corrupt a valid native proof.
 frame = {"homeVisible": True, "width": 1206, "height": 2622, "lines": ["Главная", "Нашиды без музыки"]}

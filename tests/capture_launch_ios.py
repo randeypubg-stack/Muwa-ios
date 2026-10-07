@@ -4,21 +4,24 @@ Run from the repository root after building the review app:
     python3 tests/capture_launch_ios.py
 
 The review build mounts the real Home while its account service is held for
-45 seconds. The mark animates in the toolbar, without blocking the app. This
+45 seconds. Home opens without a launch overlay or toolbar mark. This
 script never synthesizes frames or waits for artwork/network fixtures. It preserves recording logs and status.json even when capture fails.
 """
 import json
+import errno
 import fcntl
 import os
 from pathlib import Path
 import plistlib
 import pty
 import re
+import select
 import shutil
 import signal
 import struct
 import subprocess
 import termios
+import threading
 import time
 
 
@@ -28,13 +31,18 @@ APP_FOLDER = Path("build/PreviewDerivedData/Build/Products/Debug-iphonesimulator
 
 
 def start_recording(command, logfile):
-    """Give simctl a real controlling terminal, including its Ctrl-C signal.
+    """Give simctl terminal input AND output, preserving live readiness logs.
 
     Hosted shells can pass an ignored SIGINT to children. A detached process
     group alone does not restore that signal or provide terminal input.
-    This script is single-threaded; configure the child's terminal before exec.
+    Regular-file stdout can buffer the readiness acknowledgement even while
+    video frames are already encoded. Drain terminal output continuously into
+    the original log. Start that reader only after the child has been spawned.
     """
     master, slave = pty.openpty()
+    attributes = termios.tcgetattr(slave)
+    attributes[3] &= ~(termios.ECHO | termios.ECHONL)
+    termios.tcsetattr(slave, termios.TCSANOW, attributes)
 
     def prepare_terminal():
         signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -46,14 +54,42 @@ def start_recording(command, logfile):
         os.tcsetpgrp(slave, os.getpgrp())
 
     try:
-        process = subprocess.Popen(command, stdin=slave, stdout=logfile,
-                                   stderr=subprocess.STDOUT, start_new_session=True,
+        process = subprocess.Popen(command, stdin=slave, stdout=slave,
+                                   stderr=slave, start_new_session=True,
                                    preexec_fn=prepare_terminal)
     except BaseException:
         os.close(master)
         raise
     finally:
         os.close(slave)
+    output = os.dup(master)
+    process.muwa_output_errors = []
+
+    def copy_output():
+        try:
+            while True:
+                readable, _, _ = select.select([output], [], [], 0.1)
+                if not readable:
+                    if process.poll() is not None:
+                        break
+                    continue
+                try:
+                    data = os.read(output, 65536)
+                except OSError as error:
+                    if error.errno == errno.EIO:  # slave closed after recorder exit
+                        break
+                    raise
+                if not data:
+                    break
+                logfile.write(data.decode("utf-8", errors="replace"))
+                logfile.flush()
+        except Exception as error:
+            process.muwa_output_errors.append(type(error).__name__)
+        finally:
+            os.close(output)
+
+    process.muwa_output_reader = threading.Thread(target=copy_output, daemon=True)
+    process.muwa_output_reader.start()
     return process, master
 
 
@@ -75,6 +111,8 @@ def wait_recording_ready(process, log_path, seconds=45):
     """
     deadline = time.monotonic() + seconds
     while "Recording started" not in log_path.read_text():
+        if process.muwa_output_errors:
+            raise RuntimeError("Native recorder output could not be preserved")
         if process.poll() is not None or time.monotonic() >= deadline:
             raise RuntimeError(f"Native recorder did not become ready: {log_path.read_text()}")
         time.sleep(0.1)
@@ -157,8 +195,11 @@ def finish_recording(recorder, recorder_input, run, status):
                 raise RuntimeError("Simulator recorder did not finish after SIGINT")
         status["recorder_exit_code"] = recorder.returncode
     finally:
+        recorder.muwa_output_reader.join(timeout=5)
         if recorder_input is not None:
             os.close(recorder_input)
+        if recorder.muwa_output_reader.is_alive() or recorder.muwa_output_errors:
+            raise RuntimeError("Native recorder output did not finish draining")
 
 
 def parse_home_proof(output):
