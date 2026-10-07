@@ -31,8 +31,9 @@ services. See [Architecture](docs/ARCHITECTURE.md) and
 ambient lights, compact catalog collections and a shared persistent queue with
 animated controls. Reduced motion and power-saving modes stop background movement.
 
-Premium restrictions remain disabled for feature testing. New ASR generation and
-paid infrastructure are deferred by the owner. Production StoreKit/Play Billing,
+Premium restrictions remain disabled for feature testing. Local Whisper large-v3
+recognition now runs after uploads on Beget; see [the worker](tools/local-asr/README.md).
+Paid AI providers remain disabled. Production StoreKit/Play Billing,
 CarPlay provisioning and physical-device validation still require completion.
 
 The owner permits a public repository. CI scans source history and archives for

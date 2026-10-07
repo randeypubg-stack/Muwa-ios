@@ -49,19 +49,30 @@ Integration checks: unauthorized/ordinary account denial, admin creation, simult
 
 App Store review: custom unlock codes may conflict with Apple guideline 3.1.1. Current IPA implements the owner's explicit in-app gift request; do not represent it as approved for App Store. Apple subscriptions remain StoreKit-based. The user does not yet have Apple Developer.
 
-## AI remains deferred
-Owner decision, 2 October 2026: defer subtitle improvements while preparing a
-closed beta. Automatic original-text recognition after upload remains a future
-requirement; the implementation must permit changing ASR providers or using a
-local recognizer. Existing manual/cached captions continue to work. Recognition
-errors must not prevent uploading or publishing audio. Hosting and migration
-requirements are recorded in [the closed beta plan](../docs/CLOSED-BETA-HOSTING.md).
+## Local automatic recognition
+On 7 October 2026 the owner resumed subtitle recognition on the existing Beget
+server. [The local worker](../tools/local-asr/README.md) runs full Whisper large-v3
+with CPU int8 inference in a durable, sequential PostgreSQL queue. Verified
+catalog uploads, Telegram forwards and approved submissions queue automatically.
+Audio/publication never waits for ASR. Existing manual/cached captions remain
+available; changed audio, revoked leases and manual revisions reject stale
+results. Intentionally cleared manual captions are also preserved.
 
-Original provider adapter: server-only OpenAI Whisper 1 timestamps + GPT-4.1-mini translation into RU/EN/TR/UZ/KK/FR. Real ASR previously failed due exhausted provider credit. Owner chose a rented worker, then deferred it for lack of budget. New automatic generation is therefore explicitly paused in subtitleV2Service; existing cached documents are still readable, subtitles are free. No paid AI calls/provisioning were made in this change. Provider and document unit specs pass but are not evidence of real recognition quality.
+Confident original AR/RU/EN output becomes ordinary subtitles with acoustic word
+timings. Uncertain results remain in the owner's editor for review; translations
+are not fabricated. New local inference was checked on complete nasheeds: one
+71.7-second recording produced 14 lines for review, and another 145.8-second
+recording produced 24 automatic lines/109 acoustic words delivered by the native
+caption endpoint. The latter took 355.97 seconds on the 2-core/4-GiB VPS. These
+measurements verify operation, not word accuracy against human-reviewed lyrics.
+
+The previous paid OpenAI Whisper/GPT adapter remains paused in subtitleV2Service;
+its cached documents remain readable. It is separate from the enabled local
+upload worker. No paid ASR/translation requests are made.
 
 ## Security deployment
 
-Admin, security, Premium, subtitle v2 and Telegram migrations are applied in the
+Admin, security, Premium, subtitle v2, Telegram and local ASR migrations are applied in the
 fresh database. Existing authentication and handler contracts are preserved.
 Runtime additionally enforces owner-only beta access and disables registration.
 Production API/storage smoke passed with a trusted TLS connection; unit checks

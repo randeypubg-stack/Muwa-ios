@@ -21,7 +21,10 @@ Server-side user role is checked on every admin request, including uploads.
   without replacing track identity. Revision conflicts return 409.
 - Manual Arabic/Russian/English timed captions support preview, seek and JSON
   import/export; bounds and overlaps are validated. Replacing audio clears timing.
-- Automatic ASR is paused; uploading and publishing remain independent of it.
+- Local original-language ASR queues new uploads automatically, including Telegram
+  forwards. The caption editor shows progress, saved results and quality warnings;
+  the owner can retry and review text. Recognition never blocks upload/publication,
+  overwrites manual edits or restores intentionally cleared manual captions.
 - Publications preserve the audio/cover/submission.json readiness protocol.
 - Committed catalog/moderation mutations write the existing audit journal.
   Passwords, session tokens and signed file tickets are not journaled.
