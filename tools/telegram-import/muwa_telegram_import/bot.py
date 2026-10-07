@@ -253,13 +253,26 @@ def process_next(state, bot, api, config):
 def run(config, folder):
     logging.getLogger('httpx').setLevel(logging.WARNING)
     logging.getLogger('httpcore').setLevel(logging.WARNING)
-    bot, api, state = BotAPI(config['token']), MuwaAPI(config['backend']), State(folder)
+    state = State(folder)
+    bot, api = None, None
     try:
+        bot = BotAPI(config['token'])
+        api = MuwaAPI(config['backend'])
         me = bot.call('getMe')
         if not isinstance(me, dict) or me.get('id') != config['botId']:
             raise ValueError('Токен больше не соответствует настроенному боту.')
-        api.login(config['email'], config['password'])
-        api.action({'action': 'lookup-telegram-import', 'source': {'botId': config['botId'], 'chatId': config['ownerId'], 'messageId': 1}})
+        # API and bot start independently on a reboot/deploy. Retry only a
+        # temporary outage; invalid credentials/permissions still stop at once.
+        for attempt in range(5):
+            try:
+                api.login(config['email'], config['password'])
+                api.action({'action': 'lookup-telegram-import', 'source': {'botId': config['botId'], 'chatId': config['ownerId'], 'messageId': 1}})
+                break
+            except APIError as error:
+                if (error.status >= 500 or error.status == 429) and attempt < 4:
+                    time.sleep(60 if error.status == 429 else 2 ** (attempt + 1))
+                    continue
+                raise
         cursor = 'bot-updates:' + str(config['botId'])
         state.advance(cursor, config['nextOffset'] - 1)
         print('Muwa owner-only forwarding bot started; imported files remain drafts.', flush=True)
@@ -282,6 +295,6 @@ def run(config, folder):
                 print('bot_poll: HTTP_' + str(error.status), flush=True)
                 time.sleep(error.retry_after)
     finally:
-        bot.close()
-        api.close()
+        if bot is not None: bot.close()
+        if api is not None: api.close()
         state.close()

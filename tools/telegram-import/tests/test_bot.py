@@ -1,13 +1,14 @@
 import contextlib
 import io
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 import httpx
-from muwa_telegram_import.api import MuwaAPI
-from muwa_telegram_import.bot import BotAPI, BotError, MAX_BOT_AUDIO, audio_item, enqueue, owner_message, pair_owner, process_next
+from muwa_telegram_import.api import MuwaAPI, APIError
+from muwa_telegram_import.bot import BotAPI, BotError, MAX_BOT_AUDIO, audio_item, enqueue, owner_message, pair_owner, process_next, run
 from muwa_telegram_import.media import InvalidMedia
 from muwa_telegram_import.state import State
 
@@ -30,6 +31,31 @@ class OwnerBotTests(unittest.TestCase):
         self.state = State(Path(self.folder.name))
         self.addCleanup(self.state.close)
         self.bot = Mock()
+
+    def test_startup_recovers_from_temporary_api_outage(self):
+        api = Mock(); api.login.side_effect = [APIError(502), None]
+        self.bot.call.return_value = {'id': BOT}
+        self.bot.updates.side_effect = KeyboardInterrupt
+        config = {**CONFIG, 'token': TOKEN, 'backend': 'https://muwa.example.invalid', 'nextOffset': 1}
+        with patch('muwa_telegram_import.bot.BotAPI', return_value=self.bot), patch('muwa_telegram_import.bot.MuwaAPI', return_value=api), patch('muwa_telegram_import.bot.time.sleep') as sleep, contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(KeyboardInterrupt): run(config, Path(self.folder.name) / 'startup')
+            self.assertEqual(api.login.call_count, 2)
+            sleep.assert_called_once_with(2)
+
+    def test_startup_does_not_retry_invalid_owner_credentials(self):
+        api = Mock(); api.login.side_effect = APIError(401)
+        self.bot.call.return_value = {'id': BOT}
+        config = {**CONFIG, 'token': TOKEN, 'backend': 'https://muwa.example.invalid', 'nextOffset': 1}
+        with patch('muwa_telegram_import.bot.BotAPI', return_value=self.bot), patch('muwa_telegram_import.bot.MuwaAPI', return_value=api), patch('muwa_telegram_import.bot.time.sleep') as sleep:
+            with self.assertRaises(APIError): run(config, Path(self.folder.name) / 'startup')
+            api.login.assert_called_once(); sleep.assert_not_called()
+
+    @unittest.skipUnless(Path('/proc/self/fd').exists(), 'Linux worker descriptor audit')
+    def test_busy_importer_lock_does_not_leak_descriptors(self):
+        before = len(os.listdir('/proc/self/fd'))
+        for _ in range(10):
+            with self.assertRaises(BlockingIOError): State(Path(self.folder.name))
+        self.assertEqual(len(os.listdir('/proc/self/fd')), before)
 
     def test_actual_sender_and_private_chat_are_required_not_forwarded_identity(self):
         forged = message(sender=333)

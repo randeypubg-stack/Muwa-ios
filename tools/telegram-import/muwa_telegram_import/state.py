@@ -14,17 +14,22 @@ class State:
         os.chmod(folder, 0o700)
         self.folder = folder.resolve()
         self.lock = (self.folder / "import.lock").open("a")
-        fcntl.flock(self.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        path = self.folder / "state.sqlite"
-        if path.is_symlink():
-            raise ValueError("Небезопасный файл состояния.")
-        self.db = sqlite3.connect(path)
-        os.chmod(path, 0o600)
-        self.db.executescript("""
-          CREATE TABLE IF NOT EXISTS items(channel TEXT NOT NULL,message INTEGER NOT NULL,payload TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending',track TEXT,error TEXT,PRIMARY KEY(channel,message));
-          CREATE TABLE IF NOT EXISTS cursors(channel TEXT PRIMARY KEY,message INTEGER NOT NULL);
-        """)
+        try:
+            fcntl.flock(self.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            path = self.folder / "state.sqlite"
+            if path.is_symlink():
+                raise ValueError("Небезопасный файл состояния.")
+            self.db = sqlite3.connect(path)
+            os.chmod(path, 0o600)
+            self.db.executescript("""
+              CREATE TABLE IF NOT EXISTS items(channel TEXT NOT NULL,message INTEGER NOT NULL,payload TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',track TEXT,error TEXT,PRIMARY KEY(channel,message));
+              CREATE TABLE IF NOT EXISTS cursors(channel TEXT PRIMARY KEY,message INTEGER NOT NULL);
+            """)
+        except BaseException:
+            if hasattr(self, "db"): self.db.close()
+            self.lock.close()
+            raise
 
     def add(self, item, recheck=False):
         with self.db:
