@@ -52,6 +52,56 @@ const importTrack = (p, s = source) =>
     ...metadata,
   });
 describe("Telegram import in the existing catalogue", () => {
+  it("deduplicates bot forwards against channels without mixing their source namespace or changing curated metadata", async () => {
+    const first = await (await importTrack(await plan())).json();
+    await testPool.query(
+      "UPDATE catalog_tracks SET title='Curated',status='published' WHERE id=$1",
+      [first.trackId],
+    );
+    const botSource = {
+      botId: 123456789,
+      chatId: 987654321,
+      messageId: 1,
+      audioSha256: hash(audio),
+    };
+    const forwarded = await importTrack(await plan(), botSource);
+    expect(forwarded.status).toBe(200);
+    expect(await forwarded.json()).toEqual({
+      ok: true,
+      trackId: first.trackId,
+      importStatus: "duplicate",
+    });
+    const replay = await importTrack({ uploadId: randomUUID() }, botSource);
+    expect((await replay.json()).trackId).toBe(first.trackId);
+    const lookup = await request({
+      action: "lookup-telegram-import",
+      source: botSource,
+    });
+    expect((await lookup.json()).trackId).toBe(first.trackId);
+    const changed = { ...botSource, audioSha256: "a".repeat(64) };
+    expect(
+      (await request({ action: "lookup-telegram-import", source: changed }))
+        .status,
+    ).toBe(409);
+    expect(
+      (
+        await request(
+          { action: "lookup-telegram-import", source: botSource },
+          3,
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (await testPool.query("SELECT title,status FROM catalog_tracks")).rows,
+    ).toEqual([{ title: "Curated", status: "published" }]);
+    expect(
+      (
+        await testPool.query(
+          "SELECT count(*)::int AS n FROM catalog_telegram_bot_sources",
+        )
+      ).rows[0].n,
+    ).toBe(1);
+  });
   it("does not link old bytes to a track whose audio changed while its row was locked", async () => {
     const originalPlan = await plan();
     const manual = await request({
@@ -151,16 +201,57 @@ describe("Telegram import in the existing catalogue", () => {
     ).toBe(0);
   });
   it("denies other administrators, including client claims to own the app", async () => {
-    expect((await request({ action: "lookup-telegram-import", source, ownerId: 1, email: "randey.pubg@gmail.com" }, 4)).status).toBe(403);
-    expect((await request({ action: "import-telegram-track", source, uploadId: randomUUID(), ...metadata }, 4)).status).toBe(403);
-    expect((await testPool.query("select count(*)::int as n from catalog_telegram_sources")).rows[0].n).toBe(0);
+    expect(
+      (
+        await request(
+          {
+            action: "lookup-telegram-import",
+            source,
+            ownerId: 1,
+            email: "randey.pubg@gmail.com",
+          },
+          4,
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(
+          {
+            action: "import-telegram-track",
+            source,
+            uploadId: randomUUID(),
+            ...metadata,
+          },
+          4,
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await testPool.query(
+          "select count(*)::int as n from catalog_telegram_sources",
+        )
+      ).rows[0].n,
+    ).toBe(0);
   });
   it("fails closed without configured owner and never consumes an upload", async () => {
     const configured = process.env.MUWA_TELEGRAM_OWNER_ID;
     try {
       delete process.env.MUWA_TELEGRAM_OWNER_ID;
-      expect((await request({ action: "lookup-telegram-import", source })).status).toBe(403);
-      expect((await request({ action: "import-telegram-track", source, uploadId: randomUUID(), ...metadata })).status).toBe(403);
+      expect(
+        (await request({ action: "lookup-telegram-import", source })).status,
+      ).toBe(403);
+      expect(
+        (
+          await request({
+            action: "import-telegram-track",
+            source,
+            uploadId: randomUUID(),
+            ...metadata,
+          })
+        ).status,
+      ).toBe(403);
     } finally {
       process.env.MUWA_TELEGRAM_OWNER_ID = configured;
     }

@@ -30,6 +30,7 @@ import { telegramImportOwnerAllowed } from "./runtimeConfig";
 import {
   findTelegramSource,
   findAudioDuplicate,
+  telegramSourceDetails,
   lockAudio,
   lockTelegramSource,
   rememberAudio,
@@ -490,10 +491,13 @@ async function execute(
         if (duplicate) {
           await rememberTelegramSource(tx, source, duplicate, userId);
           // The unused private lease stays unconsumed for normal cleanup.
-          await audit(tx, userId, "telegram.linked", duplicate, {
-            channelId: source.channelId,
-            messageId: source.messageId,
-          });
+          await audit(
+            tx,
+            userId,
+            "telegram.linked",
+            duplicate,
+            telegramSourceDetails(source),
+          );
           return { ok: true, trackId: duplicate, importStatus: "duplicate" };
         }
       }
@@ -550,10 +554,13 @@ async function execute(
         audioReplaced: !!audio,
       });
       if (source)
-        await audit(tx, userId, "telegram.imported", id, {
-          channelId: source.channelId,
-          messageId: source.messageId,
-        });
+        await audit(
+          tx,
+          userId,
+          "telegram.imported",
+          id,
+          telegramSourceDetails(source),
+        );
       return {
         ok: true,
         trackId: id,

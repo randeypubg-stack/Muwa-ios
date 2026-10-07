@@ -3,11 +3,27 @@ import { db } from "./db";
 import type { DB } from "./schema";
 import { SecurityError } from "./requestSecurity";
 
-export type TelegramSource = {
-  channelId: string;
+export type TelegramSource = (
+  | {
+      channelId: string;
+    }
+  | {
+      botId: number;
+      chatId: number;
+    }
+) & {
   messageId: number;
   audioSha256?: string;
 };
+export function telegramSourceDetails(source: TelegramSource) {
+  return "channelId" in source
+    ? { channelId: source.channelId, messageId: source.messageId }
+    : {
+        botId: source.botId,
+        chatId: source.chatId,
+        messageId: source.messageId,
+      };
+}
 type Match = { trackId: string; audioSha256: string };
 
 // No network calls while these transaction-scoped locks are held. Shared with
@@ -21,7 +37,16 @@ export async function lockTelegramSource(
   tx: Transaction<DB>,
   source: TelegramSource,
 ) {
-  await sql`select pg_advisory_xact_lock(hashtextextended(${"muwa-telegram:" + source.channelId + ":" + source.messageId},0))`.execute(
+  const key =
+    "channelId" in source
+      ? "muwa-telegram:" + source.channelId + ":" + source.messageId
+      : "muwa-telegram-bot:" +
+        source.botId +
+        ":" +
+        source.chatId +
+        ":" +
+        source.messageId;
+  await sql`select pg_advisory_xact_lock(hashtextextended(${key},0))`.execute(
     tx,
   );
 }
@@ -30,10 +55,15 @@ export async function findTelegramSource(
   connection: typeof db | Transaction<DB> = db,
 ) {
   const row = (
-    await sql<Match>`select track_id,audio_sha256 from catalog_telegram_sources
+    "channelId" in source
+      ? await sql<Match>`select track_id,audio_sha256 from catalog_telegram_sources
     where channel_id=${source.channelId} and message_id=${source.messageId}`.execute(
-      connection,
-    )
+          connection,
+        )
+      : await sql<Match>`select track_id,audio_sha256 from catalog_telegram_bot_sources
+    where bot_id=${source.botId} and chat_id=${source.chatId} and message_id=${source.messageId}`.execute(
+          connection,
+        )
   ).rows[0];
   if (!row) return null;
   if (source.audioSha256 && row.audioSha256 !== source.audioSha256)
@@ -81,8 +111,14 @@ export async function rememberTelegramSource(
   trackId: string,
   userId: number,
 ) {
-  await sql`insert into catalog_telegram_sources(channel_id,message_id,audio_sha256,track_id,imported_by)
-    values(${source.channelId},${source.messageId},${source.audioSha256},${trackId},${userId})`.execute(
-    tx,
-  );
+  if ("channelId" in source)
+    await sql`insert into catalog_telegram_sources(channel_id,message_id,audio_sha256,track_id,imported_by)
+      values(${source.channelId},${source.messageId},${source.audioSha256},${trackId},${userId})`.execute(
+      tx,
+    );
+  else
+    await sql`insert into catalog_telegram_bot_sources(bot_id,chat_id,message_id,audio_sha256,track_id,imported_by)
+      values(${source.botId},${source.chatId},${source.messageId},${source.audioSha256},${trackId},${userId})`.execute(
+      tx,
+    );
 }

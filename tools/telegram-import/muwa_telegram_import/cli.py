@@ -34,6 +34,7 @@ def arguments(argv=None):
     live.add_argument("--scan-limit", type=int, default=500, help="Число сообщений на цикл, включая неаудио")
     login = commands.add_parser("telegram-login")
     login.add_argument("--state-dir", type=Path, default=Path(".muwa-telegram"))
+    login.add_argument("--qr", action="store_true", help="Вход по QR без SMS; нужен второй экран")
     args = parser.parse_args(argv)
     if args.command != "telegram-login":
         if not re.fullmatch(r"[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,6})?", args.language) or len(args.language) > 10:
@@ -158,7 +159,11 @@ async def run_telegram(args):
         client = await telegram_client(state)
         if args.command == "telegram-login":
             # Telegram's OTP/2FA prompts stay in the operator's local terminal.
-            await client.start()
+            if args.qr:
+                from .login import approve_login
+                await approve_login(client)
+            else:
+                await client.start()
             print("Telegram-сессия сохранена локально с правами 0600.")
             return 0
         if not await client.is_user_authorized():
@@ -248,6 +253,9 @@ def main(argv=None):
     except Exception as error:
         # In particular, an SDK RPC exception must not dump its request,
         # account phone number or a signed URL through a traceback.
-        print("Импорт остановлен: " + type(error).__name__ + ". Секреты и запрос в журнал не записаны.", file=sys.stderr)
+        diagnostic = type(error).__name__
+        if isinstance(error, AttributeError) and error.name in {"token", "url", "expires", "_resp", "print_ascii", "flush"}:
+            diagnostic += " (поле " + error.name + ")"
+        print("Импорт остановлен: " + diagnostic + ". Секреты и запрос в журнал не записаны.", file=sys.stderr)
         status = 1
     raise SystemExit(status)

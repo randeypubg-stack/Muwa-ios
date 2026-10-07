@@ -59,7 +59,8 @@ class MuwaAPI:
         raise APIError(503)
 
     def import_audio(self, item: dict, path: Path, media: dict, cover: Path | None = None):
-        source = {"channelId": item["channelId"], "messageId": item["messageId"], "audioSha256": media["audioSha256"]}
+        identity = {"botId": item["botId"], "chatId": item["chatId"]} if item.get("kind") == "bot" else {"channelId": item["channelId"]}
+        source = {**identity, "messageId": item["messageId"], "audioSha256": media["audioSha256"]}
         found = self.action({"action": "lookup-telegram-import", "source": source}, retry=True)
         if found.get("trackId"):
             return found

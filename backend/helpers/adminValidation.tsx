@@ -63,14 +63,23 @@ const metadata = {
   language: z.string().trim().min(2).max(10),
   duration: z.number().finite().positive().max(86400),
 };
-const telegramSource = z.object({
-  channelId: z.string().regex(/^-[0-9]{13,16}$/),
-  messageId: z.number().int().positive().max(2147483647),
-  audioSha256: z
-    .string()
-    .regex(/^[a-f0-9]{64}$/)
-    .optional(),
-});
+const audioSha256 = z.string().regex(/^[a-f0-9]{64}$/);
+const telegramChannelSource = z
+  .object({
+    channelId: z.string().regex(/^-[0-9]{13,16}$/),
+    messageId: z.number().int().positive().max(2147483647),
+    audioSha256: audioSha256.optional(),
+  })
+  .strict();
+const telegramBotSource = z
+  .object({
+    botId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    chatId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    messageId: z.number().int().positive().max(2147483647),
+    audioSha256: audioSha256.optional(),
+  })
+  .strict();
+const telegramSource = z.union([telegramChannelSource, telegramBotSource]);
 const action = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("lookup-telegram-import"),
@@ -78,9 +87,10 @@ const action = z.discriminatedUnion("action", [
   }),
   z.object({
     action: z.literal("import-telegram-track"),
-    source: telegramSource.extend({
-      audioSha256: z.string().regex(/^[a-f0-9]{64}$/),
-    }),
+    source: z.union([
+      telegramChannelSource.extend({ audioSha256 }),
+      telegramBotSource.extend({ audioSha256 }),
+    ]),
     uploadId: z.string().uuid(),
     ...metadata,
     status: z.literal("draft"),

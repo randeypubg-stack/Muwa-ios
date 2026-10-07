@@ -21,6 +21,21 @@ from muwa_telegram_import.state import State
 
 
 class OwnerSetupTests(unittest.TestCase):
+    def test_setup_error_explains_account_failure_without_echoing_secrets(self):
+        spec = importlib.util.spec_from_file_location('owner_setup', Path(__file__).resolve().parents[1] / 'setup-owner.py')
+        setup = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(setup)
+        for status in [401, 403, 429, 503]:
+            error = APIError(status)
+            error.args = ('private-fixture-password-and-response-body',)
+            message = setup.setup_error_message(error)
+            self.assertIn(str(status), message)
+            self.assertNotIn('private-fixture', message)
+        self.assertIn('новой панели', setup.setup_error_message(APIError(401)))
+        self.assertIn('владельца', setup.setup_error_message(APIError(403)))
+        self.assertIn('15 минут', setup.setup_error_message(APIError(429)))
+        self.assertNotIn('private-fixture', setup.setup_error_message(RuntimeError('private-fixture')))
+
     def test_failed_setup_preserves_an_inactive_watcher_and_original_config(self):
         spec = importlib.util.spec_from_file_location('owner_setup', Path(__file__).resolve().parents[1] / 'setup-owner.py')
         setup = importlib.util.module_from_spec(spec)

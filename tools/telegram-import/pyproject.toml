@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "muwa-telegram-import"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["httpx==0.28.1", "Telethon==1.45.0"]
+dependencies = ["httpx==0.28.1", "Telethon==1.45.0", "qrcode==8.2"]
 description = "Import Telegram audio into the existing authenticated Muwa catalogue"
 
 [project.scripts]

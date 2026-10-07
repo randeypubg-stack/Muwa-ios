@@ -34,9 +34,13 @@ class State:
                 self.db.execute("UPDATE items SET payload=?,status='pending',error=NULL WHERE channel=? AND message=?",
                                 (json.dumps(item, ensure_ascii=False), item["channelId"], item["messageId"]))
 
-    def pending(self, channel=None, limit=100, provider=None):
-        return [json.loads(r[0]) for r in self.db.execute("SELECT payload FROM items WHERE status IN ('pending','error','ready') AND (? IS NULL OR channel=?) AND (? IS NULL OR json_extract(payload,'$.kind')=?) ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'ready' THEN 1 ELSE 2 END,channel,message LIMIT ?",
-                                                        (channel, channel, provider, provider, limit))]
+    def pending(self, channel=None, limit=100, provider=None, include_errors=True):
+        return [json.loads(r[0]) for r in self.db.execute("SELECT payload FROM items WHERE (status IN ('pending','ready') OR (? AND status='error')) AND (? IS NULL OR channel=?) AND (? IS NULL OR json_extract(payload,'$.kind')=?) ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'ready' THEN 1 ELSE 2 END,channel,message LIMIT ?",
+                                                        (include_errors, channel, channel, provider, provider, limit))]
+
+    def retry_errors(self, provider):
+        with self.db:
+            return self.db.execute("UPDATE items SET status='pending',error=NULL WHERE status='error' AND json_extract(payload,'$.kind')=?", (provider,)).rowcount
 
     def mark(self, item, status, track=None, error=None):
         with self.db:
