@@ -14,12 +14,12 @@ on:
       source_run_id:
         description: Verified native build run ID
         type: string
-        default: "37289636605"
+        default: "37655981843"
         required: true
       source_artifact_name:
         description: Full-source artifact from that build
         type: string
-        default: Muwa-Full-Source-117
+        default: Muwa-Full-Source-132
         required: true
   push:
     branches: [feat/muwa-native-build35]
@@ -37,10 +37,13 @@ jobs:
   capture:
     name: Review CarPlay external display
     needs: source-security
-    runs-on: xcode-27
+    # Xcode 27 preview runners provide headless iOS 27 but no Simulator.app.
+    # Keep primary phone/tablet verification on iOS 27; this additional GUI
+    # capture honestly reports its compatible CarPlay runtime in status.json.
+    runs-on: macos-26
     env:
-      DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
-      MUWA_REVIEW_RUNTIME_VERSION: "27.0"
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      MUWA_REVIEW_RUNTIME_VERSION: "26.5"
       MUWA_REQUESTED_DEVICE: iPhone 18 Pro Max
       MUWA_REQUESTED_IOS: "27.0"
     timeout-minutes: 20
@@ -50,8 +53,8 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ${{ inputs.source_artifact_name || 'Muwa-Full-Source-117' }}
-          run-id: ${{ inputs.source_run_id || '37289636605' }}
+          name: ${{ inputs.source_artifact_name || 'Muwa-Full-Source-132' }}
+          run-id: ${{ inputs.source_run_id || '37655981843' }}
           github-token: ${{ github.token }}
           path: build/carplay-source
       - name: Build CarPlay review with Xcode simulator signing

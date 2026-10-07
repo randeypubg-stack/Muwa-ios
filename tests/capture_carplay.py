@@ -15,6 +15,7 @@ from pathlib import Path
 
 from verify_home_frame import (MODEL_COMMIT, MODEL_DIRECTORY, MIN_CONFIDENCE,
                                digest, png_dimensions, verify_models)
+from select_apple_review_devices import open_simulator_gui
 
 
 def carplay_target(tsv, width, height):
@@ -252,7 +253,13 @@ def capture():
         run('xcrun', 'simctl', 'install', udid, str(app), timeout=180)
         data = Path(run('xcrun', 'simctl', 'get_app_container', udid, 'app.muwa.nasheeds', 'data').strip())
         (data / 'Documents/carplay-connected.txt').unlink(missing_ok=True)
-        run('open', '-a', 'Simulator', '--args', '-CurrentDeviceUDID', udid)
+        # LaunchServices may not register an app named Simulator, and a stripped
+        # CLI runner may have no GUI at all. Use the selected toolchain's exact
+        # bundle; never substitute a different Simulator/runtime silently.
+        status['simulatorGUI'] = open_simulator_gui(udid)
+        save_status()
+        if not status['simulatorGUI']['opened']:
+            raise RuntimeError('The selected Xcode has no usable Simulator GUI for CarPlay capture')
         time.sleep(3)
         # Launch the phone scene before enabling the automotive display. SpringBoard
         # may reject a new foreground phone launch while the CarPlay display is active.
