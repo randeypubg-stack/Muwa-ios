@@ -305,8 +305,20 @@ private struct AISubtitleReader: View {
       .background(Color.black)
       .navigationTitle("Оригинал и перевод")
       .navigationBarTitleDisplayMode(.inline)
-      .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Готово") { dismiss() } } }
+      .toolbar {
+        ToolbarItem(placement: .topBarLeading) {
+          Button {
+            Task { await manager.load(track, retry: true) }
+          } label: { Image(systemName: "arrow.clockwise") }
+          .disabled(manager.isRecognizing)
+          .accessibilityLabel("Обновить субтитры")
+        }
+        ToolbarItem(placement: .topBarTrailing) { Button("Готово") { dismiss() } }
+      }
       .task(id: (manager.document?.id ?? "") + "|" + language.rawValue) { await manager.translate(language) }
+      .onChange(of: manager.availableLanguages) { _, available in
+        if !available.contains(language) { language = .original }
+      }
     }.preferredColorScheme(.dark)
   }
 }

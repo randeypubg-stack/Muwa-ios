@@ -1,4 +1,5 @@
 import AVFoundation
+import Combine
 import MediaPlayer
 import SwiftUI
 import UIKit
@@ -33,6 +34,7 @@ final class PlayerManager: ObservableObject {
   private var itemStatusObserver: NSKeyValueObservation?
   private var controlStatusObserver: NSKeyValueObservation?
   private var prefetchTask: Task<Void, Never>?
+  private var catalogChanges: AnyCancellable?
   private var sleepTask: Task<Void, Never>?
   @Published private(set) var hasStartedPlaybackThisSession = false
   @Published private(set) var resumeCandidate: PlaybackResumeCandidate?
@@ -69,6 +71,16 @@ final class PlayerManager: ObservableObject {
     self.library = library
     self.downloads = downloads
     self.premium = premium
+
+    catalogChanges = CatalogStore.shared.$tracks.dropFirst().sink { [weak self] tracks in
+      guard let self, let playing = self.currentTrack,
+        let updated = tracks.first(where: { $0.id == playing.id }),
+        updated.audioURL == playing.audioURL, updated != playing else { return }
+      // New caption revisions update the reader without recreating AVPlayer or
+      // resetting playback. Replaced audio keeps its own original metadata.
+      self.currentTrack = updated
+      self.updateNowPlaying(force: true)
+    }
 
     // A fresh app process must not expose stale system Now Playing metadata
     // from a previous listening session before the user starts a track again.

@@ -29,7 +29,7 @@ CREATE OR REPLACE FUNCTION muwa_asr_language(p_language text)
 RETURNS text LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
  SELECT CASE
   WHEN lower(p_language) ~ '^ar([_-][a-z0-9]{2,8})*$'
-    OR lower(p_language) IN ('arb','arz','ary','arq','aeb','acm','acw','acx','apc','ajp','afb','ayh','ayl','ayn','abh') THEN 'ar'
+    OR lower(p_language) IN ('aao','abh','abv','acm','acq','acw','acx','acy','adf','aeb','aec','afb','ajp','apc','apd','arb','arq','ars','ary','arz','auz','avl','ayh','ayl','ayn','ayp','pga','shu','ssh') THEN 'ar'
   WHEN lower(p_language) ~ '^[a-z]{2,3}$' THEN lower(p_language)
   ELSE 'und' END;
 $$;

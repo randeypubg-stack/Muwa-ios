@@ -97,7 +97,7 @@ describe("Local recognition queue and protected captions", () => {
     else process.env.MUWA_LOCAL_ASR_ENABLED = enabled;
   });
   it("maps Arabic regional and dialect tags to original Arabic transcription", async () => {
-    for (const language of ["ar", "ar-Arab-EG", "ar-EG", "ar-SA", "ar-IQ", "ar-MA", "ar-DZ", "ar-SY", "ar-AE", "ar-TN", "ar-YE", "arz", "ary", "acm", "apc", "arb"]) {
+    for (const language of ["ar", "ar-Arab-EG", "ar-EG", "ar-SA", "ar-IQ", "ar-MA", "ar-DZ", "ar-SY", "ar-AE", "ar-TN", "ar-YE", "arz", "ary", "acm", "apc", "arb", "apd", "ars", "acq", "shu", "abv", "aao", "ayp"]) {
       expect((await query("select muwa_asr_language($1) as language", [language]))[0].language).toBe("ar");
     }
     expect((await query("select muwa_asr_language('und') as language"))[0].language).toBe("und");

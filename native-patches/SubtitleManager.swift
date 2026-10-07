@@ -214,10 +214,11 @@ final class AISubtitleManager: ObservableObject {
   func load(_ track: Track, retry: Bool = false) async {
     let isCatalog = track.cdnSourcePath == nil
     let key = isCatalog ? "\(track.id)|\(track.audioURL.absoluteString)|r\(track.captionsRevision ?? 0)" : track.audioURL.absoluteString
-    if source == key && (document != nil || isRecognizing || (!retry && error != nil)) { return }
+    if source == key && (isRecognizing || (!retry && (document != nil || error != nil))) { return }
     if source == key && retry && Date() < retryAfter { return }
     let id = UUID(); requestID = id; translationID = UUID()
-    source = key; document = nil; translations = [:]; error = nil; translatingLanguage = nil; publishedSource = nil
+    if source != key || !retry { document = nil; translations = [:]; publishedSource = nil }
+    source = key; error = nil; translatingLanguage = nil
     isRecognizing = true
     defer { if requestID == id { isRecognizing = false } }
     do {
@@ -232,6 +233,7 @@ final class AISubtitleManager: ObservableObject {
         guard requestID == id, !Task.isCancelled else { return }
         publishedSource = payload.source
         guard !payload.segments.isEmpty else {
+          document = nil; translations = [:]
           throw AISubtitleAPIError(message: "Текст ещё готовится или ожидает проверки владельцем. Попробуйте обновить позже.", code: "NOT_READY")
         }
         installPublished(track: track, captions: payload.segments, revision: payload.revision)
