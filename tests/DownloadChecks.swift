@@ -2,7 +2,7 @@ import Foundation
 
 @main
 struct DownloadChecks {
-  @MainActor static func main() throws {
+  @MainActor static func main() async throws {
     CatalogStore.shared.installReviewTracks(Track.reviewCatalog)
     let suite = "muwa.download.audit.\(UUID())"
     let defaults = UserDefaults(suiteName: suite)!
@@ -24,6 +24,30 @@ struct DownloadChecks {
     try existing.remove(track)
     precondition(existing.localURL(for: track) == nil && existing.storageBytes == 0)
     precondition(DownloadManager(defaults: defaults, folder: folder).downloadedIDs.isEmpty, "Deleted download reappeared after restart")
+    if CommandLine.arguments.count > 1 {
+      let base = URL(string: CommandLine.arguments[1])!
+      for ext in ["mp3", "m4a", "wav"] {
+        let remote = base.appending(path: "media").appending(queryItems: [URLQueryItem(name: "format", value: ext)])
+        let value = Track(id: "test-\(ext)", title: "Fixture", artist: "Muwa", duration: 1, artworkURL: nil, audioURL: remote)
+        CatalogStore.shared.installReviewTracks([value])
+        let manager = DownloadManager(defaults: defaults, folder: folder)
+        try await manager.download(value)
+        guard let saved = manager.localURL(for: value) else { preconditionFailure("Playable download was not registered") }
+        precondition(saved.pathExtension == ext, "Container suffix lost for a catalog URL without an extension")
+        precondition(manager.progress.isEmpty && manager.downloadingIDs.isEmpty)
+        let restarted = DownloadManager(defaults: defaults, folder: folder)
+        precondition(restarted.localURL(for: value) == saved, "Offline container type lost after restart")
+        try restarted.remove(value)
+        precondition(!FileManager.default.fileExists(atPath: saved.path))
+      }
+      let invalid = Track(id: "invalid", title: "Invalid", artist: "Muwa", duration: 1, artworkURL: nil, audioURL: base.appending(path: "invalid-audio"))
+      let manager = DownloadManager(defaults: defaults, folder: folder)
+      do { try await manager.download(invalid); preconditionFailure("Non-audio response was registered offline") }
+      catch { precondition(manager.localURL(for: invalid) == nil) }
+      precondition(manager.progress.isEmpty && manager.downloadingIDs.isEmpty)
+      let remaining = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+      precondition(remaining.isEmpty, "Failed download left a temporary file")
+    }
     print("PASS: offline file validation, size accounting, deletion and restart")
   }
 }

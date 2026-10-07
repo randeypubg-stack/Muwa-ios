@@ -135,7 +135,7 @@ private struct CollectionTrackList: View {
       LazyVStack(spacing: 12) {
         ForEach(tracks) { track in
           TrackRow(track: track, isPlaying: player.currentTrack?.id == track.id && player.isPlaying,
-                   action: { player.play(track) },
+                   action: { player.play(track, in: tracks) },
                    playNextAction: { library.addNext(track, after: player.currentTrack) },
                    addToQueueAction: { library.ensureQueueContains(track) })
         }

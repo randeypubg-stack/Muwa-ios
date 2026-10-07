@@ -96,13 +96,20 @@ struct AISubtitleExperience: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .accessibilityLabel("AI-субтитры. Открыть полный текст")
+    .accessibilityLabel("Субтитры. Открыть полный текст")
     .accessibilityValue(manager.document != nil ? "Оригинальный текст доступен"
       : hasContent ? "Обычные субтитры доступны"
       : manager.isRecognizing ? "Загрузка текста" : "Текст пока недоступен")
     .preference(key: PlayerSubtitleRailAvailabilityKey.self, value: hasContent ? [track.id] : [])
     .task(id: track.id) { legacySubtitles.load(for: track) }
-    .task(id: track.audioURL) { await manager.load(track) }
+    .task(id: track.audioURL) {
+      manager.usePublishedFallback(track, captions: legacySubtitles.segments(for: track))
+      if manager.document == nil { await manager.load(track) }
+      manager.usePublishedFallback(track, captions: legacySubtitles.segments(for: track))
+    }
+    .onChange(of: legacySubtitles.segments(for: track)) { _, captions in
+      manager.usePublishedFallback(track, captions: captions)
+    }
     .sheet(isPresented: $expanded) {
       AISubtitleReader(manager: manager, timeline: timeline, track: track, language: $language)
     }
@@ -234,14 +241,14 @@ private struct AISubtitleReader: View {
         HStack {
           Menu {
             Picker("Перевод", selection: $language) {
-              ForEach(AITranslationLanguage.allCases) { value in Text(value.title).tag(value) }
+              ForEach(manager.availableLanguages) { value in Text(value.title).tag(value) }
             }
           } label: { Label(language.title, systemImage: "globe").font(.subheadline.weight(.medium)) }
           Spacer()
           Toggle("Следить", isOn: $followsPlayback).font(.caption).fixedSize()
         }.padding(.horizontal, 20)
         if manager.isRecognizing {
-          ProgressView("Распознаём оригинал…").padding()
+          ProgressView("Загружаем субтитры…").padding()
         }
         if let message = manager.error {
           VStack(spacing: 10) {
@@ -291,7 +298,8 @@ private struct AISubtitleReader: View {
             if follows, let id = activeID { proxy.scrollTo(id, anchor: .center) }
           }
         }
-        Text("Распознано автоматически. Текст и время слов могут содержать ошибки.")
+        Text(manager.publishedSource == "manual" ? "Текст проверен владельцем."
+          : "Арабский оригинал сохраняется без перевода. Автоматический текст может содержать ошибки.")
           .font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 20).padding(.bottom, 8)
       }
       .background(Color.black)

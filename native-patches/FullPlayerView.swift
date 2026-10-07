@@ -24,9 +24,7 @@ struct MorphingPlayerView: View {
   @State private var queuePresented = false
   @State private var playlistCreatePresented = false
   @State private var subtitlesVisible = false
-  @State private var aiSubtitlesVisible = false
   @State private var subtitleContentTrackIDs: Set<String> = []
-  @State private var subtitleLanguage: SubtitleLanguage = .arabic
   @State private var downloadError: String?
   @State private var dragStartExpansion: CGFloat?
   @State private var coverDragX: CGFloat = 0
@@ -536,7 +534,7 @@ struct MorphingPlayerView: View {
     subtitleRightSpace: CGFloat
   ) -> some View {
     let subtitleLayoutActive =
-      showSubtitle && (subtitlesVisible || aiSubtitlesVisible) && progress > 0.74
+      showSubtitle && subtitlesVisible && progress > 0.74
       && subtitleContentTrackIDs.contains(pageTrack.id)
     let subtitleLayout = PlayerSubtitleLayout(
       size: size, leftSpace: subtitleLeftSpace, rightSpace: subtitleRightSpace,
@@ -558,25 +556,16 @@ struct MorphingPlayerView: View {
 
       // Keep the presenter mounted while paging so its task/cache survives.
       // Only the current cover owns captions; incoming covers never show stale text.
-      if showSubtitle, aiSubtitlesVisible, progress > 0.74 {
+      if showSubtitle, subtitlesVisible, progress > 0.74 {
         AISubtitleExperience(
           timeline: player.timeline, track: pageTrack,
           compactWidth: subtitleLayout.railWidth, compactHeight: railHeight
         )
-        .id(pageTrack.id)
+        .id("\(pageTrack.id)-r\(pageTrack.captionsRevision ?? 0)")
         .frame(width: subtitleLayout.railWidth, height: railHeight)
         .offset(x: subtitleLayout.railOffset)
         .opacity(showRail ? 1 : 0)
         .allowsHitTesting(showRail)
-        .accessibilityHidden(!showRail)
-      } else if showSubtitle, subtitlesVisible, progress > 0.74 {
-        ClockedSubtitleOverlay(
-          timeline: player.timeline, track: pageTrack, language: subtitleLanguage,
-          height: railHeight
-        )
-        .frame(width: subtitleLayout.railWidth, height: railHeight)
-        .offset(x: subtitleLayout.railOffset)
-        .opacity(showRail ? 1 : 0)
         .accessibilityHidden(!showRail)
       }
     }
@@ -798,9 +787,9 @@ struct MorphingPlayerView: View {
 
       Menu {
         Button {
-          withAnimation(.easeInOut(duration: 0.22)) { aiSubtitlesVisible.toggle() }
+          toggleSubtitles()
         } label: {
-          Label(aiSubtitlesVisible ? "Скрыть AI-субтитры" : "AI-субтитры и переводы", systemImage: "captions.bubble")
+          Label(subtitlesVisible ? "Скрыть субтитры" : "Показать субтитры", systemImage: subtitleSymbol)
         }
         Divider()
         Button {
@@ -846,14 +835,16 @@ struct MorphingPlayerView: View {
         Button {
           library.addNext(track, after: player.currentTrack)
         } label: {
-          Label("Воспроизвести следующим", systemImage: "text.insert")
+          Label(track.id == player.currentTrack?.id ? "Этот нашид уже играет" : "Воспроизвести следующим", systemImage: "text.insert")
         }
+        .disabled(track.id == player.currentTrack?.id)
 
         Button {
           library.ensureQueueContains(track)
         } label: {
-          Label("Добавить в очередь", systemImage: "text.badge.plus")
+          Label(library.queueTracks.contains(where: { $0.id == track.id }) ? "Уже в очереди" : "Добавить в очередь", systemImage: "text.badge.plus")
         }
+        .disabled(library.queueTracks.contains(where: { $0.id == track.id }))
 
         Menu {
           Button {
@@ -910,18 +901,19 @@ struct MorphingPlayerView: View {
           handleDownload()
         } label: {
           Label(
-            downloads.isDownloaded(track) ? "Сохранено офлайн" : (downloads.downloadingIDs.contains(track.id) ? "Скачиваем…" : "Скачать MP3"),
+            downloads.isDownloaded(track) ? "Сохранено офлайн" : (downloads.downloadingIDs.contains(track.id) ? "Скачиваем…" : "Скачать офлайн"),
             systemImage: downloads.isDownloaded(track)
               ? "checkmark.circle"
               : "arrow.down.circle"
           )
         }
+        .disabled(downloads.isDownloaded(track) || downloads.downloadingIDs.contains(track.id))
         if downloads.downloadingIDs.contains(track.id) {
           Button("Отменить скачивание", role: .destructive) { downloads.cancel(track) }
         }
         if downloads.isDownloaded(track) {
           Button("Удалить загрузку", role: .destructive) {
-            do { try downloads.remove(track) } catch { downloadError = error.localizedDescription }
+            do { try downloads.remove(track) } catch { downloadError = DownloadManager.message(for: error) }
           }
         }
         if player.playbackError != nil {
@@ -936,6 +928,8 @@ struct MorphingPlayerView: View {
           .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
       }
       .buttonStyle(.plain)
+      .accessibilityLabel("Меню плеера")
+      .accessibilityIdentifier("player-menu")
     }
     .frame(width: width)
   }
@@ -948,7 +942,7 @@ struct MorphingPlayerView: View {
   private func transport(compact: Bool) -> some View {
     let mainSize: CGFloat = compact ? 58 : 68
     let sideSize: CGFloat = compact ? 46 : 54
-    let spacing: CGFloat = compact ? 14 : 22
+    let spacing: CGFloat = compact ? 10 : 22
 
     return HStack(spacing: spacing) {
       Button {
@@ -956,14 +950,19 @@ struct MorphingPlayerView: View {
       } label: {
         Image(systemName: "shuffle")
           .foregroundStyle(player.shuffleOn ? .white : .white.opacity(0.55))
-          .frame(width: 38, height: 38)
+          .frame(width: 44, height: 44)
       }
+      .accessibilityLabel("Перемешать")
+      .accessibilityValue(player.shuffleOn ? "Включено" : "Выключено")
+      .accessibilityIdentifier("player-shuffle")
 
       Button(action: player.previous) {
         Image(systemName: "backward.fill")
           .font(.title2)
           .frame(width: sideSize, height: sideSize)
       }
+      .accessibilityLabel("Предыдущий нашид")
+      .accessibilityIdentifier("player-previous")
 
       Button(action: player.toggle) {
         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
@@ -972,20 +971,27 @@ struct MorphingPlayerView: View {
           .frame(width: mainSize, height: mainSize)
           .background(.white, in: Circle())
       }
+      .accessibilityLabel(player.isPlaying ? "Пауза" : "Воспроизвести")
+      .accessibilityIdentifier("player-toggle")
 
       Button(action: player.next) {
         Image(systemName: "forward.fill")
           .font(.title2)
           .frame(width: sideSize, height: sideSize)
       }
+      .accessibilityLabel("Следующий нашид")
+      .accessibilityIdentifier("player-next")
 
       Button {
         player.cycleRepeatMode()
       } label: {
         Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
           .foregroundStyle(player.repeatOn ? .white : .white.opacity(0.55))
-          .frame(width: 38, height: 38)
+          .frame(width: 44, height: 44)
       }
+      .accessibilityLabel("Повтор")
+      .accessibilityValue(player.repeatMode == .one ? "Один нашид" : player.repeatOn ? "Вся очередь" : "Выключено")
+      .accessibilityIdentifier("player-repeat")
     }
     .buttonStyle(.plain)
     .frame(maxWidth: .infinity)
@@ -994,17 +1000,10 @@ struct MorphingPlayerView: View {
   private var smallActions: some View {
     HStack(spacing: 14) {
       Button {
-        withAnimation(.easeInOut(duration: 0.18)) {
-          aiSubtitlesVisible = false
-          subtitlesVisible.toggle()
-        }
+        toggleSubtitles()
       } label: {
         ZStack(alignment: .topTrailing) {
-          Image(
-            systemName: subtitlesVisible
-              ? "captions.bubble.fill"
-              : "captions.bubble"
-          )
+          Image(systemName: subtitleSymbol)
           .frame(width: 44, height: 44)
           .background(
             .white.opacity(subtitlesVisible ? 0.14 : 0.055),
@@ -1016,6 +1015,7 @@ struct MorphingPlayerView: View {
       }
       .buttonStyle(.plain)
       .accessibilityLabel(subtitlesVisible ? "Скрыть субтитры" : "Показать субтитры")
+      .accessibilityIdentifier("player-subtitles")
 
       Button {
         queuePresented = true
@@ -1028,6 +1028,8 @@ struct MorphingPlayerView: View {
           )
       }
       .buttonStyle(.plain)
+      .accessibilityLabel("Открыть очередь")
+      .accessibilityIdentifier("player-queue")
 
       if FeatureAccess.allowsPremiumFeature(isPremium: premium.isPremium) {
         AirPlayButton()
@@ -1129,6 +1131,12 @@ struct MorphingPlayerView: View {
     }
   }
 
+  private var subtitleSymbol: String { subtitlesVisible ? "captions.bubble.fill" : "captions.bubble" }
+
+  private func toggleSubtitles() {
+    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { subtitlesVisible.toggle() }
+  }
+
   private func handleDownload() {
     guard !downloads.isDownloaded(track), !downloads.downloadingIDs.contains(track.id) else { return }
 
@@ -1142,7 +1150,7 @@ struct MorphingPlayerView: View {
         try await downloads.download(track)
       } catch {
         guard !(error is CancellationError), (error as NSError).code != NSURLErrorCancelled else { return }
-        downloadError = error.localizedDescription
+        downloadError = DownloadManager.message(for: error)
       }
     }
   }
@@ -1268,15 +1276,5 @@ private struct PlaybackScrubber: View {
   private func time(_ seconds: TimeInterval) -> String {
     guard seconds.isFinite, seconds >= 0 else { return "0:00" }
     return String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60)
-  }
-}
-
-private struct ClockedSubtitleOverlay: View {
-  @ObservedObject var timeline: PlaybackTimeline
-  let track: Track
-  let language: SubtitleLanguage
-  let height: CGFloat
-  var body: some View {
-    PlayerSubtitleOverlay(track: track, currentTime: timeline.snapshot.time, language: language, height: height)
   }
 }

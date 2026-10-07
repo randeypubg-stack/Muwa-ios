@@ -18,6 +18,12 @@ import Foundation
     let legacy = Data("[{\"start\":1,\"end\":3,\"ar\":\"مرحبا\",\"ru\":\"Привет\",\"en\":\"Hello\"}]".utf8)
     let old = try JSONDecoder().decode([SubtitleSegment].self, from: legacy)
     precondition(old[0].text(for: .russian) == "Привет")
+    let dialect = SubtitleSegment(start: 1, end: 3, ar: "إزاي الحال يا حبيبي", ru: "Как дела", en: "How are you", words: nil)
+    let published = try AISubtitleDocument.published(trackID: "test", revision: 7, captions: [dialect])
+    precondition(published.language == "ar" && published.isRTL)
+    precondition(published.segments[0].original == dialect.ar, "Colloquial Arabic was replaced by a translation")
+    let changed = try AISubtitleDocument.published(trackID: "test", revision: 8, captions: [dialect])
+    precondition(published.id != changed.id)
     print("PASS: subtitle v2 boundaries, silent gaps, RTL, serialization, validation, legacy decoding")
   }
 }

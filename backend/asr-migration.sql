@@ -22,6 +22,17 @@ CREATE INDEX IF NOT EXISTS catalog_asr_jobs_queue_idx ON catalog_asr_jobs(create
 CREATE INDEX IF NOT EXISTS catalog_asr_jobs_track_idx ON catalog_asr_jobs(track_id);
 
 -- Called inside the same transaction as saving/fingerprinting an upload.
+-- Whisper uses the Arabic language token for MSA and dialects, not separate
+-- dialect models. Keep the catalogue's regional tag but decode the original
+-- Arabic words; do not run translation or infer a dialect from the title.
+CREATE OR REPLACE FUNCTION muwa_asr_language(p_language text)
+RETURNS text LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
+ SELECT CASE
+  WHEN lower(p_language) ~ '^ar([_-][a-z0-9]{2,8})*$'
+    OR lower(p_language) IN ('arb','arz','ary','arq','aeb','acm','acw','acx','apc','ajp','afb','ayh','ayl','ayn','abh') THEN 'ar'
+  WHEN lower(p_language) ~ '^[a-z]{2,3}$' THEN lower(p_language)
+  ELSE 'und' END;
+$$;
 CREATE OR REPLACE FUNCTION muwa_enqueue_asr(p_track text,p_retry boolean DEFAULT false)
 RETURNS uuid LANGUAGE plpgsql SET search_path=pg_catalog,public AS $$
 DECLARE t public.catalog_tracks; h text; job uuid; lang text;
@@ -29,8 +40,7 @@ BEGIN
  SELECT * INTO t FROM public.catalog_tracks WHERE id=p_track FOR UPDATE;
  IF NOT FOUND OR t.audio_filename IS NULL OR t.audio_filename !~ '^catalog/[a-f0-9-]{36}/audio\.(mp3|m4a|wav)$'
    OR t.duration <= 0 OR t.duration > 3600 THEN RETURN NULL; END IF;
- lang := lower(t.language);
- IF lang !~ '^[a-z]{2,3}$' THEN lang := 'und'; END IF;
+ lang := public.muwa_asr_language(t.language);
  SELECT sha256 INTO h FROM public.catalog_audio_fingerprints WHERE track_id=t.id;
  IF h IS NULL THEN RETURN NULL; END IF;
  UPDATE public.catalog_asr_jobs SET status='stale',lease_token=NULL,lease_until=NULL,updated_at=now()
@@ -62,7 +72,7 @@ BEGIN
    JOIN public.catalog_tracks t ON t.id=q.track_id AND t.audio_filename=q.audio_filename
    JOIN public.catalog_audio_fingerprints h ON h.track_id=t.id AND h.sha256=q.audio_sha256
    WHERE (q.status='queued' OR (q.status='processing' AND q.lease_until<now() AND q.attempts<3))
-    AND q.language=CASE WHEN lower(t.language) ~ '^[a-z]{2,3}$' THEN lower(t.language) ELSE 'und' END
+    AND q.language=public.muwa_asr_language(t.language)
    ORDER BY q.created_at,q.id LIMIT 1 FOR UPDATE OF q SKIP LOCKED
  ) RETURNING j.*;
 END $$;
@@ -93,7 +103,7 @@ BEGIN
  IF NOT FOUND OR j.status<>'processing' OR j.lease_token IS DISTINCT FROM p_token OR j.lease_until IS NULL OR j.lease_until<=now() THEN RETURN false; END IF;
  SELECT sha256 INTO h FROM public.catalog_audio_fingerprints WHERE track_id=t.id;
  IF h IS DISTINCT FROM j.audio_sha256 OR t.audio_filename IS DISTINCT FROM j.audio_filename OR
-   (CASE WHEN lower(t.language) ~ '^[a-z]{2,3}$' THEN lower(t.language) ELSE 'und' END)<>j.language THEN
+   public.muwa_asr_language(t.language)<>j.language THEN
   UPDATE public.catalog_asr_jobs SET status='stale',lease_token=NULL,lease_until=NULL,updated_at=now() WHERE id=p_id;
   RETURN false;
  END IF;

@@ -73,3 +73,18 @@ tests text/timing validation and decoder/path/hash boundaries. Backend DB checks
 exercise real PostgreSQL leases, automatic enqueue, concurrent claims, owner
 access, malformed documents, stale recordings and manual-edit protection.
 Run an actual nasheed separately; test fixtures cannot prove speech accuracy.
+
+Arabic originals and dialect tags
+--------------------------------
+New owner-bot forwards default to Arabic (`ar`). The owner can choose another
+language in the catalogue; `und` retains automatic language detection. MSA,
+regional tags such as `ar-EG`, `ar-SA`, `ar-IQ`, `ar-MA`, and Arabic dialect
+language codes route to the same multilingual large-v3 Arabic transcription
+language token. The model transcribes the original dialectal wording; it does
+not translate it to English or rewrite it as MSA. Dialect recognition is not a
+separate classifier, and equal accuracy across dialects is not established.
+Regional routing is covered through enqueue, claim and caption persistence.
+Quality still requires listening and comparing representative recordings with
+human-checked lyrics, especially refrains, reverberation and overlapping voices.
+Published Arabic text is the default native subtitle reader. Saved translations
+remain optional. Opening subtitles never starts a paid transcription request.

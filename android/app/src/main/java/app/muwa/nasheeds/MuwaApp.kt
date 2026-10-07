@@ -220,7 +220,7 @@ fun MuwaApp(
                     "home" ->
                         HomeScreen(
                             model,
-                            play,
+                            { model.play(it, model.library.catalog); requestNotifications() },
                             { addingTrack = it },
                             { route = "collection:$it" },
                             {
@@ -283,7 +283,7 @@ fun MuwaApp(
                                 contentPadding = PaddingValues(bottom = 24.dp),
                             ) {
                                 items(tracks, key = { it.id }) {
-                                    TrackRow(model, it, play, { addingTrack = it })
+                                    TrackRow(model, it, { t -> model.play(t, tracks); requestNotifications() }, { addingTrack = it })
                                 }
                             }
                         } else if (route.startsWith("playlist:")) {

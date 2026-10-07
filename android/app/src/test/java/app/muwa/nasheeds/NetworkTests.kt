@@ -78,5 +78,15 @@ class NetworkTests {
             } finally { partial.delete() }
         }
     }
+    @Test
+    fun downloadedContainerUsesBytesInsteadOfTheCatalogUrl() {
+        assertEquals("mp3", audioContainer("ID3fixture".toByteArray()))
+        assertEquals("m4a", audioContainer(byteArrayOf(0, 0, 0, 24) + "ftypM4A ".toByteArray()))
+        assertEquals("wav", audioContainer("RIFF0000WAVE".toByteArray()))
+        try {
+            audioContainer("{\"error\":\"no audio\"}".toByteArray())
+            fail("JSON registered as audio")
+        } catch (expected: IllegalStateException) {}
+    }
 
 }

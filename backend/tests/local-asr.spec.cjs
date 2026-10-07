@@ -96,6 +96,20 @@ describe("Local recognition queue and protected captions", () => {
     if (enabled === undefined) delete process.env.MUWA_LOCAL_ASR_ENABLED;
     else process.env.MUWA_LOCAL_ASR_ENABLED = enabled;
   });
+  it("maps Arabic regional and dialect tags to original Arabic transcription", async () => {
+    for (const language of ["ar", "ar-Arab-EG", "ar-EG", "ar-SA", "ar-IQ", "ar-MA", "ar-DZ", "ar-SY", "ar-AE", "ar-TN", "ar-YE", "arz", "ary", "acm", "apc", "arb"]) {
+      expect((await query("select muwa_asr_language($1) as language", [language]))[0].language).toBe("ar");
+    }
+    expect((await query("select muwa_asr_language('und') as language"))[0].language).toBe("und");
+    expect((await query("select muwa_asr_language('ru') as language"))[0].language).toBe("ru");
+    const id = await create();
+    await query("update catalog_tracks set language='ar-EG'");
+    expect((await query("select muwa_enqueue_asr('asr-fixture') as id"))[0].id).toBe(id);
+    const c = await claim();
+    expect(c.job.language).toBe("ar");
+    expect(await finish(c)).toBeTrue();
+    expect((await query("select captions from catalog_tracks"))[0].captions[0].ar).toBe("مرحبا");
+  });
   it("automatically queues a verified upload and deduplicates subsequent metadata saves", async () => {
     const p = await (
       await request({

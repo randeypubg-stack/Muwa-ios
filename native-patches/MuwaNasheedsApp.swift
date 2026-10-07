@@ -4,7 +4,6 @@ import SwiftUI
 struct MuwaNasheedsApp: App {
   @Environment(\.scenePhase) private var scenePhase
 
-  @StateObject private var launch: LaunchPresentation
   @StateObject private var library: LibraryStore
   @StateObject private var downloads: DownloadManager
   @StateObject private var premium: PremiumManager
@@ -13,7 +12,6 @@ struct MuwaNasheedsApp: App {
   @StateObject private var auth: AuthManager
 
   init() {
-    _launch = StateObject(wrappedValue: LaunchPresentation())
     _ = Diagnostics.shared
     let library = LibraryStore()
     let downloads = DownloadManager()
@@ -32,7 +30,6 @@ struct MuwaNasheedsApp: App {
   var body: some Scene {
     WindowGroup {
       RootView()
-        .environmentObject(launch)
         .environmentObject(player)
         .environmentObject(library)
         .environmentObject(downloads)

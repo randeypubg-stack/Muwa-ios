@@ -27,6 +27,51 @@ final class NativeInteractionTests: XCTestCase {
   }
   private var queueButtons: [XCUIElement] { queueQuery.allElementsBoundByIndex }
 
+  func testPlayerButtonsAndBothSubtitleEntrypointsShareState() throws {
+    app.launchArguments = ["--audit-player", "--audit-ai"]
+    app.launch()
+    let subtitles = app.buttons["player-subtitles"]
+    XCTAssertTrue(subtitles.waitForExistence(timeout: 30))
+    XCTAssertTrue(subtitles.isHittable)
+    XCTAssertEqual(subtitles.label, "Скрыть субтитры")
+    subtitles.tap()
+    XCTAssertEqual(subtitles.label, "Показать субтитры")
+    app.buttons["player-menu"].tap()
+    let menuCaption = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Показать субтитры", "player-subtitles")).firstMatch
+    XCTAssertTrue(menuCaption.waitForExistence(timeout: 10))
+    menuCaption.tap()
+    XCTAssertEqual(subtitles.label, "Скрыть субтитры")
+    XCTAssertTrue(app.buttons["Субтитры. Открыть полный текст"].waitForExistence(timeout: 10))
+    let shuffle = app.buttons["player-shuffle"]
+    XCTAssertEqual(shuffle.value as? String, "Выключено")
+    shuffle.tap()
+    XCTAssertEqual(shuffle.value as? String, "Включено")
+    shuffle.tap()
+    XCTAssertEqual(shuffle.value as? String, "Выключено")
+    let repeatButton = app.buttons["player-repeat"]
+    for expected in ["Вся очередь", "Один нашид", "Выключено"] {
+      repeatButton.tap()
+      XCTAssertEqual(repeatButton.value as? String, expected)
+    }
+    shot("player-buttons-and-arabic-subtitles")
+    app.buttons["player-queue"].tap()
+    XCTAssertTrue(queueQuery.firstMatch.waitForExistence(timeout: 10))
+    shot("player-queue-opened-by-button")
+  }
+
+  func testHomeHasNoToolbarLogoAfterNativeTitleCollapses() throws {
+    app.launchArguments = ["--audit-home"]
+    app.launch()
+    XCTAssertTrue(app.navigationBars["Главная"].waitForExistence(timeout: 30))
+    XCTAssertTrue(app.buttons["Поиск"].exists)
+    XCTAssertFalse(app.images["Muwa"].exists, "Removed toolbar logo returned")
+    shot("home-before-scroll-no-logo")
+    app.scrollViews.firstMatch.swipeUp()
+    XCTAssertTrue(app.navigationBars["Главная"].exists)
+    XCTAssertFalse(app.images["Muwa"].exists)
+    shot("home-after-scroll-no-edge-blur")
+  }
+
   func testWholeQueueRowMovePersistsAndKeepsCurrentTrack() throws {
     try XCTSkipIf(UIDevice.current.userInterfaceIdiom != .phone,
                   "Queue interaction is covered on the iPhone; tablet jobs verify real device rotation")
@@ -113,7 +158,7 @@ final class NativeInteractionTests: XCTestCase {
     // --audit-ai-expanded: the production rail's own button must open the reader.
     app.launchArguments = ["--audit-player", "--audit-ai"]
     app.launch()
-    let rail = app.buttons["AI-субтитры. Открыть полный текст"].firstMatch
+    let rail = app.buttons["Субтитры. Открыть полный текст"].firstMatch
     let reader = app.navigationBars["Оригинал и перевод"].firstMatch
     let follow = app.switches["Следить"].firstMatch
     XCTAssertTrue(rail.waitForExistence(timeout: 30))

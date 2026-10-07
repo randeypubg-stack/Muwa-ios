@@ -197,7 +197,7 @@ jobs:
           python3 tests/check_native_registration.py "$ROOT"
 
           # iOS owns the brief system launch phase. The app then mounts Home
-          # immediately; the brand mark animates in its toolbar.
+          # immediately, without an extra toolbar logo or startup gate.
           /usr/libexec/PlistBuddy -c "Delete :UILaunchScreen" "$ROOT/Info.plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :UILaunchScreen dict" "$ROOT/Info.plist"
           /usr/libexec/PlistBuddy -c "Add :UILaunchScreen:UIColorName string LaunchBackground" "$ROOT/Info.plist"
@@ -219,7 +219,7 @@ jobs:
           test "$WIDTH" = "1024"
           test "$HEIGHT" = "1024"
 
-          sed -i '' 's/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = 46;/g' "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
+          sed -i '' 's/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = 47;/g' "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
           echo "SOURCE_ROOT=$ROOT" >> "$GITHUB_ENV"
 
       - name: Package full source archive
@@ -237,7 +237,7 @@ jobs:
           cat > build/full-source/README-SOURCE.txt <<EOF
           Muwa — Full Source Archive
           Version: 1.4.0
-          Build: 46
+          Build: 47
           Commit: ${GITHUB_SHA}
 
           Contents:
@@ -255,7 +255,7 @@ jobs:
 
           Notes:
           - This archive contains source code and project resources, not only the IPA.
-          - The project is the same assembled source tree used for the build-46 IPA.
+          - The project is the same assembled source tree used for the build-47 IPA.
           - Application identity is preserved; the owner chose a fresh Beget database.
           - See Repository/docs for production deployment verification and device limitations.
           - Audio and artwork use authenticated Beget storage and are not bundled as local media.
@@ -264,18 +264,18 @@ jobs:
           find build/full-source -name '.DS_Store' -delete
           (
             cd build/full-source
-            /usr/bin/zip -qry -y ../Muwa-v1.4.0-build46-FULL-SOURCE.zip .
+            /usr/bin/zip -qry -y ../Muwa-v1.4.0-build47-FULL-SOURCE.zip .
           )
-          shasum -a 256 build/Muwa-v1.4.0-build46-FULL-SOURCE.zip \
-            | tee build/Muwa-v1.4.0-build46-FULL-SOURCE.zip.sha256
+          shasum -a 256 build/Muwa-v1.4.0-build47-FULL-SOURCE.zip \
+            | tee build/Muwa-v1.4.0-build47-FULL-SOURCE.zip.sha256
 
       - name: Upload full source archive
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Muwa-Full-Source-${{ github.run_number }}
           path: |
-            build/Muwa-v1.4.0-build46-FULL-SOURCE.zip
-            build/Muwa-v1.4.0-build46-FULL-SOURCE.zip.sha256
+            build/Muwa-v1.4.0-build47-FULL-SOURCE.zip
+            build/Muwa-v1.4.0-build47-FULL-SOURCE.zip.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 90
@@ -294,7 +294,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
-          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='46'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='47'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
         shell: bash
@@ -311,7 +311,7 @@ jobs:
 
           test "$BUNDLE_ID" = "app.muwa.nasheeds"
           test "$VERSION" = "1.4.0"
-          test "$BUILD_NO" = "46"
+          test "$BUILD_NO" = "47"
           test -x "$APP_PATH/$EXECUTABLE"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist")" = "true"
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIColorName' "$APP_PATH/Info.plist")" = "LaunchBackground"
@@ -327,10 +327,10 @@ jobs:
 
           (
             cd build/package
-            /usr/bin/zip -qry -y ../Muwa-v1.4.0-build46-native-unsigned.ipa Payload
+            /usr/bin/zip -qry -y ../Muwa-v1.4.0-build47-native-unsigned.ipa Payload
           )
 
-          shasum -a 256 build/Muwa-v1.4.0-build46-native-unsigned.ipa | tee build/Muwa-v1.4.0-build46-native-unsigned.ipa.sha256
+          shasum -a 256 build/Muwa-v1.4.0-build47-native-unsigned.ipa | tee build/Muwa-v1.4.0-build47-native-unsigned.ipa.sha256
 
           cat > build/build-info.json <<EOF
           {
@@ -354,8 +354,8 @@ jobs:
         with:
           name: Muwa-Native-IPA-${{ github.run_number }}
           path: |
-            build/Muwa-v1.4.0-build46-native-unsigned.ipa
-            build/Muwa-v1.4.0-build46-native-unsigned.ipa.sha256
+            build/Muwa-v1.4.0-build47-native-unsigned.ipa
+            build/Muwa-v1.4.0-build47-native-unsigned.ipa.sha256
             build/build-info.json
           if-no-files-found: error
           compression-level: 0
@@ -372,7 +372,7 @@ jobs:
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Muwa-build46-simulator-${{ github.run_id }}
+          name: Muwa-build47-simulator-${{ github.run_id }}
           path: build/muwa-review-app.tar.gz
           if-no-files-found: error
 
@@ -417,7 +417,7 @@ jobs:
           xcrun simctl list runtimes --json
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: Muwa-build46-simulator-${{ github.run_id }}
+          name: Muwa-build47-simulator-${{ github.run_id }}
           path: build
       - name: Unpack simulator app
         run: |
@@ -441,7 +441,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build46-${{ matrix.device }}-screenshots
+          name: Muwa-build47-${{ matrix.device }}-screenshots
           overwrite: true
           # Keep individual downloadable archives below the attachment limit on
           # large iPads. All files remain unmodified native Simulator captures.
@@ -456,7 +456,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build46-${{ matrix.device }}-player-screenshots
+          name: Muwa-build47-${{ matrix.device }}-player-screenshots
           overwrite: true
           path: |
             build/previews/*player.png
@@ -469,7 +469,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build46-${{ matrix.device }}-account-screenshots
+          name: Muwa-build47-${{ matrix.device }}-account-screenshots
           overwrite: true
           path: |
             build/previews/*profile.png
@@ -480,7 +480,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always() && matrix.device == 'phone'
         with:
-          name: Muwa-build46-phone-launch-review
+          name: Muwa-build47-phone-launch-review
           overwrite: true
           path: build/previews/launch
           if-no-files-found: error
@@ -510,7 +510,7 @@ jobs:
           test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "27.0"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: Muwa-build46-simulator-${{ github.run_id }}
+          name: Muwa-build47-simulator-${{ github.run_id }}
           path: build
       - name: Unpack simulator app
         run: |
@@ -523,7 +523,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build46-subtitle-motion-${{ matrix.device }}
+          name: Muwa-build47-subtitle-motion-${{ matrix.device }}
           overwrite: true
           path: build/previews/subtitle-motion
           if-no-files-found: error
@@ -591,7 +591,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build46-native-interactions-${{ matrix.device }}
+          name: Muwa-build47-native-interactions-${{ matrix.device }}
           overwrite: true
           path: |
             build/interactions.xcresult
@@ -604,7 +604,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build46-rotation-primary-${{ matrix.device }}
+          name: Muwa-build47-rotation-primary-${{ matrix.device }}
           overwrite: true
           path: |
             build/interaction-proof/primary

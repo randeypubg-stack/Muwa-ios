@@ -12,6 +12,9 @@ text = project.read_text()
 # reader. Remove its original registration instead of compiling a second UI.
 text = ''.join(line for line in text.splitlines(keepends=True) if '/* SubtitlePanel.swift' not in line)
 (root / 'Sources/Views/Player/SubtitlePanel.swift').unlink(missing_ok=True)
+# The removed Home-toolbar mark also retires its unused state owner.
+text = ''.join(line for line in text.splitlines(keepends=True) if '/* LaunchExperience.swift' not in line)
+(root / 'Sources/App/LaunchExperience.swift').unlink(missing_ok=True)
 files = {
     'CatalogStore.swift': 'Services',
     'Track.swift': 'Models',
@@ -19,7 +22,6 @@ files = {
     'Diagnostics.swift': 'Services',
     'AppSettingsView.swift': 'Views/Profile',
     'CarPlaySceneDelegate.swift': 'App',
-    'LaunchExperience.swift': 'App',
     'DownloadManager.swift': 'Services',
     'AuthManager.swift': 'Services',
     'AuthService.swift': 'Services',

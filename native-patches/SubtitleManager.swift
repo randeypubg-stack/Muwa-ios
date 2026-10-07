@@ -201,20 +201,42 @@ final class AISubtitleManager: ObservableObject {
   @Published private(set) var isRecognizing = false
   @Published private(set) var translatingLanguage: String?
   @Published private(set) var error: String?
+  @Published private(set) var publishedSource: String?
+  var availableLanguages: [AITranslationLanguage] {
+    publishedSource == nil ? AITranslationLanguage.allCases
+      : AITranslationLanguage.allCases.filter { $0 == .original || translations[$0.rawValue] != nil }
+  }
   private var source: String?
   private var requestID = UUID()
   private var translationID = UUID()
   private var retryAfter = Date.distantPast
 
   func load(_ track: Track, retry: Bool = false) async {
-    let key = track.audioURL.absoluteString
+    let isCatalog = track.cdnSourcePath == nil
+    let key = isCatalog ? "\(track.id)|\(track.audioURL.absoluteString)|r\(track.captionsRevision ?? 0)" : track.audioURL.absoluteString
     if source == key && (document != nil || isRecognizing || (!retry && error != nil)) { return }
     if source == key && retry && Date() < retryAfter { return }
     let id = UUID(); requestID = id; translationID = UUID()
-    source = key; document = nil; translations = [:]; error = nil; translatingLanguage = nil
+    source = key; document = nil; translations = [:]; error = nil; translatingLanguage = nil; publishedSource = nil
     isRecognizing = true
     defer { if requestID == id { isRecognizing = false } }
     do {
+      if isCatalog {
+        var parts = URLComponents(url: BackendConfig.apiBaseURL.appending(path: "_api/catalog/captions"), resolvingAgainstBaseURL: false)!
+        parts.queryItems = [URLQueryItem(name: "trackId", value: track.id)]
+        var req = URLRequest(url: parts.url!); req.timeoutInterval = 20
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        let (data, response) = try await BackendConfig.boundedData(for: req)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+        let payload = try JSONDecoder().decode(PublishedCaptions.self, from: data)
+        guard requestID == id, !Task.isCancelled else { return }
+        publishedSource = payload.source
+        guard !payload.segments.isEmpty else {
+          throw AISubtitleAPIError(message: "Текст ещё готовится или ожидает проверки владельцем. Попробуйте обновить позже.", code: "NOT_READY")
+        }
+        installPublished(track: track, captions: payload.segments, revision: payload.revision)
+        return
+      }
       if let cached = await AISubtitleDisk.shared.load(key: key), let valid = try? cached.validated() {
         guard requestID == id, !Task.isCancelled else { return }
         document = valid; return
@@ -229,12 +251,13 @@ final class AISubtitleManager: ObservableObject {
       await AISubtitleDisk.shared.save(valid, key: key)
     } catch {
       guard requestID == id else { return }
-      if !Task.isCancelled { self.error = error.localizedDescription }
+      if !Task.isCancelled, document == nil { self.error = error.localizedDescription }
     }
   }
 
   func translate(_ language: AITranslationLanguage) async {
     guard language != .original, let doc = document, translations[language.rawValue] == nil else { return }
+    guard publishedSource == nil else { return } // Local captions never start a paid provider request.
     guard Date() >= retryAfter else { return }
     let id = UUID(); translationID = id
     translatingLanguage = language.rawValue; error = nil
@@ -255,6 +278,30 @@ final class AISubtitleManager: ObservableObject {
     } catch {
       guard translationID == id, !Task.isCancelled else { return }
       self.error = error.localizedDescription
+    }
+  }
+  private struct PublishedCaptions: Decodable {
+    let segments: [SubtitleSegment]; let source: String; let revision: Int
+  }
+  func usePublishedFallback(_ track: Track, captions: [SubtitleSegment]) {
+    guard document == nil, !captions.isEmpty else { return }
+    publishedSource = "published"
+    installPublished(track: track, captions: captions, revision: track.captionsRevision ?? 0)
+    error = nil
+  }
+  private func installPublished(track: Track, captions: [SubtitleSegment], revision: Int) {
+    guard let doc = try? AISubtitleDocument.published(trackID: track.id, revision: revision, captions: captions) else { return }
+    document = doc
+    error = nil
+    translations = [:]
+    for language in [SubtitleLanguage.russian, .english] where language.rawValue.lowercased() != doc.language {
+      let values = Dictionary(uniqueKeysWithValues: captions.enumerated().compactMap { index, caption -> (String, String)? in
+        let value = caption.text(for: language).trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : ("s\(index)", value)
+      })
+      if Set(values.keys) == Set(doc.segments.map(\.id)) {
+        translations[language.rawValue.lowercased()] = AISubtitleTranslation(documentId: doc.id, language: language.rawValue.lowercased(), segments: values)
+      }
     }
   }
   private struct OriginalRequest: Encodable { let src: String; let durationSeconds: Double }

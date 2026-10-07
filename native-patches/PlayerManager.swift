@@ -159,6 +159,12 @@ final class PlayerManager: ObservableObject {
     persistResumeCandidate(force: true)
   }
 
+  func play(_ track: Track, in collection: [Track], autoplay: Bool = true) {
+    guard collection.contains(where: { $0.id == track.id }) else { return }
+    library.replaceQueue(with: collection)
+    play(track, autoplay: autoplay)
+  }
+
   func play(_ track: Track, autoplay: Bool = true) {
     hasStartedPlaybackThisSession = true
     playbackError = nil

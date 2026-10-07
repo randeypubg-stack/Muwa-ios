@@ -101,9 +101,9 @@ struct SearchView: View {
                     track: track,
                     isPlaying: player.currentTrack?.id == track.id && player.isPlaying,
                     trailingSystemImage: "play.circle",
-                    action: { player.play(track) },
+                    action: { player.play(track, in: results) },
                     trailingAction: {
-                      player.play(track)
+                      player.play(track, in: results)
                       openPlayer()
                     }
                   )

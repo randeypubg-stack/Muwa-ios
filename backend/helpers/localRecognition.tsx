@@ -28,7 +28,7 @@ export async function recognitionResults(
     from catalog_asr_jobs j join catalog_tracks t on t.id=j.track_id
     join catalog_audio_fingerprints h on h.track_id=t.id and h.sha256=j.audio_sha256
     where j.track_id in (${sql.join(ids)}) and j.audio_filename=t.audio_filename
-      and j.language=case when lower(t.language) ~ '^[a-z]{2,3}$' then lower(t.language) else 'und' end
+      and j.language=muwa_asr_language(t.language)
       and j.status<>'stale'`.execute(db);
   return r.rows;
 }

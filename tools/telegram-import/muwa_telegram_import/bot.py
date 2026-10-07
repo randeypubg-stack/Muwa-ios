@@ -227,7 +227,7 @@ def process_next(state, bot, api, config):
             with tempfile.TemporaryDirectory(prefix='bot-audio-', dir=state.folder) as folder:
                 path = Path(folder) / ('audio' + item['extension'])
                 bot.download(item, path)
-                media = inspect_audio(path, item, 'und', Path(folder) / 'cover.jpg')
+                media = inspect_audio(path, item, 'ar', Path(folder) / 'cover.jpg')
                 result = api.import_audio(item, path, media, media['cover'])
         if not result.get('trackId'):
             raise APIError(502)

@@ -75,6 +75,11 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
         }
         track = new; playing = p.isPlaying; buffering = p.playbackState == Player.STATE_BUFFERING; shuffle = p.shuffleModeEnabled; repeat = p.repeatMode
     } }
+    fun play(track: Track, collection: List<Track>, autoplay: Boolean = true) {
+        if (collection.none { it.id == track.id }) return
+        library.replaceQueue(collection.map { it.id })
+        play(track, autoplay)
+    }
     fun play(track: Track, autoplay: Boolean = true) {
         val p = controller ?: run { error = "Плеер ещё подключается. Попробуйте через секунду."; return }
         val queue = if (track.id in library.queue) library.queue else library.queue + track.id

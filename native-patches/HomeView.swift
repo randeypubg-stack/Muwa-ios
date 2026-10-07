@@ -51,14 +51,12 @@ struct HomeView: View {
           .adaptiveFrame(maxWidth: layout.contentMaxWidth)
         }
         .scrollContentBackground(.hidden)
+        .modifier(HomeScrollEdgeVisibility())
       }
       .background(AppBackground().ignoresSafeArea())
       .navigationTitle("Главная")
       .navigationBarTitleDisplayMode(.large)
       .toolbar {
-        ToolbarItem(placement: .topBarLeading) {
-          MuwaLaunchView()
-        }
         ToolbarItem(placement: .topBarTrailing) {
           Button(action: openSearch) {
             Image(systemName: "magnifyingglass")
@@ -242,7 +240,7 @@ struct HomeView: View {
 
   private func recommendationCard(_ track: Track, width: CGFloat?) -> some View {
     Button {
-      player.play(track)
+      player.play(track, in: Track.catalog)
       openPlayer()
     } label: {
       VStack(alignment: .leading, spacing: 8) {
@@ -299,7 +297,7 @@ struct HomeView: View {
       track: track,
       isPlaying: player.currentTrack?.id == track.id && player.isPlaying,
       action: {
-        player.play(track)
+        player.play(track, in: Track.catalog)
       },
       playNextAction: {
         library.addNext(track, after: player.currentTrack)
@@ -313,5 +311,17 @@ struct HomeView: View {
   private func format(_ seconds: TimeInterval) -> String {
     guard seconds.isFinite, seconds >= 0 else { return "0:00" }
     return String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60)
+  }
+}
+
+// iOS 26+ adds a separate scroll-edge blur even with a hidden navigation
+// background. Hide that effect while retaining native large-title collapse.
+private struct HomeScrollEdgeVisibility: ViewModifier {
+  @ViewBuilder func body(content: Content) -> some View {
+    if #available(iOS 26.0, *) {
+      content.scrollEdgeEffectHidden(true, for: .top)
+    } else {
+      content
+    }
   }
 }

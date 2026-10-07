@@ -1,6 +1,8 @@
 """Loopback-only native networking fixture; never loads production credentials."""
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import json
+from pathlib import Path
+from urllib.parse import urlparse, parse_qs
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -17,6 +19,14 @@ class Handler(BaseHTTPRequestHandler):
             self.do_GET()
     def do_GET(self):
         try:
+            if urlparse(self.path).path == '/media':
+                ext = parse_qs(urlparse(self.path).query).get('format', [''])[0]
+                if ext not in {'mp3', 'm4a', 'wav'}: self.send_error(404); return
+                body = (Path(__file__).parent / 'fixtures/media' / ('tone.' + ext)).read_bytes()
+                self.send_response(200)
+                self.send_header('Content-Type', {'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'wav': 'audio/wav'}[ext])
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers(); self.wfile.write(body); return
             if self.path == '/redirect-target': Handler.redirect_hits += 1
             self.send_response(200)
             if self.path in {'/declared-large', '/chunked-large'}:

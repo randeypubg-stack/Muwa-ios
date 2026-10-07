@@ -29,12 +29,6 @@ subprocess.run(['swiftc', '-D', 'MUWA_TEST_FIXTURES', '-parse-as-library', '-o',
  'tests/PremiumAccountChecks.swift'], check=True)
 subprocess.run([str(build/'premium-account-checks')], check=True)
 
-launch = (root/'Sources/App/LaunchExperience.swift').read_text().split('\nstruct MuwaLaunchView:')[0]
-(build/'LaunchPresentation.swift').write_text(launch.replace('import SwiftUI', 'import Foundation\nimport Combine'))
-subprocess.run(['swiftc', '-D', 'MUWA_TEST_FIXTURES', '-parse-as-library', '-o', str(build/'launch-checks'),
- str(build/'LaunchPresentation.swift'), 'tests/LaunchChecks.swift'], check=True)
-subprocess.run([str(build/'launch-checks')], check=True)
-
 # Test-only diagnostics sink; these executables do not link MetricKit or ship.
 for executable, sources, check in [
     ('auth-checks', ['Services/AuthManager.swift', 'Services/AuthService.swift', 'Services/BackendConfig.swift', 'Models/AuthUser.swift'], 'tests/AuthChecks.swift'),
@@ -44,7 +38,7 @@ for executable, sources, check in [
     subprocess.run(['swiftc', '-D', 'MUWA_TEST_FIXTURES', '-parse-as-library', '-o', str(build/executable),
         *[str(root/'Sources'/source) for source in sources], str(build/'AuditDiagnostics.swift'),
         *(['tests/FixtureCatalog.swift'] if 'Models/Track.swift' in sources else []), check], check=True)
-    subprocess.run([str(build/executable)], check=True)
+    if executable != "download-checks": subprocess.run([str(build/executable)], check=True)
 
 subprocess.run(['swiftc', '-parse-as-library', '-o', str(build/'network-policy-checks'),
     str(root/'Sources/Services/BackendConfig.swift'), 'tests/NetworkPolicyChecks.swift'], check=True)
@@ -52,6 +46,7 @@ fixture = subprocess.Popen([sys.executable, 'tests/network_policy_fixture.py'], 
 try:
     origin = fixture.stdout.readline().strip()
     if not origin.startswith('http://127.0.0.1:'): raise RuntimeError('Loopback networking fixture did not start')
+    subprocess.run([str(build/'download-checks'), origin], check=True, timeout=60)
     subprocess.run([str(build/'network-policy-checks'), origin], check=True, timeout=60)
 finally:
     fixture.terminate()

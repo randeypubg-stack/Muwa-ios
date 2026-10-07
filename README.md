@@ -44,3 +44,17 @@ Floot is no longer required to build or run this beta; its old project is untouc
 See [the deployment and first-login instructions](docs/BEGET-BETA-DEPLOYMENT.md).
 Client build numbers above identify the updated source; CI results establish
 whether their installable artifacts are ready.
+
+7 October 2026 — build 47 player fixes
+------------------------------------
+Home retains native large-title collapse, without the removed toolbar mark;
+iOS 26+ scroll-edge blur is hidden. Home and collection playback supply the
+actual collection as the queue, so next/shuffle have more than one item on a
+fresh catalogue. Both subtitle buttons share one state and reader: published
+Arabic originals, word timings when available, and already saved translations.
+Local captions never initiate paid provider calls. MP3/M4A/WAV downloads inspect
+the actual container, validate a correctly named staged file and persist its
+format for offline playback across restarts. Existing offline keys remain valid.
+The retired toolbar launch view/state and its Xcode registration are removed.
+Regional Arabic ASR routing and original preservation are tested independently
+of accuracy; representative dialectal nasheed lyrics still need human evaluation.
