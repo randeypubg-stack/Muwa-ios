@@ -267,24 +267,7 @@ private struct AISubtitleReader: View {
             LazyVStack(alignment: .leading, spacing: 22) {
               if let doc = manager.document {
                 ForEach(doc.segments) { segment in
-                  Button {
-                    guard player.currentTrack?.id == track.id else { return }
-                    player.seek(to: segment.start / max(player.duration, 1))
-                  } label: {
-                    VStack(alignment: .leading, spacing: 8) {
-                      AISubtitleLine(segment: segment, time: timeline.snapshot.time, rtl: doc.isRTL)
-                        .font(.system(size: 23, weight: activeID == segment.id ? .semibold : .regular))
-                      if let translation = manager.translations[language.rawValue]?.segments[segment.id] {
-                        Text(translation).font(.body).foregroundStyle(.white.opacity(0.65)).multilineTextAlignment(.leading)
-                      }
-                    }
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.white.opacity(activeID == segment.id ? 0.065 : 0), in: RoundedRectangle(cornerRadius: 18))
-                    .opacity(activeID == segment.id ? 1 : 0.55)
-                  }
-                  .buttonStyle(.plain).id(segment.id)
-                  .accessibilityHint("Перейти к этой фразе")
+                  segmentRow(segment, rtl: doc.isRTL)
                 }
               }
             }.padding(.horizontal, 8).padding(.vertical, 20)
@@ -320,5 +303,29 @@ private struct AISubtitleReader: View {
         if !available.contains(language) { language = .original }
       }
     }.preferredColorScheme(.dark)
+  }
+
+  private func segmentRow(_ segment: AISubtitleSegment, rtl: Bool) -> some View {
+    let isActive = activeID == segment.id
+    let translation = manager.translations[language.rawValue]?.segments[segment.id]
+    return Button {
+      guard player.currentTrack?.id == track.id else { return }
+      player.seek(to: segment.start / max(player.duration, 1))
+    } label: {
+      VStack(alignment: .leading, spacing: 8) {
+        AISubtitleLine(segment: segment, time: timeline.snapshot.time, rtl: rtl)
+          .font(.system(size: 23, weight: isActive ? .semibold : .regular))
+        if let translation {
+          Text(translation).font(.body).foregroundStyle(.white.opacity(0.65))
+            .multilineTextAlignment(.leading)
+        }
+      }
+      .padding(16)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(Color.white.opacity(isActive ? 0.065 : 0), in: RoundedRectangle(cornerRadius: 18))
+      .opacity(isActive ? 1 : 0.55)
+    }
+    .buttonStyle(.plain).id(segment.id)
+    .accessibilityHint("Перейти к этой фразе")
   }
 }

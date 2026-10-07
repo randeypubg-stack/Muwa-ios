@@ -89,11 +89,13 @@ final class NativeInteractionTests: XCTestCase {
     let handle = firstCell.buttons.matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", "Reorder", "Reorder ")).firstMatch
     XCTAssertTrue(handle.exists)
     let start = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-    let end = thirdCell.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.95))
+    // UIKit positions the lifted cell by its centre. Dropping at the third
+    // cell's bottom crosses the fourth row's insertion threshold.
+    let end = thirdCell.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5))
     start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow,
                 thenHoldForDuration: 0.5)
     let expected = [before[1], before[2], before[0]]
-    // A spring-backed List commits its new accessibility order asynchronously.
+    // The native table commits its new accessibility order asynchronously.
     // Wait for the actual drop rather than inspecting the previous snapshot;
     // retain the real gesture and exact order/persistence assertions.
     let moved = XCTNSPredicateExpectation(predicate: NSPredicate { [self] _, _ in
