@@ -88,11 +88,12 @@ final class NativeInteractionTests: XCTestCase {
     shot("queue-before-move")
     let handle = firstCell.buttons.matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", "Reorder", "Reorder ")).firstMatch
     XCTAssertTrue(handle.exists)
+    XCTAssertTrue(handle.isHittable)
     let start = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
     // UIKit positions the lifted cell by its centre. Dropping at the third
     // cell's bottom crosses the fourth row's insertion threshold.
     let end = thirdCell.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5))
-    start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow,
+    start.press(forDuration: 0.8, thenDragTo: end, withVelocity: .slow,
                 thenHoldForDuration: 0.5)
     let expected = [before[1], before[2], before[0]]
     // The native table commits its new accessibility order asynchronously.
@@ -202,7 +203,10 @@ final class NativeInteractionTests: XCTestCase {
     add(evidence)
     let done = reader.buttons["Готово"].firstMatch
     XCTAssertTrue(done.waitForExistence(timeout: 5))
+    XCTAssertTrue(done.isHittable)
     done.tap()
+    // Preserve the actual post-tap state even when a hosted gesture fails.
+    shot("subtitle-reader-after-close-tap")
     XCTAssertTrue(rail.waitForExistence(timeout: 10))
     let closed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
       !reader.exists && !follow.exists && rail.isHittable

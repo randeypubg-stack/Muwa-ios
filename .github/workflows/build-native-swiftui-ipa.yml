@@ -426,7 +426,22 @@ jobs:
       - name: Capture native screens
         env:
           MUWA_REVIEW_DEVICE: ${{ matrix.device }}
+          MUWA_REVIEW_CAPTION_MOTION: ${{ matrix.device == 'tablet' && '1' || '0' }}
         run: python3 tests/capture_previews.py
+      - name: Record iPad captions on the verified warm Simulator
+        if: matrix.device == 'tablet'
+        env:
+          MUWA_REVIEW_DEVICE: tablet
+        run: |
+          python3 tests/RecorderSignalChecks.py
+          python3 tests/capture_subtitle_motion.py --review-manifest build/previews/manifest.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always() && matrix.device == 'tablet'
+        with:
+          name: Muwa-build47-subtitle-motion-tablet
+          overwrite: true
+          path: build/previews/subtitle-motion
+          if-no-files-found: error
       - name: Prepare CPU OCR for native Home verification
         if: matrix.device == 'phone'
         run: |
@@ -499,7 +514,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        device: [large-phone, tablet]
+        device: [large-phone]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

@@ -31,6 +31,21 @@ PACKAGE = "app.muwa.nasheeds"
 PROOF_PREFIX = "subtitle-motion-"
 
 
+def completed_review_selection(rows, inventory, kind, runtime):
+    selected = inventory.get("selected", [])
+    if (len(rows) != 1 or len(selected) != 1
+            or rows[0].get("captureCompleted") is not True
+            or rows[0].get("leftBootedForCaptionMotion") is not True
+            or rows[0].get("kind") != kind or selected[0].get("kind") != kind
+            or rows[0].get("udid") != selected[0].get("udid")
+            or rows[0].get("deviceTypeIdentifier") != selected[0].get("deviceTypeIdentifier")
+            or rows[0].get("runtimeIdentifier") != selected[0].get("runtimeIdentifier")
+            or rows[0].get("osVersion") != runtime or selected[0].get("runtimeVersion") != runtime
+            or rows[0].get("toolchain") != inventory.get("toolchain")):
+        raise AssertionError("Caption capture requires a completed matching same-job native screen review")
+    return selected
+
+
 def verify_frame(frame, pid):
     keys = ("x", "y", "width", "height", "screenWidth", "screenHeight")
     if frame.get("pid") != pid:
@@ -126,7 +141,25 @@ def self_test():
     case("unfinished clock", lambda v: v[3].update(time=10))
     case("clipped caption bounds", lambda v: v[4].update(x=400))
     case("invalid caption bounds", lambda v: v[4].update(width=float("nan")))
-    print(json.dumps({"selfTestsPassed": 1 + len(cases), "rejectedInvalidProofs": cases}, indent=2))
+    device = {"udid": "actual-udid", "kind": "tablet", "deviceTypeIdentifier": "actual-ipad-type",
+              "runtimeIdentifier": "actual-runtime", "runtimeVersion": "27.0"}
+    inventory = {"selected": [device], "toolchain": {"simulatorSDKVersion": "27.0"}}
+    row = {**device, "captureCompleted": True, "leftBootedForCaptionMotion": True,
+           "osVersion": "27.0", "toolchain": inventory["toolchain"]}
+    assert completed_review_selection([row], inventory, "tablet", "27.0") == [device]
+    reuse_cases = []
+    for key, value in [("captureCompleted", False), ("leftBootedForCaptionMotion", False),
+                       ("udid", "another-udid"), ("kind", "large-phone"),
+                       ("deviceTypeIdentifier", "another-type"), ("runtimeIdentifier", "another-runtime"),
+                       ("osVersion", "26.5"), ("toolchain", {"simulatorSDKVersion": "26.5"})]:
+        try:
+            completed_review_selection([{**row, key: value}], inventory, "tablet", "27.0")
+        except AssertionError:
+            reuse_cases.append(key)
+        else:
+            raise AssertionError(f"Invalid same-job review was accepted: {key}")
+    print(json.dumps({"selfTestsPassed": 2 + len(cases) + len(reuse_cases),
+                      "rejectedInvalidProofs": cases, "rejectedMismatchedReviewFields": reuse_cases}, indent=2))
 
 
 def main():
@@ -136,6 +169,8 @@ def main():
                         default=Path("build/PreviewDerivedData/Build/Products/Debug-iphonesimulator"))
     parser.add_argument("--output", type=Path, default=Path("build/previews/subtitle-motion"))
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--review-manifest", type=Path,
+                        help="Reuse the completed same-job screen review and verify its installed executable")
     args = parser.parse_args()
     if args.self_test:
         self_test()
@@ -201,9 +236,20 @@ def main():
         temporary.replace(path)
 
     try:
-        selected, inventory = load_selection(args.kind, os.environ.get("MUWA_REQUESTED_DEVICE"),
-                                             os.environ.get("MUWA_REQUESTED_IOS"),
-                                             os.environ.get("MUWA_REVIEW_RUNTIME_VERSION"))
+        if args.review_manifest:
+            # Do not issue another inventory RPC to a busy headless Simulator.
+            # The producer already verified the real type/runtime, booted this
+            # exact UDID and captured its original screen in the same CI job.
+            rows = json.loads(args.review_manifest.read_text())
+            inventory = json.loads((args.review_manifest.parent / "device-inventory.json").read_text())
+            selected = completed_review_selection(rows, inventory, args.kind,
+                                                  os.environ.get("MUWA_REVIEW_RUNTIME_VERSION"))
+            booted_here = True  # this capture now owns the producer's cleanup
+            status["selectionSource"] = "Completed same-job native review; exact UDID/runtime and executable verified"
+        else:
+            selected, inventory = load_selection(args.kind, os.environ.get("MUWA_REQUESTED_DEVICE"),
+                                                 os.environ.get("MUWA_REQUESTED_IOS"),
+                                                 os.environ.get("MUWA_REVIEW_RUNTIME_VERSION"))
         if len(selected) != 1:
             raise AssertionError("Motion review requires exactly one actual selected Simulator")
         device = selected[0]
@@ -220,16 +266,26 @@ def main():
             raise AssertionError("Review app has the wrong bundle identifier")
         status.update(version=info.get("CFBundleShortVersionString"), build=info.get("CFBundleVersion"))
         udid = device["udid"]
-        if device["state"] != "Booted":
+        if not args.review_manifest and device["state"] != "Booted":
             run("xcrun", "simctl", "boot", udid)
             booted_here = True
         run("xcrun", "simctl", "bootstatus", udid, "-b", timeout=240)
         status["bootstatusCompleted"] = True
         status["appearanceSource"] = "Production Muwa preferredColorScheme(.dark); no Simulator GUI RPC"
-        # Cold iPad Pro iOS 27 installation took 232 seconds in the successful
-        # static review. Bound installation separately from fixture commands;
-        # retain all PID, frame, clock and video assertions below.
-        run("xcrun", "simctl", "install", udid, app, timeout=300)
+        if args.review_manifest:
+            installed = Path(run("xcrun", "simctl", "get_app_container", udid, PACKAGE, "app").strip())
+            installed_info = plistlib.loads((installed / "Info.plist").read_bytes())
+            identity = ("CFBundleIdentifier", "CFBundleVersion", "CFBundleShortVersionString", "CFBundleExecutable")
+            if any(installed_info.get(key) != info.get(key) for key in identity):
+                raise AssertionError("Installed caption review app has a different build identity")
+            executable = info["CFBundleExecutable"]
+            expected_hash = hashlib.sha256((app / executable).read_bytes()).hexdigest()
+            if hashlib.sha256((installed / executable).read_bytes()).hexdigest() != expected_hash:
+                raise AssertionError("Installed caption review app does not match the current compiled executable")
+            status["installedExecutableSha256"] = expected_hash
+        else:
+            # Bound cold installation independently of fixture commands.
+            run("xcrun", "simctl", "install", udid, app, timeout=300)
         data = Path(run("xcrun", "simctl", "get_app_container", udid, PACKAGE, "data").strip())
         for path in (data / "Documents").glob(PROOF_PREFIX + "*"):
             if path.is_file():

@@ -102,9 +102,12 @@ for i,d in enumerate(selected):
             run('xcrun','simctl','io',udid,'screenshot',str(out/f'{i}-{label}.png'))
     finally:
         run('xcrun','simctl','ui',udid,'content_size','large')
-    # The phone review immediately records launch motion with the same installed
-    # app. Keep its Simulator warm; every other matrix job closes its own device.
-    if kind != 'phone': run('xcrun','simctl','shutdown',udid)
+    # Launch/caption review can reuse this verified installed app in the same
+    # job, avoiding a second cold CoreSimulator installation on large iPads.
+    keep_for_motion = os.environ.get('MUWA_REVIEW_CAPTION_MOTION') == '1'
+    manifest[i]['leftBootedForCaptionMotion'] = keep_for_motion
+    if kind != 'phone' and not keep_for_motion:
+        run('xcrun','simctl','shutdown',udid)
     (out/f'{i}-device.txt').write_text(d['name'])
     manifest[i]['captureCompleted'] = True
     (out/'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
