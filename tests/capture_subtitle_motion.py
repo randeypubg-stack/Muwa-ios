@@ -226,7 +226,10 @@ def main():
         run("xcrun", "simctl", "bootstatus", udid, "-b", timeout=240)
         status["bootstatusCompleted"] = True
         status["appearanceSource"] = "Production Muwa preferredColorScheme(.dark); no Simulator GUI RPC"
-        run("xcrun", "simctl", "install", udid, app)
+        # Cold iPad Pro iOS 27 installation took 232 seconds in the successful
+        # static review. Bound installation separately from fixture commands;
+        # retain all PID, frame, clock and video assertions below.
+        run("xcrun", "simctl", "install", udid, app, timeout=300)
         data = Path(run("xcrun", "simctl", "get_app_container", udid, PACKAGE, "data").strip())
         for path in (data / "Documents").glob(PROOF_PREFIX + "*"):
             if path.is_file():
