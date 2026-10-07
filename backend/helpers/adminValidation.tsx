@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { SubtitleDocument } from "../endpoints/subtitles/original_POST.schema";
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,80}$/);
 const revision = z.number().int().positive();
 const status = z.enum(["draft", "published", "archived"]);
@@ -81,6 +82,8 @@ const telegramBotSource = z
   .strict();
 const telegramSource = z.union([telegramChannelSource, telegramBotSource]);
 const action = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("get-recognition"), trackId: id }),
+  z.object({ action: z.literal("recognize-track"), trackId: id, revision }),
   z.object({
     action: z.literal("lookup-telegram-import"),
     source: telegramSource,
@@ -183,6 +186,25 @@ export type TrackRecord = {
   captionsRevision: number;
   captions: Caption[];
   updatedAt: string;
+  recognition?: RecognitionSummary;
+};
+export type RecognitionSummary = {
+  id: string;
+  status: "queued" | "processing" | "ready" | "failed" | "stale";
+  progressSeconds: number;
+  errorCode: string | null;
+  language: string | null;
+  quality: {
+    needsReview: boolean;
+    model: string;
+    languageProbability: number;
+    warnings: string[];
+    elapsedSeconds: number;
+  } | null;
+};
+export type RecognitionResult = RecognitionSummary & {
+  trackId: string;
+  document: SubtitleDocument | null;
 };
 export type SubmissionRecord = {
   id: string;
@@ -219,7 +241,7 @@ export type AdminState = {
   total: number;
   page: number;
   stats: { published: number; drafts: number; pending: number };
-  recognition: { enabled: false; message: string };
+  recognition: { enabled: boolean; message: string };
 };
 export type UploadFile = {
   part: "audio" | "cover";
@@ -235,6 +257,8 @@ export type UploadFile = {
 };
 export type AdminResult = {
   ok: true;
+  recognition?: RecognitionResult | null;
+  jobId?: string;
   importStatus?: "missing" | "existing" | "duplicate" | "created";
   trackId?: string;
   uploadId?: string;

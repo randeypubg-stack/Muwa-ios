@@ -48,8 +48,7 @@ import {
   type AdminAction,
 } from "../../backend/helpers/adminValidation";
 import styles from "./AdminWorkspace.module.css";
-const logo =
-  "/assets/app-mark.png";
+const logo = "/assets/app-mark.png";
 const labels: Record<string, string> = {
   published: "Опубликован",
   draft: "Черновик",
@@ -58,6 +57,12 @@ const labels: Record<string, string> = {
   rejected: "Отклонён",
   uploading: "Загружается",
 };
+const recognitionLabels: Record<string, string> = {
+  queued: "Субтитры в очереди",
+  processing: "Распознаём субтитры",
+  ready: "Оригинал распознан",
+  failed: "Ошибка распознавания",
+};
 const eventLabels: Record<string, string> = {
   "track.created": "Добавлен нашид",
   "track.updated": "Изменён нашид",
@@ -65,6 +70,7 @@ const eventLabels: Record<string, string> = {
   "track.draft": "Возвращён в черновики",
   "track.archived": "Нашид снят с публикации",
   "captions.updated": "Обновлены субтитры",
+  "recognition.queued": "Запущено распознавание оригинала",
   "submission.received": "Поступила публикация",
   "submission.rejected": "Публикация отклонена",
   "submission.published": "Публикация одобрена",
@@ -166,11 +172,7 @@ export const AdminWorkspace = () => {
     return (
       <main className={styles.gate}>
         <p>Откройте панель Muwa в отдельном окне.</p>
-        <a
-          href="/admin"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        <a href="/admin" target="_blank" rel="noopener noreferrer">
           Открыть панель
         </a>
       </main>
@@ -273,6 +275,7 @@ export const AdminConsole = ({
     enabled: !exampleState,
     retry: false,
     staleTime: 15000,
+    refetchInterval: 15000,
   });
   const data = exampleState ?? query.data;
   async function refresh() {
@@ -585,6 +588,9 @@ export const AdminConsole = ({
                           {t.captionsRevision > 0
                             ? `${t.captions.length} строк субтитров`
                             : "Без редакторских субтитров"}
+                          {t.recognition
+                            ? " · " + recognitionLabels[t.recognition.status]
+                            : ""}
                         </small>
                       </div>
                     </div>
@@ -1025,6 +1031,20 @@ const CaptionEditor = ({
     [time, setTime] = useState(0);
   const audio = useRef<HTMLAudioElement>(null),
     importer = useRef<HTMLInputElement>(null);
+  const recognition = useQuery({
+    queryKey: ["muwa-recognition", track.id],
+    queryFn: () =>
+      postAdminAction({ action: "get-recognition", trackId: track.id }),
+    enabled: !disabled,
+    retry: false,
+    refetchInterval: (query) =>
+      ["queued", "processing"].includes(
+        query.state.data?.recognition?.status ?? "",
+      )
+        ? 5000
+        : false,
+  });
+  const recognized = recognition.data?.recognition;
   const dirty = JSON.stringify(rows) !== JSON.stringify(track.captions);
   const close = () => {
     if (
@@ -1035,6 +1055,49 @@ const CaptionEditor = ({
   };
   const update = (i: number, patch: Partial<Caption>) =>
     setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  async function recognize() {
+    setBusy(true);
+    setError("");
+    try {
+      await postAdminAction({
+        action: "recognize-track",
+        trackId: track.id,
+        revision: track.revision,
+      });
+      await recognition.refetch();
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  function useRecognition() {
+    const doc = recognized?.document;
+    if (!doc) return;
+    if (!["ar", "ru", "en"].includes(doc.language)) {
+      setError(
+        "Этот язык сохранён в оригинальном документе. Редактор сейчас поддерживает AR, RU и EN.",
+      );
+      return;
+    }
+    if (
+      dirty &&
+      !window.confirm(
+        "Заменить несохранённые строки результатом распознавания?",
+      )
+    )
+      return;
+    setRows(
+      doc.segments.map((s) => ({
+        start: s.start,
+        end: s.end,
+        ar: doc.language === "ar" ? s.original : "",
+        ru: doc.language === "ru" ? s.original : "",
+        en: doc.language === "en" ? s.original : "",
+      })),
+    );
+    setError("");
+  }
   async function save() {
     setBusy(true);
     setError("");
@@ -1093,6 +1156,55 @@ const CaptionEditor = ({
           Время в секундах. Строки идут по порядку, без пересечений. Нажмите
           время начала, чтобы прослушать фразу.
         </DialogDescription>
+        <section className={styles.recognition} aria-live="polite">
+          <div>
+            <strong>
+              {recognized
+                ? recognitionLabels[recognized.status]
+                : "Автоматические субтитры"}
+            </strong>
+            <p>
+              {recognized?.status === "processing"
+                ? `Распознано ${minutes(recognized.progressSeconds)} из ${minutes(track.duration)}. Загрузка и прослушивание продолжают работать.`
+                : recognized?.status === "failed"
+                  ? "Распознавание не завершено. Исходный файл и сохранённые субтитры не изменены; можно повторить."
+                  : recognized?.status === "ready"
+                    ? "Проверьте слова и время по записи. Ручные исправления не заменяются автоматическим результатом."
+                    : "Сервер распознаёт оригинал локально, по одному файлу. Новые загрузки попадают в очередь автоматически."}
+            </p>
+            {recognized?.quality?.needsReview && (
+              <p>
+                Есть неуверенно распознанные фразы или язык. Проверьте текст
+                перед сохранением.
+              </p>
+            )}
+            {recognition.error && <p>{message(recognition.error)}</p>}
+          </div>
+          <div>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={
+                busy ||
+                disabled ||
+                ["queued", "processing"].includes(recognized?.status ?? "")
+              }
+              onClick={() => void recognize()}
+            >
+              {recognized ? "Распознать заново" : "Распознать оригинал"}
+            </Button>
+            {recognized?.document && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy || disabled}
+                onClick={useRecognition}
+              >
+                Взять распознанный текст
+              </Button>
+            )}
+          </div>
+        </section>
         {track.audioUrl && (
           <audio
             ref={audio}

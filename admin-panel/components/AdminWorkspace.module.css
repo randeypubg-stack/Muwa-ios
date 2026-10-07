@@ -684,6 +684,25 @@
   width: min(1000px, 95vw) !important;
   max-width: 1000px !important;
 }
+.recognition {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(120, 174, 199, 0.06);
+}
+.recognition p {
+  margin: 6px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.recognition > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .captionToolbar {
   display: flex;
   align-items: center;

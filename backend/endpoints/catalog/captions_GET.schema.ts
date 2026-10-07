@@ -5,7 +5,7 @@ export const schema = z.object({
 });
 export type OutputType = {
   segments: Caption[];
-  source: "manual";
+  source: "manual" | "automatic";
   revision: number;
 };
 export async function getCatalogCaptions(

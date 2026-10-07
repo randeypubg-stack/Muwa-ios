@@ -7,7 +7,10 @@ const Jasmine = require("jasmine");
 const root = path.resolve(__dirname, "..");
 const folder = fs.mkdtempSync(path.join(root, ".test-run-"));
 process.env.MUWA_PUBLIC_ORIGIN ??= "https://muwa-app.floot.app";
-fs.writeFileSync(path.join(folder, "package.json"), JSON.stringify({type:"commonjs"}));
+fs.writeFileSync(
+  path.join(folder, "package.json"),
+  JSON.stringify({ type: "commonjs" }),
+);
 const databaseTests = Boolean(process.env.MUWA_TEST_DATABASE_URL);
 const helpers = path.join(folder, "helpers");
 fs.mkdirSync(helpers);
@@ -45,6 +48,7 @@ async function main() {
         "mediaSecurity.tsx",
         "uploadCleanup.tsx",
         "telegramImport.tsx",
+        "localRecognition.tsx",
       );
     for (const name of names) {
       const output = ts.transpileModule(
@@ -70,7 +74,10 @@ async function main() {
             'require("./testStorage")',
           )
         : output.outputText;
-      fs.writeFileSync(path.join(helpers, name.replace(/\.tsx?$/, ".js")), code);
+      fs.writeFileSync(
+        path.join(helpers, name.replace(/\.tsx?$/, ".js")),
+        code,
+      );
     }
     if (databaseTests) {
       // Disposable importer fixtures explicitly provision their owner. Missing
@@ -120,6 +127,10 @@ async function main() {
       fs.copyFileSync(
         path.join(__dirname, "telegram-import.spec.cjs"),
         path.join(helpers, "telegram-import.spec.js"),
+      );
+      fs.copyFileSync(
+        path.join(__dirname, "local-asr.spec.cjs"),
+        path.join(helpers, "local-asr.spec.js"),
       );
       fs.writeFileSync(
         path.join(helpers, "testStorage.js"),

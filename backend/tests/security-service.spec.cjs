@@ -82,6 +82,7 @@ describe("Muwa security boundaries with disposable PostgreSQL", () => {
       "security-migration.sql",
       "security-migration.sql",
       "telegram-import-migration.sql",
+      "asr-migration.sql",
     ])
       await testPool.query(fs.readFileSync(path.join(root, name), "utf8"));
   });

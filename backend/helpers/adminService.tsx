@@ -28,6 +28,12 @@ import {
 import { cleanupExpiredUploads } from "./uploadCleanup";
 import { telegramImportOwnerAllowed } from "./runtimeConfig";
 import {
+  enqueueRecognition,
+  localRecognitionEnabled,
+  recognitionResults,
+  recognitionSummary,
+} from "./localRecognition";
+import {
   findTelegramSource,
   findAudioDuplicate,
   telegramSourceDetails,
@@ -389,6 +395,30 @@ async function execute(
   input: AdminAction,
   userId: number,
 ): Promise<AdminResult> {
+  if (input.action === "get-recognition") {
+    const row = await db
+      .selectFrom("catalogTracks")
+      .select("id")
+      .where("id", "=", input.trackId)
+      .executeTakeFirst();
+    if (!row) fail("Нашид не найден.", 404);
+    return {
+      ok: true,
+      recognition: (await recognitionResults([row.id], true))[0] ?? null,
+    };
+  }
+  if (input.action === "recognize-track") {
+    if (!localRecognitionEnabled())
+      fail("Локальное распознавание пока не подключено.", 503);
+    return db.transaction().execute(async (tx) => {
+      const row = await track(tx, input.trackId, input.revision);
+      const jobId = await enqueueRecognition(tx, row.id, true);
+      if (!jobId)
+        fail("Нужен загруженный MP3/M4A/WAV длительностью до 60 минут.");
+      await audit(tx, userId, "recognition.queued", row.id);
+      return { ok: true, jobId };
+    });
+  }
   if (input.action === "lookup-telegram-import") {
     const id = await findTelegramSource(input.source);
     return {
@@ -547,6 +577,11 @@ async function execute(
           .values({ ...values, id, createdBy: userId })
           .execute();
       if (audio) await rememberAudio(tx, id, audio.fingerprint.sha256);
+      await enqueueRecognition(tx, id);
+      if (captionsChanged)
+        await sql`update catalog_tracks set captions_source='manual' where id=${id}`.execute(
+          tx,
+        );
       if (source) await rememberTelegramSource(tx, source, id, userId);
       await audit(tx, userId, current ? "track.updated" : "track.created", id, {
         title: input.title,
@@ -603,6 +638,9 @@ async function execute(
         await audit(tx, userId, "captions.updated", row.id, {
           lines: input.captions.length,
         });
+        await sql`update catalog_tracks set captions_source='manual' where id=${row.id}`.execute(
+          tx,
+        );
       }
       return { ok: true };
     });
@@ -664,6 +702,7 @@ async function execute(
         })
         .execute();
       await rememberAudio(tx, id, audio.fingerprint.sha256);
+      await enqueueRecognition(tx, id);
       await tx
         .updateTable("publicationDrafts")
         .set({
@@ -703,9 +742,10 @@ async function state(input: AdminQuery): Promise<AdminState> {
       pending: pending.count,
     },
     recognition: {
-      enabled: false,
-      message:
-        "Автораспознавание приостановлено. Редактирование и импорт готовых субтитров доступны.",
+      enabled: localRecognitionEnabled(),
+      message: localRecognitionEnabled()
+        ? "После загрузки сервер распознаёт оригинал в отдельной очереди. Проверяйте текст по аудио; ручные исправления сохраняются."
+        : "Автораспознавание пока не подключено. Редактирование и импорт готовых субтитров доступны.",
     },
   };
   const offset = (input.page - 1) * 20;
@@ -752,6 +792,11 @@ async function state(input: AdminQuery): Promise<AdminState> {
       captions: r.captions as unknown as Caption[],
       updatedAt: r.updatedAt.toISOString(),
     }));
+    const recognition = await recognitionResults(rows.map((r) => r.id));
+    const byTrack = new Map(
+      recognition.map((r) => [r.trackId, recognitionSummary(r)]),
+    );
+    for (const row of base.tracks) row.recognition = byTrack.get(row.id);
   } else if (input.section === "submissions") {
     let query = db.selectFrom("publicationDrafts");
     if (input.status !== "all")
@@ -865,10 +910,11 @@ async function handle(request: Request, method: "GET" | "POST") {
         fail(parsed.error.issues[0]?.message ?? "Проверьте данные.");
       if (
         (parsed.data.action === "lookup-telegram-import" ||
-          parsed.data.action === "import-telegram-track") &&
+          parsed.data.action === "import-telegram-track" ||
+          parsed.data.action === "recognize-track") &&
         !telegramImportOwnerAllowed(user.id)
       )
-        fail("Импорт из Telegram доступен только владельцу Muwa.", 403);
+        fail("Эта операция доступна только владельцу Muwa.", 403);
       output = await execute(parsed.data, user.id);
     } else {
       const parsed = adminValidation.query.safeParse(

@@ -166,6 +166,7 @@ describe("Telegram import in the existing catalogue", () => {
       "security-migration.sql",
       "telegram-import-migration.sql",
       "telegram-import-migration.sql",
+      "asr-migration.sql",
     ])
       await testPool.query(fs.readFileSync(path.join(root, name), "utf8"));
   });

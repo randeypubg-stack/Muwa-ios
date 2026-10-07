@@ -29,7 +29,7 @@ async function request(endpoint:string,body?:unknown,options:{cookie?:string;ori
 async function status(endpoint:string,body:unknown,expected:number,options={}){const r=await request(endpoint,body,options);assert.equal(r.status,expected,endpoint);await r.arrayBuffer();checks++;}
 try {
  await sql.unsafe('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
- const migrations=['base-schema.sql','admin-migration.sql','security-migration.sql','premium-migration.sql','migration.sql','telegram-import-migration.sql'];
+ const migrations=['base-schema.sql','admin-migration.sql','security-migration.sql','premium-migration.sql','migration.sql','telegram-import-migration.sql','asr-migration.sql'];
  for(const name of migrations)await sql.unsafe(await fs.readFile(name,'utf8'));
  assert.equal((await fetch(origin+'/_health')).status,200);checks++;
  await status('catalog/tracks',undefined,401);

@@ -1,4 +1,5 @@
 import { db } from "../../helpers/db";
+import { sql } from "kysely";
 import { schema } from "./captions_GET.schema";
 export async function handle(request: Request) {
   const parsed = schema.safeParse(
@@ -12,7 +13,7 @@ export async function handle(request: Request) {
   try {
     const row = await db
       .selectFrom("catalogTracks")
-      .select(["captions", "captionsRevision"])
+      .select(["captions", "captionsRevision", sql<string>`captions_source`.as("source")])
       .where("id", "=", parsed.data.trackId)
       .where("status", "=", "published")
       .executeTakeFirst();
@@ -21,7 +22,7 @@ export async function handle(request: Request) {
     return Response.json(
       {
         segments: row.captions,
-        source: "manual",
+        source: row.source,
         revision: row.captionsRevision,
       },
       { headers: { "Cache-Control": "public, max-age=30" } },

@@ -17,10 +17,10 @@
   unused.
 - Verify changed behavior with suitable checks. State clearly what was tested
   and what still requires backend deployment or a physical device.
-- Subtitle development is deferred by the owner on 2 October 2026. Preserve
-  existing manual/cached captions and the future requirement for automatic
-  nasheed transcription after upload, independent of the chosen ASR provider.
-  Do not activate paid recognition or make upload/publication depend on it now.
+- On 7 October 2026 the owner resumed automatic subtitle recognition on the
+  rented server. Use a local worker; preserve manual/cached captions and keep
+  upload/publication independent of recognition. Do not activate paid providers
+  or promise maximum accuracy without checking actual nasheed recordings.
 - The hosting direction is a closed beta on rented infrastructure. On 4 October
   2026 the owner explicitly chose a fresh Beget database and catalog: previous
   Floot accounts, Premium grants, captions and media need not be imported. Leave

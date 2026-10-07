@@ -52,7 +52,9 @@ async function objectPaths(key: ObjectKey, create = false) {
     let current = root;
     for (const part of path.relative(root, folder).split(path.sep).filter(Boolean)) {
       current = path.join(current, part);
-      if (create) await fs.mkdir(current, {mode:0o700}).catch(e => { if (e.code !== "EEXIST") throw e; });
+      // The deployment sets a dedicated media group and setgid directories.
+      // Its local recognition worker can read audio without API/bot credentials.
+      if (create) await fs.mkdir(current, {mode:0o750}).catch(e => { if (e.code !== "EEXIST") throw e; });
       try {
         const info = await fs.lstat(current);
         if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("Unsafe storage directory");
@@ -124,7 +126,7 @@ async function writeObject(request:Request,ticket:Ticket) {
     if(space.bavail*space.bsize < expected+5*1024**3)throw new SecurityError("Мало свободного места на сервере.",507);
     const paths=await objectPaths(ticket,true);
     temporary=path.join(path.dirname(paths.file),".upload-"+randomUUID());
-    const output=await fs.open(temporary,"wx",0o600), hash=createHash("sha256");
+    const output=await fs.open(temporary,"wx",0o640), hash=createHash("sha256");
     let size=0;
     reader=request.body.getReader();
     try{
@@ -141,7 +143,7 @@ async function writeObject(request:Request,ticket:Ticket) {
     try{await fs.link(temporary,paths.file);published=paths.file;}
     catch(e){if((e as NodeJS.ErrnoException).code==="EEXIST")throw new SecurityError("Файл уже существует.",409);throw e;}
     const metadata:Metadata={sizeBytes:size,contentType:ticket.contentType,etag:'"'+hash.digest("hex")+'"'};
-    await fs.writeFile(paths.metadata,JSON.stringify(metadata),{flag:"wx",mode:0o600});
+    await fs.writeFile(paths.metadata,JSON.stringify(metadata),{flag:"wx",mode:0o640});
     published=undefined;
     return new Response(null,{status:201,headers:{ETag:metadata.etag,"Cache-Control":"no-store"}});
   }finally{
