@@ -116,7 +116,7 @@ BEGIN
  UPDATE public.catalog_asr_jobs SET status='ready',document=p_doc,quality=p_quality,error_code=NULL,
  progress_seconds=duration,lease_token=NULL,lease_until=NULL,updated_at=now() WHERE id=p_id;
  IF lang IN ('ar','ru','en') AND p_quality->>'needsReview'='false' AND t.captions_revision=j.captions_revision
- AND (t.captions='[]'::jsonb OR t.captions_source='automatic') THEN
+ AND ((t.captions='[]'::jsonb AND t.captions_revision=0) OR t.captions_source='automatic') THEN
   SELECT jsonb_agg(jsonb_build_object('start',s->'start','end',s->'end',
    'ar',CASE WHEN lang='ar' THEN s->>'original' ELSE '' END,
    'ru',CASE WHEN lang='ru' THEN s->>'original' ELSE '' END,

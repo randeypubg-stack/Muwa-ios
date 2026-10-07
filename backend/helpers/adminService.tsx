@@ -579,7 +579,7 @@ async function execute(
       if (audio) await rememberAudio(tx, id, audio.fingerprint.sha256);
       await enqueueRecognition(tx, id);
       if (captionsChanged)
-        await sql`update catalog_tracks set captions_source='manual' where id=${id}`.execute(
+        await sql`update catalog_tracks set captions_source=${localRecognitionEnabled() ? "automatic" : "manual"} where id=${id}`.execute(
           tx,
         );
       if (source) await rememberTelegramSource(tx, source, id, userId);

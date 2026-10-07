@@ -194,6 +194,20 @@ describe("Local recognition queue and protected captions", () => {
       "ready",
     );
   });
+  it("preserves intentionally cleared manual captions even when recognition starts later", async () => {
+    await create();
+    await query(
+      "UPDATE catalog_tracks SET captions_revision=2,captions='[]'::jsonb,captions_source='manual'",
+    );
+    await query("DELETE FROM catalog_asr_jobs");
+    await query("SELECT muwa_enqueue_asr('asr-fixture')");
+    const c = await claim();
+    expect(await finish(c)).toBeTrue();
+    const t = (await query("SELECT * FROM catalog_tracks"))[0];
+    expect(t.captions).toEqual([]);
+    expect(t.captions_revision).toBe(2);
+    expect(t.captions_source).toBe("manual");
+  });
   it("invalidates a replaced recording and refuses to attach the previous result", async () => {
     await create();
     const c = await claim();
