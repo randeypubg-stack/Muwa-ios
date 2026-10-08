@@ -103,6 +103,13 @@ try {
  await status('admin/action',{action:'lookup-telegram-import',source:importSource,ownerId:1,email:'owner@muwa.invalid'},403,{cookie:otherCookie});
  await status('admin/action',{action:'import-telegram-track',source:{...importSource,audioSha256:createHash('sha256').update(audio).digest('hex')},uploadId:randomUUID(),title:'Denied',artist:'Other',language:'und',duration:1,status:'draft'},403,{cookie:otherCookie});
  process.env.MUWA_BETA_USER_IDS='1';
+ // Removing an administrator from the beta must also revoke draft previews,
+ // despite the catalog's public GET middleware exception.
+ await status('admin/action',{action:'set-status',trackId:id,revision:3,status:'draft'},200);
+ const revokedPreview=await fetch(tracks[0].audio,{headers:{Cookie:otherCookie},redirect:'manual'});assert.equal(revokedPreview.status,404);await revokedPreview.arrayBuffer();checks++;
+ const ownerPreview=await fetch(tracks[0].audio,{headers:{Cookie:cookie},redirect:'manual'});assert.equal(ownerPreview.status,302);await ownerPreview.arrayBuffer();checks++;
+ const unpublished=await request('catalog/tracks',undefined,{cookie:''});assert.deepEqual((await unpublished.json()).tracks,[]);checks++;
+ await status('catalog/captions?trackId='+id,undefined,404,{cookie:''});
  await status('auth/logout',{},200,{superjson:true});
  await status('catalog/tracks',undefined,200);
  console.log(JSON.stringify({runtimeChecks:checks,result:'passed',productionDatabaseTouched:false}));

@@ -1,6 +1,6 @@
 import { db } from "../../helpers/db";
 import { getUrl } from "../../helpers/storage";
-import { publicOrigin } from "../../helpers/runtimeConfig";
+import { publicOrigin, betaUserAllowed } from "../../helpers/runtimeConfig";
 import { getServerUserSession } from "../../helpers/getServerUserSession";
 import { NotAuthenticatedError } from "../../helpers/getSetServerSession";
 import { catalogueMediaURL } from "../../helpers/mediaSecurity";
@@ -21,7 +21,8 @@ export async function handle(request: Request) {
     if (!track) return secureJSON({ error: "Файл не найден." }, 404);
     if (track.status !== "published") {
       try {
-        if ((await getServerUserSession(request)).user.role !== "admin")
+        const { user } = await getServerUserSession(request);
+        if (user.role !== "admin" || !betaUserAllowed(user.id))
           return secureJSON({ error: "Файл не найден." }, 404);
       } catch (error) {
         if (error instanceof NotAuthenticatedError)
