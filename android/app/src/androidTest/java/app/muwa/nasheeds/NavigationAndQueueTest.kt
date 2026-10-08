@@ -34,7 +34,7 @@ class NavigationAndQueueTest {
             )
             .use {
                 val pages = compose.onNodeWithTag("popular.pages")
-                pages.performScrollTo()
+                compose.onNodeWithTag("home.screen").performScrollToNode(hasTestTag("popular.pages"))
                 compose.onNodeWithTag("popular.page.muwa-01").assertIsDisplayed()
                 pages.performTouchInput { swipeLeft() }
                 compose.onNodeWithTag("popular.page.muwa-06").assertIsDisplayed()
