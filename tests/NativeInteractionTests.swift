@@ -100,15 +100,19 @@ final class NativeInteractionTests: XCTestCase {
     pages.swipeLeft()
     shot("popular-after-forward-swipe")
     let nextPage = app.descendants(matching: .any).matching(identifier: "popular-page-1").firstMatch
+    // SwiftUI reports a containment element's accessibility bounds as the
+    // union of its children. A final one-row tablet page occupies only the
+    // leading column, so its centre is not the scroll viewport's centre.
+    // View-aligned paging aligns the leading edge for full and partial pages.
     let arrived = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-      nextPage.exists && abs(nextPage.frame.midX - pages.frame.midX) < 20
+      nextPage.exists && abs(nextPage.frame.minX - pages.frame.minX) < 20
     }, object: nil)
     XCTAssertEqual(XCTWaiter.wait(for: [arrived], timeout: 10), .completed)
     shot("popular-next-page")
     pages.swipeRight()
     let firstPage = app.descendants(matching: .any).matching(identifier: "popular-page-0").firstMatch
     let returned = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-      firstPage.exists && abs(firstPage.frame.midX - pages.frame.midX) < 20
+      firstPage.exists && abs(firstPage.frame.minX - pages.frame.minX) < 20
     }, object: nil)
     XCTAssertEqual(XCTWaiter.wait(for: [returned], timeout: 10), .completed)
     shot("popular-returned-page")
