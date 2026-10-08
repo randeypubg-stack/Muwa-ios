@@ -99,14 +99,14 @@ final class NativeInteractionTests: XCTestCase {
     shot("popular-first-page")
     pages.swipeLeft()
     shot("popular-after-forward-swipe")
-    let nextPage = app.descendants(matching: .any)["popular-page-1"].firstMatch
+    let nextPage = app.descendants(matching: .any).matching(identifier: "popular-page-1").firstMatch
     let arrived = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
       nextPage.exists && abs(nextPage.frame.midX - pages.frame.midX) < 20
     }, object: nil)
     XCTAssertEqual(XCTWaiter.wait(for: [arrived], timeout: 10), .completed)
     shot("popular-next-page")
     pages.swipeRight()
-    let firstPage = app.descendants(matching: .any)["popular-page-0"].firstMatch
+    let firstPage = app.descendants(matching: .any).matching(identifier: "popular-page-0").firstMatch
     let returned = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
       firstPage.exists && abs(firstPage.frame.midX - pages.frame.midX) < 20
     }, object: nil)
