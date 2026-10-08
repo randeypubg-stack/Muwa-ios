@@ -548,9 +548,13 @@ struct MorphingPlayerView: View {
       ArtworkView(
         url: pageTrack.artworkURL,
         cornerRadius: cornerRadius,
-        placeholderSystemImage: "music.note"
+        placeholderSystemImage: "music.note",
+        contentMode: .fill
       )
       .frame(width: size, height: size)
+      .accessibilityElement(children: .contain)
+      .accessibilityIdentifier(pageTrack.id == track.id ? "player-artwork-frame" : "incoming-artwork-frame")
+      .accessibilityHidden(pageTrack.id != track.id)
       .scaleEffect(subtitleLayout.coverScale)
       .offset(x: subtitleLayout.coverShift)
 
@@ -750,7 +754,6 @@ struct MorphingPlayerView: View {
 
       VStack(spacing: 6) {
         smallActions
-        if player.isBuffering { Text("Загружаем аудио…").font(.caption2).foregroundStyle(.secondary) }
         if player.playbackError != nil {
           Button("Не удалось воспроизвести · Повторить") { player.retryPlayback() }
             .font(.caption2).foregroundStyle(.orange)
@@ -912,8 +915,10 @@ struct MorphingPlayerView: View {
           Button("Отменить скачивание", role: .destructive) { downloads.cancel(track) }
         }
         if downloads.isDownloaded(track) {
-          Button("Удалить загрузку", role: .destructive) {
+          Button(role: .destructive) {
             do { try downloads.remove(track) } catch { downloadError = DownloadManager.message(for: error) }
+          } label: {
+            Label("Удалить загрузку", systemImage: "trash")
           }
         }
         if player.playbackError != nil {
@@ -972,9 +977,11 @@ struct MorphingPlayerView: View {
           .foregroundStyle(.black)
           .frame(width: mainSize, height: mainSize)
           .background(.white, in: Circle())
+          .overlay { if player.isBuffering { PlaybackLoadingRing().padding(-5) } }
       }
       .accessibilityLabel(player.isPlaying ? "Пауза" : "Воспроизвести")
       .accessibilityIdentifier("player-toggle")
+      .accessibilityValue(player.isBuffering ? "Загрузка аудио" : player.isPlaying ? "Воспроизводится" : "На паузе")
 
       Button(action: player.next) {
         Image(systemName: "forward.fill")

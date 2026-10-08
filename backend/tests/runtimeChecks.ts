@@ -32,7 +32,7 @@ try {
  const migrations=['base-schema.sql','admin-migration.sql','security-migration.sql','premium-migration.sql','migration.sql','telegram-import-migration.sql','asr-migration.sql'];
  for(const name of migrations)await sql.unsafe(await fs.readFile(name,'utf8'));
  assert.equal((await fetch(origin+'/_health')).status,200);checks++;
- await status('catalog/tracks',undefined,401);
+ await status('catalog/tracks',undefined,200);
  await status('admin/state',undefined,401);
  await status('auth/register_with_password',{},403);
  const token=randomBytes(32).toString('hex'),password=randomBytes(20).toString('hex');
@@ -54,7 +54,7 @@ try {
  await status('auth/login_with_password',{email:'owner@muwa.invalid',password:boundary},200,{cookie:'',superjson:true});
  await sql`update user_passwords set password_hash=${await hash(password,10)} where user_id=1`;
 
- const empty=await request('catalog/tracks');assert.deepEqual((await empty.json()).tracks,[]);assert.match(empty.headers.get('cache-control')!,/no-store/);checks++;
+ const empty=await request('catalog/tracks');assert.deepEqual((await empty.json()).tracks,[]);assert.match(empty.headers.get('cache-control')!,/public/);checks++;
  const importSource={channelId:'-1000000012345',messageId:1};
  await status('admin/action',{action:'lookup-telegram-import',source:importSource},200);
  delete process.env.MUWA_TELEGRAM_OWNER_ID;
@@ -66,10 +66,18 @@ try {
  const file=plan.files[0];assert.equal((await fetch(file.presignedUrl,{method:'PUT',headers:file.headers,body:audio})).status,201);checks++;
  assert.equal((await fetch(file.presignedUrl,{method:'PUT',headers:file.headers,body:audio})).status,409);checks++;
  const saved=await request('admin/action',{action:'save-track',uploadId:plan.uploadId,title:'Проверка Muwa',artist:'Muwa',language:'ar',duration:1,status:'draft'});assert.equal(saved.status,200);const id=(await saved.json()).trackId;checks++;
- const pending=await request('catalog/tracks');assert.equal((await pending.json()).tracks.length,0);checks++;
+ const pending=await request('catalog/tracks',undefined,{cookie:''});assert.equal((await pending.json()).tracks.length,0);checks++;
+ const draftRows=await sql`select audio_url from catalog_tracks where id=${id}`;
+ const draftMedia=await fetch(draftRows[0].audio_url,{redirect:'manual'});assert.equal(draftMedia.status,404);await draftMedia.arrayBuffer();checks++;
+ await status('catalog/captions?trackId='+id,undefined,404,{cookie:''});
  await status('admin/action',{action:'set-status',trackId:id,revision:1,status:'published'},200);
  const catalog=await request('catalog/tracks');const tracks=(await catalog.json()).tracks;assert.equal(tracks.length,1);assert.equal(tracks[0].id,id);assert(tracks[0].audio.startsWith(origin+'/_api/catalog/media'));checks++;
- const denied=await fetch(tracks[0].audio,{redirect:'manual'});assert.equal(denied.status,401);await denied.arrayBuffer();checks++;
+ const guest=await fetch(tracks[0].audio,{headers:{Range:'bytes=0-43'}});assert.equal(guest.status,206);assert.deepEqual(Buffer.from(await guest.arrayBuffer()),audio.subarray(0,44));checks++;
+ const publicCatalog=await request('catalog/tracks',undefined,{cookie:''});assert.equal((await publicCatalog.json()).tracks[0].id,id);checks++;
+ await status('catalog/tracks',{},401,{cookie:''});
+ await status('premium/access',{action:'status'},401,{cookie:''});
+ await status('publicationUpload',{},401,{cookie:''});
+ await status('admin/action',{action:'set-status',trackId:id,revision:2,status:'draft'},401,{cookie:''});
  const media=await fetch(tracks[0].audio,{headers:{Cookie:cookie,Range:'bytes=0-43'}});assert.equal(media.status,206);assert.equal(media.headers.get('content-range'),'bytes 0-43/16044');assert.deepEqual(Buffer.from(await media.arrayBuffer()),audio.subarray(0,44));checks++;
  const ticket=await storage.getUrl({visibility:'private',filename:file.filename,expiresInSeconds:60});assert(ticket.ok);
  const tampered=ticket.url.slice(0,-1)+(ticket.url.endsWith('0')?'1':'0');assert.equal((await fetch(tampered)).status,403);checks++;
@@ -77,14 +85,15 @@ try {
  const range=await fetch(ticket.url,{headers:{Range:'bytes=999999-'}});assert.equal(range.status,416);checks++;
  const traversal=await storage.upload({visibility:'private',filename:'../outside.wav',contentType:'audio/wav',sizeBytes:1});assert(!traversal.ok);checks++;
  await status('admin/action',{action:'save-captions',trackId:id,revision:2,captions:[{start:0,end:1,ar:'تجربة',ru:'Проверка',en:'Test'}]},200);
- const captions=await request('catalog/captions?trackId='+id);assert.equal(captions.status,200);assert.equal((await captions.json()).segments.length,1);checks++;
+ const captions=await request('catalog/captions?trackId='+id,undefined,{cookie:''});assert.equal(captions.status,200);assert.equal((await captions.json()).segments.length,1);checks++;
  await status('diagnostics/events',{platform:'iOS',version:'1.4.0',build:'43',events:[{id:randomUUID(),occurredAt:new Date().toISOString(),area:'playback',errorType:'network',errorCode:-1009}]},200);
  await status('transcribe',{src:'/_cdn/static/test.mp3',title:'Test',durationSeconds:1},503,{superjson:true});
- // A non-allowlisted authenticated account must not see closed-beta data.
+ // Public listening works with or without an account. Private beta data remains gated.
  const user=(await sql`insert into users(email,display_name,role) values('other@muwa.invalid','Other','user') returning id`)[0];
  const session=randomBytes(32).toString('hex'),now=new Date();await sql`insert into sessions(id,user_id,expires_at) values(${session},${user.id},now()+interval '1 hour')`;
  const {setServerSession}=await import('../helpers/getSetServerSession');const response=new Response();await setServerSession(response,{id:session,createdAt:now.getTime(),lastAccessed:now.getTime()});
- await status('catalog/tracks',undefined,403,{cookie:response.headers.get('set-cookie')!.split(';')[0]});
+ await status('catalog/tracks',undefined,200,{cookie:response.headers.get('set-cookie')!.split(';')[0]});
+ await status('admin/state',undefined,403,{cookie:response.headers.get('set-cookie')!.split(';')[0]});
  // General administrators still cannot use owner-only Telegram ingestion,
  // even when they are permitted into the beta and claim the owner's ID/email.
  await sql`update users set role='admin' where id=${user.id}`;
@@ -95,7 +104,7 @@ try {
  await status('admin/action',{action:'import-telegram-track',source:{...importSource,audioSha256:createHash('sha256').update(audio).digest('hex')},uploadId:randomUUID(),title:'Denied',artist:'Other',language:'und',duration:1,status:'draft'},403,{cookie:otherCookie});
  process.env.MUWA_BETA_USER_IDS='1';
  await status('auth/logout',{},200,{superjson:true});
- await status('catalog/tracks',undefined,401);
+ await status('catalog/tracks',undefined,200);
  console.log(JSON.stringify({runtimeChecks:checks,result:'passed',productionDatabaseTouched:false}));
 } finally {
  await new Promise<void>(resolve=>server.close(()=>resolve()));await db.destroy();await sql.end();await fs.rm(root,{recursive:true,force:true});

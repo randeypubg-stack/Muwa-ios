@@ -6,6 +6,7 @@ struct ArtworkView: View {
   let url: URL?
   var cornerRadius: CGFloat = 24
   var placeholderSystemImage = "waveform"
+  var contentMode: ContentMode = .fit
 
   var body: some View {
     ZStack {
@@ -16,10 +17,13 @@ struct ArtworkView: View {
         CachedArtworkImage(url: url) { phase in
           switch phase {
           case .success(let image):
-            image
-              .resizable()
-              .scaledToFit()
-              .frame(maxWidth: .infinity, maxHeight: .infinity)
+            GeometryReader { proxy in
+              image.resizable()
+                .aspectRatio(contentMode: contentMode)
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .clipped()
+                .accessibilityLabel("Обложка нашида")
+            }
               .transition(.opacity.combined(with: .scale(scale: 0.985)))
 
           case .failure:

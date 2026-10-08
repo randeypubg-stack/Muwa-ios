@@ -220,7 +220,10 @@ fun MuwaApp(
                     "home" ->
                         HomeScreen(
                             model,
-                            { model.play(it, model.library.catalog); requestNotifications() },
+                            {
+                                model.play(it, model.library.catalog)
+                                requestNotifications()
+                            },
                             { addingTrack = it },
                             { route = "collection:$it" },
                             {
@@ -259,6 +262,8 @@ fun MuwaApp(
                                                 .onFailure { model.error = it.message }
                                         }
                                     ) {
+                                        Icon(Icons.Default.Delete, null)
+                                        Spacer(Modifier.width(8.dp))
                                         Text("Удалить загрузку")
                                     }
                             }
@@ -283,7 +288,15 @@ fun MuwaApp(
                                 contentPadding = PaddingValues(bottom = 24.dp),
                             ) {
                                 items(tracks, key = { it.id }) {
-                                    TrackRow(model, it, { t -> model.play(t, tracks); requestNotifications() }, { addingTrack = it })
+                                    TrackRow(
+                                        model,
+                                        it,
+                                        { t ->
+                                            model.play(t, tracks)
+                                            requestNotifications()
+                                        },
+                                        { addingTrack = it },
+                                    )
                                 }
                             }
                         } else if (route.startsWith("playlist:")) {

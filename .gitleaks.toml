@@ -7,5 +7,5 @@ useDefault = true
 description = "PostgreSQL EXCLUDED lease column assignment"
 condition = "AND"
 regexTarget = "match"
-paths = ['''backend/helpers/subtitleV2Service\.tsx$''']
+paths = ['''backend/(helpers/subtitleV2Service\.tsx|dist/server\.mjs)$''']
 regexes = ['''excluded\.lease_token,lease_until=excluded\.lease_until''']

@@ -119,6 +119,13 @@ fun TrackRow(model: MuwaModel, track: Track, play: (Track) -> Unit, playlist: (T
                             else "Скачать MP3"
                         )
                     },
+                    leadingIcon = {
+                        Icon(
+                            if (track.id in model.downloads.downloaded) Icons.Default.Delete
+                            else Icons.Default.Download,
+                            null,
+                        )
+                    },
                     onClick = {
                         menu = false
                         runCatching {

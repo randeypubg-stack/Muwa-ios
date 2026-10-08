@@ -33,13 +33,16 @@ export function createApp() {
   app.all("/_storage/file",c=>handleStorage(c.req.raw));
   app.use("/_api/*",async(c,next)=>{
     const open=["/_api/auth/login_with_password","/_api/auth/logout","/_api/auth/session","/_api/auth/owner_setup"];
+    // Public listening is independent of beta account access. Each catalog
+    // handler still excludes drafts; media checks publication before signing.
+    const publicCatalog = c.req.method === "GET" && ["/_api/catalog/tracks", "/_api/catalog/captions", "/_api/catalog/media"].includes(c.req.path);
     if(c.req.path==="/_api/auth/register_with_password")return secureJSON({message:"Закрытый тест Muwa. Регистрация пока недоступна."},403);
-    if(!open.includes(c.req.path)){
+    if(!open.includes(c.req.path) && !publicCatalog){
       try{const {user}=await getServerUserSession(c.req.raw);if(!betaUserAllowed(user.id))return secureJSON({error:"Доступ к закрытому тесту не предоставлен."},403);}
       catch(e){return secureJSON({error:e instanceof NotAuthenticatedError?"Войдите в Muwa.":"Сервис временно недоступен."},e instanceof NotAuthenticatedError?401:503);}
     }
     await next();
-    if(!open.includes(c.req.path)){c.header("Cache-Control","private, no-store");c.header("Vary","Cookie");}
+    if(!open.includes(c.req.path) && !publicCatalog){c.header("Cache-Control","private, no-store");c.header("Vary","Cookie");}
   });
   const routes:["get"|"post",string,(request:Request)=>Promise<Response>][]=[
     ["post","auth/login_with_password",login],["post","auth/register_with_password",register],

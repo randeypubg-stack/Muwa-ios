@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeView: View {
   @EnvironmentObject private var player: PlayerManager
   @EnvironmentObject private var library: LibraryStore
+  @ObservedObject private var catalog = CatalogStore.shared
 
   let openPlayer: () -> Void
   let openSearch: () -> Void
@@ -32,18 +33,17 @@ struct HomeView: View {
               .foregroundStyle(MuwaPalette.secondary)
 
             HomeCollections(
-              tracks: Track.catalog,
+              tracks: catalog.tracks,
               contentWidth: min(layout.viewportWidth, layout.contentMaxWidth)
                 - 2 * (layout.isPhone ? MuwaSpacing.screen : layout.horizontalPadding)
             )
 
             if layout.isWide {
               recommendationsGrid(layout: layout)
-              popularGrid(layout: layout)
             } else {
               recommendationsCarousel
-              popularList
             }
+            popularPages(layout: layout)
           }
           .padding(.horizontal, layout.isPhone ? MuwaSpacing.screen : layout.horizontalPadding)
           .padding(.top, layout.isCompactLandscapePhone ? 4 : 8)
@@ -211,7 +211,7 @@ struct HomeView: View {
 
       ScrollView(.horizontal, showsIndicators: false) {
         LazyHStack(spacing: 14) {
-          ForEach(Array(Track.catalog.prefix(12))) { track in
+          ForEach(Array(catalog.tracks.prefix(12))) { track in
             recommendationCard(track, width: 160)
           }
         }
@@ -231,7 +231,7 @@ struct HomeView: View {
         ),
         spacing: 18
       ) {
-        ForEach(Array(Track.catalog.prefix(12))) { track in
+        ForEach(Array(catalog.tracks.prefix(12))) { track in
           recommendationCard(track, width: nil)
         }
       }
@@ -240,7 +240,7 @@ struct HomeView: View {
 
   private func recommendationCard(_ track: Track, width: CGFloat?) -> some View {
     Button {
-      player.play(track, in: Track.catalog)
+      player.play(track, in: catalog.tracks)
       openPlayer()
     } label: {
       VStack(alignment: .leading, spacing: 8) {
@@ -260,35 +260,38 @@ struct HomeView: View {
     .buttonStyle(MuwaPressStyle())
   }
 
-  private var popularList: some View {
-    VStack(alignment: .leading, spacing: 10) {
+  private func popularPages(layout: AdaptiveLayout) -> some View {
+    let tracks = catalog.tracks
+    let count = layout.isWide ? 6 : 5
+    let starts = Array(stride(from: 0, to: tracks.count, by: count))
+    let width = max(1, min(layout.viewportWidth, layout.contentMaxWidth)
+      - 2 * (layout.isPhone ? MuwaSpacing.screen : layout.horizontalPadding))
+    return VStack(alignment: .leading, spacing: 12) {
       Text("Популярное").font(MuwaTypography.section)
-
-      ForEach(Track.catalog.prefix(5)) { track in
-        popularRow(track)
-
-        if track.id != Track.catalog.prefix(5).last?.id {
-          Divider().overlay(.white.opacity(0.05))
-        }
+      if tracks.count > count {
+        Text("Листайте, чтобы открыть больше нашидов")
+          .font(.caption).foregroundStyle(.secondary)
       }
-    }
-  }
-
-  private func popularGrid(layout: AdaptiveLayout) -> some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Text("Популярное").font(MuwaTypography.section)
-
-      LazyVGrid(
-        columns: Array(repeating: GridItem(.flexible(), spacing: 20), count: layout.listColumns),
-        spacing: 0
-      ) {
-        ForEach(Track.catalog.prefix(6)) { track in
-          popularRow(track)
-            .overlay(alignment: .bottom) {
-              Divider().overlay(.white.opacity(0.05))
+      ScrollView(.horizontal, showsIndicators: false) {
+        LazyHStack(alignment: .top, spacing: 16) {
+          ForEach(starts, id: \.self) { start in
+            let page = Array(tracks[start..<min(start + count, tracks.count)])
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 20), count: layout.isWide ? layout.listColumns : 1), spacing: 0) {
+              ForEach(page) { track in
+                popularRow(track)
+                  .overlay(alignment: .bottom) { Divider().overlay(.white.opacity(0.05)) }
+              }
             }
+            .frame(width: width)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Популярное, страница \(start / count + 1) из \(starts.count)")
+            .accessibilityIdentifier("popular-page-\(start / count)")
+          }
         }
+        .scrollTargetLayout()
       }
+      .scrollTargetBehavior(.viewAligned)
+      .accessibilityIdentifier("popular-pages")
     }
   }
 
@@ -297,7 +300,7 @@ struct HomeView: View {
       track: track,
       isPlaying: player.currentTrack?.id == track.id && player.isPlaying,
       action: {
-        player.play(track, in: Track.catalog)
+        player.play(track, in: catalog.tracks)
       },
       playNextAction: {
         library.addNext(track, after: player.currentTrack)

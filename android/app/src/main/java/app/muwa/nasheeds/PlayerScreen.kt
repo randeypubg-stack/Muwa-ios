@@ -17,10 +17,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import app.muwa.nasheeds.ui.components.Cover
+import app.muwa.nasheeds.ui.design.rememberAmbientMotionAllowed
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 
@@ -105,6 +107,14 @@ fun PlayerSheet(
                                         if (track.id in model.downloads.downloaded)
                                             "Удалить загрузку"
                                         else "Скачать MP3"
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        if (track.id in model.downloads.downloaded)
+                                            Icons.Default.Delete
+                                        else Icons.Default.Download,
+                                        null,
                                     )
                                 },
                                 onClick = {
@@ -219,17 +229,36 @@ fun PlayerSheet(
                             IconButton(onClick = model::previous) {
                                 Icon(Icons.Default.SkipPrevious, "Предыдущий")
                             }
-                            FilledIconButton(
-                                onClick = model::toggle,
-                                modifier =
-                                    Modifier.size(if (wide) 56.dp else 62.dp)
-                                        .testTag("player.toggle"),
-                            ) {
-                                Icon(
-                                    if (model.playing) Icons.Default.Pause
-                                    else Icons.Default.PlayArrow,
-                                    "Воспроизведение",
-                                )
+                            Box(contentAlignment = Alignment.Center) {
+                                val playSize = if (wide) 56.dp else 62.dp
+                                FilledIconButton(
+                                    onClick = model::toggle,
+                                    modifier = Modifier.size(playSize).testTag("player.toggle"),
+                                ) {
+                                    Icon(
+                                        if (model.playing) Icons.Default.Pause
+                                        else Icons.Default.PlayArrow,
+                                        "Воспроизведение",
+                                    )
+                                }
+                                if (model.buffering) {
+                                    val motion = rememberAmbientMotionAllowed()
+                                    val ring =
+                                        Modifier.size(playSize + 10.dp).clearAndSetSemantics {}
+                                    if (motion)
+                                        CircularProgressIndicator(
+                                            modifier = ring,
+                                            strokeWidth = 1.5.dp,
+                                            color = Color.White,
+                                        )
+                                    else
+                                        CircularProgressIndicator(
+                                            progress = { .72f },
+                                            modifier = ring,
+                                            strokeWidth = 1.5.dp,
+                                            color = Color.White,
+                                        )
+                                }
                             }
                             IconButton(onClick = model::next) {
                                 Icon(Icons.Default.SkipNext, "Следующий")
@@ -246,7 +275,6 @@ fun PlayerSheet(
                                 )
                             }
                         }
-                        if (model.buffering) LinearProgressIndicator(Modifier.fillMaxWidth())
                         model.downloads.progress[track.id]?.let {
                             LinearProgressIndicator(
                                 progress = { it },

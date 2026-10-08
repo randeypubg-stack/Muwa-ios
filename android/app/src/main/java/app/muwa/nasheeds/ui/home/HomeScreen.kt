@@ -175,7 +175,21 @@ fun HomeScreen(
                 }
             }
         item { Text("Популярное", style = MaterialTheme.typography.titleLarge) }
-        items(catalog.take(6), key = { "popular-${it.id}" }) { TrackRow(model, it, play, playlist) }
+        item {
+            BoxWithConstraints {
+                val pageWidth = maxWidth
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.testTag("popular.pages"),
+                ) {
+                    items(catalog.chunked(5), key = { it.first().id }) { page ->
+                        Column(Modifier.width(pageWidth)) {
+                            page.forEach { TrackRow(model, it, play, playlist) }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

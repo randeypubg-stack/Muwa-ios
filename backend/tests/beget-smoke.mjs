@@ -12,9 +12,10 @@ try {
  const read=await getUrl({visibility:'private',filename});assert(read.ok);
  const response=await fetch(read.url,{headers:{Range:'bytes=0-43'}});assert.equal(response.status,206);assert.deepEqual(Buffer.from(await response.arrayBuffer()),audio.subarray(0,44));
  const full=Buffer.from(await(await fetch(read.url)).arrayBuffer());assert.equal(createHash('sha256').update(full).digest('hex'),createHash('sha256').update(audio).digest('hex'));
- for(const route of ['catalog/tracks','admin/state','premium/access']) {const r=await fetch(origin+'/_api/'+route);assert.equal(r.status,401);await r.arrayBuffer();}
+ for(const route of ['admin/state','premium/access']) {const r=await fetch(origin+'/_api/'+route);assert.equal(r.status,401);await r.arrayBuffer();}
+ assert.equal((await fetch(origin+'/_api/catalog/tracks')).status,200);
  assert.equal((await fetch(origin+'/_health')).status,200);
  assert.equal((await fetch(origin+'/.env')).status,404);
  assert.equal((await fetch(origin+'/backend/helpers/db.tsx')).status,404);
- console.log(JSON.stringify({https:'trusted IP certificate',audioUpload:'passed',audioRange:'passed',audioIntegrity:'passed',anonymousAccess:'denied',sourceFiles:'not exposed',productionAccountsCreated:0}));
+ console.log(JSON.stringify({https:'trusted IP certificate',audioUpload:'passed',audioRange:'passed',audioIntegrity:'passed',anonymousCatalog:'published only',anonymousPrivateAccess:'denied',sourceFiles:'not exposed',productionAccountsCreated:0}));
 }finally{await remove({visibility:'private',filename});}

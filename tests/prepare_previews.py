@@ -6,7 +6,7 @@ app=root/'Sources/App/MuwaNasheedsApp.swift'
 s=app.read_text()
 track=root/'Sources/Models/Track.swift'
 track.write_text(track.read_text()+'\n#if DEBUG\n'+Path('tests/FixtureCatalog.swift').read_text()+'\n#endif\n')
-s=s.replace('let library = LibraryStore()', 'CatalogStore.shared.installReviewTracks(Track.reviewCatalog)\n    let library = LibraryStore()')
+s=s.replace('let library = LibraryStore()', 'CatalogStore.shared.installReviewTracks(Track.reviewCatalog)\n    if ProcessInfo.processInfo.arguments.contains("--audit-portrait") {\n      let fixture = Track(id: "portrait", title: "Portrait crop check", artist: "Muwa", duration: 60, artworkURL: URL(string: "https://muwa-review.invalid/portrait.png"), audioURL: Track.reviewCatalog[0].audioURL)\n      CatalogStore.shared.installReviewTracks([fixture])\n    }\n    let library = LibraryStore()')
 s=s.replace('.task { await auth.restore() }', '''.task {
           if ProcessInfo.processInfo.arguments.contains("--audit-launch") {
             await auth.restore()
@@ -15,6 +15,10 @@ s=s.replace('.task { await auth.restore() }', '''.task {
           }
         }''')
 s=s.replace('.task { await premium.load() }', '')
+# UI fixtures keep their controlled catalog; production guest requests are covered
+# by CatalogChecks and the real HTTP/PostgreSQL tests. Never fetch live data here.
+s=s.replace('.task(id: auth.user?.id) { await CatalogStore.shared.refresh(force: true) }', '')
+s=s.replace('Task { await CatalogStore.shared.refresh() }', '')
 s=s.replace('AuthManager()', 'AuthManager(service: ProcessInfo.processInfo.arguments.contains("--audit-launch") ? HeldLaunchAuthService() : AuthService.shared)')
 s += """
 // Disposable Simulator-only service. Release source/IPA were packaged before
@@ -56,6 +60,11 @@ s=s.replace(needle, '''    .task {
       if args.contains("--audit-player") {
         player.play(Track.catalog[0], autoplay: false)
         playerExpansion = 1
+        if args.contains("--audit-buffering") {
+          try? await Task.sleep(for: .seconds(1))
+          player.isPlaying = true
+          player.isBuffering = true
+        }
       }
       if args.contains("--audit-profile") { selection = .profile }; if args.contains("--audit-search") { searchPresented = true }
       if args.contains("--audit-library") || args.contains("--audit-library-empty") || args.contains("--audit-playlist-create") {
@@ -361,7 +370,10 @@ private final class ReviewArtworkProtocol: URLProtocol, @unchecked Sendable {
   override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "muwa-review.invalid" }
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
   override func startLoading() {
-    guard let url = request.url, let bytes = UIImage(named: "AppMark")?.pngData() else {
+    let portrait = UIGraphicsImageRenderer(size: CGSize(width: 120, height: 240)).image { context in
+      UIColor.systemTeal.setFill(); context.fill(CGRect(x: 0, y: 0, width: 120, height: 240))
+    }
+    guard let url = request.url, let bytes = (url.path == "/portrait.png" ? portrait : UIImage(named: "AppMark"))?.pngData() else {
       client?.urlProtocol(self, didFailWithError: URLError(.cannotDecodeContentData)); return
     }
     let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil,
@@ -402,4 +414,9 @@ private enum ReviewAudioFixture {
   }()
 }
 '''
+p.write_text(s)
+
+# Held buffering is confined to the disposable review copy.
+p=root/'Sources/Services/PlayerManager.swift'
+s=p.read_text().replace('@Published private(set) var isBuffering = false', '@Published var isBuffering = false')
 p.write_text(s)

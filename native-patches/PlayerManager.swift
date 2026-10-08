@@ -180,6 +180,7 @@ final class PlayerManager: ObservableObject {
   func play(_ track: Track, autoplay: Bool = true) {
     hasStartedPlaybackThisSession = true
     playbackError = nil
+    isBuffering = false
     configureAudioSession()
     clearResumeCandidate()
     lastResumePersistBucket = -1
@@ -265,6 +266,7 @@ final class PlayerManager: ObservableObject {
     if isPlaying {
       persistResumeCandidate(force: true)
       player.pause()
+      isBuffering = false
       isPlaying = false
     } else {
       if duration > 0, currentTime >= duration - 0.35 {

@@ -27,6 +27,87 @@ final class NativeInteractionTests: XCTestCase {
   }
   private var queueButtons: [XCUIElement] { queueQuery.allElementsBoundByIndex }
 
+  func testPortraitArtworkFillsThePlayerFrame() throws {
+    app.launchArguments = ["--audit-player", "--audit-portrait"]
+    app.launch()
+    XCTAssertTrue(app.staticTexts["Portrait crop check"].waitForExistence(timeout: 30))
+    // Keep the original framebuffer for the pixel checker. The controlled
+    // portrait has a uniform teal colour, so side bars cannot hide in artwork.
+    let cover = app.otherElements["player-artwork-frame"]
+    XCTAssertTrue(cover.waitForExistence(timeout: 15))
+    let loaded = app.images["Обложка нашида"].firstMatch
+    XCTAssertTrue(loaded.waitForExistence(timeout: 15))
+    shot("portrait-artwork-filled-frame")
+    let frame = cover.frame
+    let image = app.screenshot().image
+    guard let cg = image.cgImage else { return XCTFail("Native cover screenshot missing pixels") }
+    let width = cg.width, height = cg.height
+    var rgba = [UInt8](repeating: 0, count: width * height * 4)
+    let colourSpace = CGColorSpaceCreateDeviceRGB()
+    let drawn = rgba.withUnsafeMutableBytes { bytes -> Bool in
+      guard let context = CGContext(data: bytes.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: colourSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+      context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height)); return true
+    }
+    XCTAssertTrue(drawn)
+    func sample(_ fraction: Double) -> [Int] {
+      let x = Int((frame.minX + frame.width * fraction) / app.frame.width * Double(width))
+      let y = Int(frame.midY / app.frame.height * Double(height))
+      XCTAssertTrue(x >= 0 && x < width && y >= 0 && y < height)
+      let offset = (min(height - 1, max(0, y)) * width + min(width - 1, max(0, x))) * 4
+      return rgba[offset..<offset+3].map(Int.init)
+    }
+    let centre = sample(0.5)
+    XCTAssertGreaterThan(centre[1], 100); XCTAssertGreaterThan(centre[2], 100)
+    for side in [0.05, 0.95] {
+      let edge = sample(side)
+      for channel in 0..<3 { XCTAssertLessThan(abs(edge[channel] - centre[channel]), 12, "Portrait artwork left an empty side bar") }
+    }
+    let proof: [String: Any] = ["x":frame.minX,"y":frame.minY,"width":frame.width,"height":frame.height,"screenWidth":app.frame.width,"screenHeight":app.frame.height]
+    let data = try JSONSerialization.data(withJSONObject: proof, options: .sortedKeys)
+    let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
+    attachment.name = "portrait-artwork-frame-proof"; attachment.lifetime = .keepAlways; add(attachment)
+  }
+
+  func testPlayRemainsTappableWhileBuffering() throws {
+    app.launchArguments = ["--audit-player", "--audit-buffering"]
+    app.launch()
+    let play = app.buttons["player-toggle"]
+    XCTAssertTrue(play.waitForExistence(timeout: 30))
+    let loading = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Загрузка аудио"), object: play)
+    XCTAssertEqual(XCTWaiter.wait(for: [loading], timeout: 10), .completed)
+    XCTAssertTrue(play.isHittable)
+    XCTAssertFalse(app.staticTexts["Загружаем аудио…"].exists)
+    shot("buffering-ring-play-tappable")
+    play.tap()
+    XCTAssertEqual(play.label, "Воспроизвести")
+    XCTAssertEqual(play.value as? String, "На паузе")
+    shot("buffering-ring-dismissed-after-pause")
+  }
+
+  func testPopularPagesMoveForwardAndBack() throws {
+    app.launchArguments = ["--audit-home"]
+    app.launch()
+    let pages = app.scrollViews["popular-pages"]
+    XCTAssertTrue(pages.waitForExistence(timeout: 30))
+    for _ in 0..<3 { if !pages.isHittable { app.scrollViews.firstMatch.swipeUp() } }
+    XCTAssertTrue(pages.isHittable)
+    shot("popular-first-page")
+    pages.swipeLeft()
+    let nextPage = app.otherElements["popular-page-1"]
+    let arrived = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+      nextPage.exists && abs(nextPage.frame.midX - pages.frame.midX) < 20
+    }, object: nil)
+    XCTAssertEqual(XCTWaiter.wait(for: [arrived], timeout: 10), .completed)
+    shot("popular-next-page")
+    pages.swipeRight()
+    let firstPage = app.otherElements["popular-page-0"]
+    let returned = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+      firstPage.exists && abs(firstPage.frame.midX - pages.frame.midX) < 20
+    }, object: nil)
+    XCTAssertEqual(XCTWaiter.wait(for: [returned], timeout: 10), .completed)
+    shot("popular-returned-page")
+  }
+
   func testPlayerButtonsAndBothSubtitleEntrypointsShareState() throws {
     app.launchArguments = ["--audit-player", "--audit-ai"]
     app.launch()
