@@ -52,7 +52,9 @@ def package_attachments(source, output, inventory=None):
     if output.exists() and any(output.iterdir()):
         raise ValueError("Output must be empty; preserve earlier review packages separately")
 
-    groups = {"primary": output / "primary"}
+    # Keep each changed feature small enough to inspect independently without
+    # transforming the original PNGs or discarding the complete primary export.
+    groups = {name: output / name for name in ("primary", "popular", "artwork", "loading")}
     mappings = {name: [] for name in groups}
     used = {name: {"manifest.json", "provenance.json", "interaction-devices.json"} for name in groups}
     excluded = []
@@ -87,6 +89,8 @@ def package_attachments(source, output, inventory=None):
                 excluded.append({**provenance, "reason": "Video or non-PNG/non-JSON attachment; retained in original xcresult/export"})
                 continue
             destinations = ["primary"]
+            for marker, group in [("popular-", "popular"), ("portrait-artwork", "artwork"), ("buffering-ring", "loading")]:
+                if marker in str(label).lower(): destinations.append(group)
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
             for group in destinations:
                 name = unique_name(label, path, used[group])

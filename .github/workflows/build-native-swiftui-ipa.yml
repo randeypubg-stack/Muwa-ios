@@ -626,3 +626,27 @@ jobs:
             build/interaction-proof/package-summary.json
             build/interaction-devices.json
           if-no-files-found: error
+      - name: Upload popular paging screenshots
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: Muwa-build48-popular-${{ matrix.device }}
+          overwrite: true
+          path: build/interaction-proof/popular
+          if-no-files-found: warn
+      - name: Upload portrait artwork screenshots
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: Muwa-build48-artwork-${{ matrix.device }}
+          overwrite: true
+          path: build/interaction-proof/artwork
+          if-no-files-found: warn
+      - name: Upload playback loading screenshots
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: Muwa-build48-loading-${{ matrix.device }}
+          overwrite: true
+          path: build/interaction-proof/loading
+          if-no-files-found: warn

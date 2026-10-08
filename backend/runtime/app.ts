@@ -35,7 +35,7 @@ export function createApp() {
     const open=["/_api/auth/login_with_password","/_api/auth/logout","/_api/auth/session","/_api/auth/owner_setup"];
     // Public listening is independent of beta account access. Each catalog
     // handler still excludes drafts; media checks publication before signing.
-    const publicCatalog = c.req.method === "GET" && ["/_api/catalog/tracks", "/_api/catalog/captions", "/_api/catalog/media"].includes(c.req.path);
+    const publicCatalog = ["GET", "HEAD"].includes(c.req.method) && ["/_api/catalog/tracks", "/_api/catalog/captions", "/_api/catalog/media"].includes(c.req.path);
     if(c.req.path==="/_api/auth/register_with_password")return secureJSON({message:"Закрытый тест Muwa. Регистрация пока недоступна."},403);
     if(!open.includes(c.req.path) && !publicCatalog){
       try{const {user}=await getServerUserSession(c.req.raw);if(!betaUserAllowed(user.id))return secureJSON({error:"Доступ к закрытому тесту не предоставлен."},403);}

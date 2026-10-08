@@ -33,6 +33,7 @@ try {
  for(const name of migrations)await sql.unsafe(await fs.readFile(name,'utf8'));
  assert.equal((await fetch(origin+'/_health')).status,200);checks++;
  await status('catalog/tracks',undefined,200);
+ const catalogHead=await fetch(origin+'/_api/catalog/tracks',{method:'HEAD'});assert.equal(catalogHead.status,200);assert.equal((await catalogHead.arrayBuffer()).byteLength,0);checks++;
  await status('admin/state',undefined,401);
  await status('auth/register_with_password',{},403);
  const token=randomBytes(32).toString('hex'),password=randomBytes(20).toString('hex');
@@ -69,10 +70,12 @@ try {
  const pending=await request('catalog/tracks',undefined,{cookie:''});assert.equal((await pending.json()).tracks.length,0);checks++;
  const draftRows=await sql`select audio_url from catalog_tracks where id=${id}`;
  const draftMedia=await fetch(draftRows[0].audio_url,{redirect:'manual'});assert.equal(draftMedia.status,404);await draftMedia.arrayBuffer();checks++;
+ const draftHead=await fetch(draftRows[0].audio_url,{method:'HEAD',redirect:'manual'});assert.equal(draftHead.status,404);checks++;
  await status('catalog/captions?trackId='+id,undefined,404,{cookie:''});
  await status('admin/action',{action:'set-status',trackId:id,revision:1,status:'published'},200);
  const catalog=await request('catalog/tracks');const tracks=(await catalog.json()).tracks;assert.equal(tracks.length,1);assert.equal(tracks[0].id,id);assert(tracks[0].audio.startsWith(origin+'/_api/catalog/media'));checks++;
  const guest=await fetch(tracks[0].audio,{headers:{Range:'bytes=0-43'}});assert.equal(guest.status,206);assert.deepEqual(Buffer.from(await guest.arrayBuffer()),audio.subarray(0,44));checks++;
+ const guestHead=await fetch(tracks[0].audio,{method:'HEAD'});assert.equal(guestHead.status,200);assert.equal(guestHead.headers.get('content-length'),String(audio.length));assert.equal((await guestHead.arrayBuffer()).byteLength,0);checks++;
  const publicCatalog=await request('catalog/tracks',undefined,{cookie:''});assert.equal((await publicCatalog.json()).tracks[0].id,id);checks++;
  await status('catalog/tracks',{},401,{cookie:''});
  await status('premium/access',{action:'status'},401,{cookie:''});

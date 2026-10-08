@@ -89,18 +89,24 @@ final class NativeInteractionTests: XCTestCase {
     app.launch()
     let pages = app.scrollViews["popular-pages"]
     XCTAssertTrue(pages.waitForExistence(timeout: 30))
-    for _ in 0..<3 { if !pages.isHittable { app.scrollViews.firstMatch.swipeUp() } }
+    // A tiny exposed strip is already "hittable" even when the swipe's centre
+    // lies behind the bottom bar. Bring the actual gesture area into view.
+    for _ in 0..<5 {
+      if pages.frame.midY > app.frame.height * 0.6 { app.scrollViews.firstMatch.swipeUp() }
+    }
     XCTAssertTrue(pages.isHittable)
+    XCTAssertLessThan(pages.frame.midY, app.frame.height - 170)
     shot("popular-first-page")
     pages.swipeLeft()
-    let nextPage = app.otherElements["popular-page-1"]
+    shot("popular-after-forward-swipe")
+    let nextPage = app.descendants(matching: .any)["popular-page-1"].firstMatch
     let arrived = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
       nextPage.exists && abs(nextPage.frame.midX - pages.frame.midX) < 20
     }, object: nil)
     XCTAssertEqual(XCTWaiter.wait(for: [arrived], timeout: 10), .completed)
     shot("popular-next-page")
     pages.swipeRight()
-    let firstPage = app.otherElements["popular-page-0"]
+    let firstPage = app.descendants(matching: .any)["popular-page-0"].firstMatch
     let returned = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
       firstPage.exists && abs(firstPage.frame.midX - pages.frame.midX) < 20
     }, object: nil)
