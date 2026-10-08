@@ -81,6 +81,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     coordinator.downloads?.$downloadedIDs.dropFirst().receive(on: RunLoop.main)
       .sink { [weak self] _ in Task { @MainActor in self?.refreshLists() } }
       .store(in: &subscriptions)
+    // The public catalogue can arrive after a guest/CarPlay-only connection.
+    CatalogStore.shared.$tracks.dropFirst().receive(on: RunLoop.main)
+      .sink { [weak self] _ in Task { @MainActor in self?.refreshLists() } }
+      .store(in: &subscriptions)
     coordinator.player?.objectWillChange
       .debounce(for: .milliseconds(100), scheduler: RunLoop.main)
       .sink { [weak self] _ in Task { @MainActor in self?.refreshLists() } }

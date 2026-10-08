@@ -246,7 +246,10 @@ def capture():
         status['codesign_verified'] = True
         if phone['state'] != 'Booted':
             run('xcrun', 'simctl', 'boot', udid)
-        run('xcrun', 'simctl', 'bootstatus', udid, '-b', timeout=240)
+        # A cold hosted GUI simulator must migrate CoreLocation before it can
+        # install or launch the app. Keep the deadline bounded, but allow that
+        # first boot to finish instead of treating four minutes as an app fault.
+        run('xcrun', 'simctl', 'bootstatus', udid, '-b', timeout=600)
         status['booted'] = True
         # A fresh hosted runner can finish bootstatus before installd is responsive.
         # The previous 45-second cap failed before any CarPlay UI could be inspected.
