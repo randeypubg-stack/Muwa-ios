@@ -183,7 +183,9 @@ fun HomeScreen(
                     modifier = Modifier.testTag("popular.pages"),
                 ) {
                     items(catalog.chunked(5), key = { it.first().id }) { page ->
-                        Column(Modifier.width(pageWidth)) {
+                        Column(
+                            Modifier.width(pageWidth).testTag("popular.page.${page.first().id}")
+                        ) {
                             page.forEach { TrackRow(model, it, play, playlist) }
                         }
                     }

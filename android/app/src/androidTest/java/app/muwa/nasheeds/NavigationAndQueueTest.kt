@@ -27,6 +27,23 @@ class NavigationAndQueueTest {
     @get:Rule val compose = createEmptyComposeRule()
 
     @Test
+    fun popularPagesBrowseTheWholeCatalogInBothDirections() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        ActivityScenario.launch<MainActivity>(
+                Intent(context, MainActivity::class.java).putExtra("review.route", "home")
+            )
+            .use {
+                val pages = compose.onNodeWithTag("popular.pages")
+                pages.performScrollTo()
+                compose.onNodeWithTag("popular.page.muwa-01").assertIsDisplayed()
+                pages.performTouchInput { swipeLeft() }
+                compose.onNodeWithTag("popular.page.muwa-06").assertIsDisplayed()
+                pages.performTouchInput { swipeRight() }
+                compose.onNodeWithTag("popular.page.muwa-01").assertIsDisplayed()
+            }
+    }
+
+    @Test
     fun collectionNavigationReturnsToHome() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         ActivityScenario.launch<MainActivity>(

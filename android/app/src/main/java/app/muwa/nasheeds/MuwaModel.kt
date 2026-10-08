@@ -73,7 +73,9 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
             subtitleRevision++; subtitleJob?.cancel(); subtitleLoading = false
             subtitles = emptyList(); subtitleStatus = "Текст ещё не загружен"
         }
-        track = new; playing = p.isPlaying; buffering = p.playbackState == Player.STATE_BUFFERING; shuffle = p.shuffleModeEnabled; repeat = p.repeatMode
+        // Play/Pause represents the user's intent even before audio is ready.
+        // isPlaying is false while buffering, so it cannot own the toggle.
+        track = new; playing = p.playWhenReady && p.playbackState != Player.STATE_ENDED && p.playerError == null; buffering = p.playWhenReady && p.playbackState == Player.STATE_BUFFERING; shuffle = p.shuffleModeEnabled; repeat = p.repeatMode
     } }
     fun play(track: Track, collection: List<Track>, autoplay: Boolean = true) {
         if (collection.none { it.id == track.id }) return
@@ -94,7 +96,7 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
         if (autoplay) library.played(track)
         resumeCandidate = null; error = null
     }
-    fun toggle() { controller?.let { if (it.isPlaying) it.pause() else { if (it.playerError != null) it.prepare(); it.play() } } }
+    fun toggle() { controller?.let { if (it.playWhenReady && it.playerError == null) it.pause() else { if (it.playerError != null) it.prepare(); it.play() } } }
     fun retry() { controller?.prepare(); controller?.play(); error = null }
     fun next() { controller?.seekToNextMediaItem() }
     fun previous() { controller?.let { if (it.currentPosition > 4000) it.seekTo(0) else it.seekToPreviousMediaItem() } }
@@ -102,6 +104,9 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
     fun toggleShuffle() { controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled } }
     fun cycleRepeat() { controller?.let { it.repeatMode = when(it.repeatMode) { Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL; Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE; else -> Player.REPEAT_MODE_OFF } } }
     fun refreshCatalog() {
+        // Explicit debug reviews keep controlled data; ordinary debug and
+        // release launches always load the public server catalog as guests.
+        if (BuildConfig.DEBUG && AppGraph.reviewPlaybackEnabled) return
         if (catalogJob?.isActive == true || System.currentTimeMillis() - lastCatalogRefresh < 30_000) return
         catalogJob = viewModelScope.launch {
             try { library.updateCatalog(backend.request("catalog/tracks")); lastCatalogRefresh = System.currentTimeMillis() }
