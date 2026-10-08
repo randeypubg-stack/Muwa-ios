@@ -38,7 +38,7 @@ struct MuwaNasheedsApp: App {
         .environmentObject(auth)
         .preferredColorScheme(.dark)
         .task { await auth.restore() }
-        .task(id: auth.user?.id) { await CatalogStore.shared.refresh(force: true) }
+        .task { await CatalogStore.shared.refresh(force: true) }
          .onChange(of: auth.state, initial: true) { _, state in
           premium.setAccount(auth.user?.id)
           if state != .checking { Diagnostics.shared.setAccount(auth.user?.id) }

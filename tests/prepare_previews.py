@@ -17,7 +17,7 @@ s=s.replace('.task { await auth.restore() }', '''.task {
 s=s.replace('.task { await premium.load() }', '')
 # UI fixtures keep their controlled catalog; production guest requests are covered
 # by CatalogChecks and the real HTTP/PostgreSQL tests. Never fetch live data here.
-s=s.replace('.task(id: auth.user?.id) { await CatalogStore.shared.refresh(force: true) }', '')
+s=s.replace('.task { await CatalogStore.shared.refresh(force: true) }', '')
 s=s.replace('Task { await CatalogStore.shared.refresh() }', '')
 s=s.replace('AuthManager()', 'AuthManager(service: ProcessInfo.processInfo.arguments.contains("--audit-launch") ? HeldLaunchAuthService() : AuthService.shared)')
 s += """
