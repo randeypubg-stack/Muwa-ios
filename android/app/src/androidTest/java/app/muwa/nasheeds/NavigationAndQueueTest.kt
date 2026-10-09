@@ -350,7 +350,7 @@ class NavigationAndQueueTest {
                         compose.onNodeWithText("Субтитры").assertIsDisplayed()
                         compose.waitUntil(timeoutMillis = 10_000) {
                             compose
-                                .onAllNodesWithText("Субтитры доступны бесплатно.")
+                                .onAllNodesWithText("نص محفوظ", useUnmergedTree = true)
                                 .fetchSemanticsNodes()
                                 .isNotEmpty()
                         }
