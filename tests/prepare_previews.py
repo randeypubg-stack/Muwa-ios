@@ -100,16 +100,6 @@ s=s.replace(needle, '''    .task {
 s=s.replace('      .coordinateSpace(name: "playerContainer")', '      .coordinateSpace(name: "playerContainer")\n      .onAppear {\n        if ProcessInfo.processInfo.arguments.contains("--audit-launch") {\n          precondition(auth.state == .checking, "Session finished before startup review")\n          try? String(ProcessInfo.processInfo.processIdentifier).write(to: URL.documentsDirectory.appendingPathComponent("launch-home-mounted.txt"), atomically: true, encoding: .utf8)\n        }\n      }', 1)
 view.write_text(s)
 
-# Override only a disposable review environment, never the release source.
-# The explicit preference also reaches the real rail and native reader sheet.
-s=view.read_text()
-needle='      .coordinateSpace(name: "playerContainer")'
-assert s.count(needle) == 1
-s=s.replace(needle, needle+'''\n      .transformEnvironment(\\.accessibilityReduceMotion) { value in
-        if ProcessInfo.processInfo.arguments.contains("--audit-reduce-motion") { value = true }
-      }''',1)
-view.write_text(s)
-
 # AI review fixture, injected only after production IPA/source packaging.
 manager=root/'Sources/Services/SubtitleManager.swift'
 s=manager.read_text()
@@ -199,6 +189,15 @@ p.write_text(s)
 
 p=root/'Sources/Views/Player/PlayerSubtitleOverlay.swift'
 s=p.read_text()
+# accessibilityReduceMotion is read-only on the selected SDK. Override the
+# decision input only in this disposable copy; the Release views still read
+# the real system preference. Exercise both existing rail and reader branches.
+needle='  @Environment(\\.accessibilityReduceMotion) private var reduceMotion'
+assert s.count(needle) == 2, 'Reduced motion must reach the rail and full reader'
+s=s.replace(needle, '''  @Environment(\\.accessibilityReduceMotion) private var systemReduceMotion
+  private var reduceMotion: Bool {
+    systemReduceMotion || ProcessInfo.processInfo.arguments.contains("--audit-reduce-motion")
+  }''')
 needle='private struct SubtitleRail<Line: View>: View {'
 assert s.count(needle) == 1, 'Motion review must observe the shared production rail'
 s=s.replace(needle, needle+'\n  @EnvironmentObject private var reviewPlayer: PlayerManager\n  @EnvironmentObject private var reviewSubtitles: SubtitleManager',1)

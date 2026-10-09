@@ -54,11 +54,14 @@ disposable ordinary Arabic captions and a bounded, real-time review clock.
 It does not run recognition or fetch user credentials/content. Release source
 and IPA are packaged before test fixture injection. Each checkpoint checks the
 mounted active index, source, preference and frame; the video is finalized and
-its hash recorded. The iPhone 17 Pro capture also runs with Reduce Motion on.
+its hash recorded. The iPhone 17 Pro capture also runs the reduced-motion
+branch. Since the SDK environment value is read-only, the disposable review
+copy overrides that boolean input for the rail and reader; it does not switch
+the simulator's system setting. Release continues to read the real preference.
 
 All four native interaction profiles retain navigation, rotation, reader
 open/close, long Arabic scrolling, artwork paging, queue and playback checks.
-A second long-Arabic scenario exercises the reduced-motion environment.
+A second long-Arabic scenario exercises the same reduced-motion decision input.
 Android adds a cached Arabic reader test with animator scale zero, rapid seeking,
 whole-phrase visibility, manual following suspension and the navigation anchor.
 It restores the device setting and cached file after the test.
