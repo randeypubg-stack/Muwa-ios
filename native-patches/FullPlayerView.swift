@@ -14,7 +14,7 @@ struct MorphingPlayerView: View {
   @EnvironmentObject private var downloads: DownloadManager
 
   @Binding var expansion: CGFloat
-  let chromeDrop: CGFloat
+  let chromeBottomPadding: CGFloat
   let safeTopInset: CGFloat
   let safeBottomInset: CGFloat
   let safeLeadingInset: CGFloat
@@ -58,15 +58,14 @@ struct MorphingPlayerView: View {
       let miniWidth = min(miniWidthLimit, usableWidth)
       let miniHeight: CGFloat = 58
 
-      let bottomBarHeight: CGFloat = 62
-      let playerBarGap: CGFloat = 8
+      let bottomBarHeight = BottomChromeLayout.barHeight
+      let playerBarGap = BottomChromeLayout.playerGap
       let miniCenterY =
         viewportHeight
         - bottomBarHeight
         - playerBarGap
         - (miniHeight / 2)
-        - (layout.isPhone ? 6 : 0)
-        + chromeDrop
+        - chromeBottomPadding
 
       let fullSurfaceHeight =
         viewportHeight
@@ -85,7 +84,7 @@ struct MorphingPlayerView: View {
       let artworkLimit = isShortPhone ? min(layout.playerArtworkSize, 210) : layout.playerArtworkSize
       let geometry = PlayerGeometry(
         width: viewportWidth, height: viewportHeight,
-        safeTop: safeTopInset, chromeDrop: chromeDrop, phone: layout.isPhone,
+        safeTop: safeTopInset, chromeBottomPadding: chromeBottomPadding, phone: layout.isPhone,
         contentWidth: min(layout.contentMaxWidth, usableWidth), artworkLimit: artworkLimit
       )
       let fullArtworkSize = geometry.artworkSize
@@ -321,7 +320,8 @@ struct MorphingPlayerView: View {
           showSubtitle: false,
           progress: progress,
           subtitleLeftSpace: subtitleLeftSpace,
-          subtitleRightSpace: subtitleRightSpace
+          subtitleRightSpace: subtitleRightSpace,
+          interactionDistance: interactionDistance, expansionTravel: expansionTravel
         )
         .offset(x: incomingX)
         .scaleEffect(incomingScale)
@@ -335,7 +335,8 @@ struct MorphingPlayerView: View {
         showSubtitle: true,
         progress: progress,
         subtitleLeftSpace: subtitleLeftSpace,
-        subtitleRightSpace: subtitleRightSpace
+        subtitleRightSpace: subtitleRightSpace,
+        interactionDistance: interactionDistance, expansionTravel: expansionTravel
       )
       .offset(x: coverSwipeDirection == 0 ? 0 : outgoingX)
       .scaleEffect(coverSwipeDirection == 0 ? 1 : currentScale)
@@ -351,13 +352,7 @@ struct MorphingPlayerView: View {
       y: 16 * smoothStep(progress)
     )
     .allowsHitTesting((progress > 0.74 || artworkGestureActive) && !coverPaging)
-    .highPriorityGesture(
-      artworkDragGesture(
-        size: size,
-        interactionDistance: interactionDistance,
-        expansionTravel: expansionTravel
-      )
-    )
+
   }
 
   private func artworkDragGesture(
@@ -531,7 +526,9 @@ struct MorphingPlayerView: View {
     showSubtitle: Bool,
     progress: CGFloat,
     subtitleLeftSpace: CGFloat,
-    subtitleRightSpace: CGFloat
+    subtitleRightSpace: CGFloat,
+    interactionDistance: CGFloat,
+    expansionTravel: CGFloat
   ) -> some View {
     let subtitleLayoutActive =
       showSubtitle && subtitlesVisible && progress > 0.74
@@ -540,7 +537,7 @@ struct MorphingPlayerView: View {
       size: size, leftSpace: subtitleLeftSpace, rightSpace: subtitleRightSpace,
       active: subtitleLayoutActive
     )
-    let railHeight = min(170, max(96, size * 0.72))
+    let railHeight = min(220, max(120, size * 0.78))
     let showRail =
       showSubtitle && progress > 0.74 && !coverPaging && abs(coverDragX) < 6
 
@@ -552,6 +549,11 @@ struct MorphingPlayerView: View {
         contentMode: .fill
       )
       .frame(width: size, height: size)
+      .highPriorityGesture(
+        artworkDragGesture(size: size, interactionDistance: interactionDistance,
+                           expansionTravel: expansionTravel),
+        including: showSubtitle ? .all : .none
+      )
       .accessibilityElement(children: .contain)
       .accessibilityIdentifier(pageTrack.id == track.id ? "player-artwork-frame" : "incoming-artwork-frame")
       .accessibilityHidden(pageTrack.id != track.id)
@@ -1194,9 +1196,9 @@ struct PlayerGeometry {
   let actionsY: CGFloat
   let chromeTop: CGFloat
 
-  init(width: CGFloat, height: CGFloat, safeTop: CGFloat, chromeDrop: CGFloat,
+  init(width: CGFloat, height: CGFloat, safeTop: CGFloat, chromeBottomPadding: CGFloat,
        phone: Bool, contentWidth: CGFloat, artworkLimit: CGFloat) {
-    chromeTop = height + safeTop - 62 - (phone ? 9 : 0) + chromeDrop
+    chromeTop = height + safeTop - BottomChromeLayout.barHeight - chromeBottomPadding
     let landscape = width > height * 1.2 && height < 520
     let short = phone && height < 740
     if landscape {
@@ -1229,6 +1231,15 @@ struct PlayerGeometry {
   }
 }
 
+// One reviewed anchor for navigation and the mini/full-player morph. The root
+// is already inside SwiftUI's safe area: never add its bottom inset a second time.
+struct BottomChromeLayout {
+  static let barHeight: CGFloat = 62
+  static let playerGap: CGFloat = 8
+  let bottomPadding: CGFloat
+  init(phone: Bool) { bottomPadding = phone ? 9 : 0 }
+}
+
 // Fit the transparent caption rail beside the reduced cover, inside the safe
 // artwork column. The right boundary excludes transport controls in landscape.
 struct PlayerSubtitleLayout {
@@ -1239,7 +1250,7 @@ struct PlayerSubtitleLayout {
 
   init(size: CGFloat, leftSpace: CGFloat, rightSpace: CGFloat, active: Bool) {
     let availableWidth = max(0, leftSpace + rightSpace)
-    railWidth = min(116, max(78, size * 0.36), availableWidth * 0.40)
+    railWidth = min(164, max(104, size * 0.43), availableWidth * 0.44)
     let gap = min(10, availableWidth * 0.04)
     let coverWidth = min(size * 0.82, max(0, availableWidth - gap - railWidth))
     if active {

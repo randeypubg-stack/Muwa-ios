@@ -32,7 +32,9 @@ struct BottomBar: View {
           }
       )
     }
-    .frame(height: 62)
+    .frame(height: BottomChromeLayout.barHeight)
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("bottom-navigation")
   }
 
   private var playerItem: some View {

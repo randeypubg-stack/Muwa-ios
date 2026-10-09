@@ -104,6 +104,7 @@ def select_devices(records, kind=None, runtime_version=None):
         "tablet": [device for device in pads if "mini" not in device["name"]] or pads,
         "small-tablet": [device for device in pads if "mini" in device["name"]],
         "small-phone": [device for device in phones if "SE" in device["name"]],
+        "reported-phone": [device for device in phones if device["name"] == "iPhone 17 Pro"],
     }
     if kind is not None and kind not in groups:
         raise ValueError(f"Unknown review device kind: {kind}")
@@ -237,7 +238,7 @@ def load_selection(kind=None, requested_device=None, requested_ios=None, runtime
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--kind", choices=KINDS, default=os.environ.get("MUWA_REVIEW_DEVICE"))
+    parser.add_argument("--kind", choices=(*KINDS, "reported-phone"), default=os.environ.get("MUWA_REVIEW_DEVICE"))
     parser.add_argument("--requested-device", default=os.environ.get("MUWA_REQUESTED_DEVICE"))
     parser.add_argument("--requested-ios", default=os.environ.get("MUWA_REQUESTED_IOS"))
     parser.add_argument("--runtime-version", default=os.environ.get("MUWA_REVIEW_RUNTIME_VERSION"))

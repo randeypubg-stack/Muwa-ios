@@ -63,6 +63,12 @@ const recognitionLabels: Record<string, string> = {
   ready: "Оригинал распознан",
   failed: "Ошибка распознавания",
 };
+const recognitionLabel = (job: TrackRecord["recognition"]) =>
+  job?.status === "ready" && job.quality?.needsReview
+    ? "Текст готов · требуется проверка"
+    : job
+      ? recognitionLabels[job.status]
+      : "Ожидает распознавания";
 const eventLabels: Record<string, string> = {
   "track.created": "Добавлен нашид",
   "track.updated": "Изменён нашид",
@@ -484,6 +490,40 @@ export const AdminConsole = ({
               </Button>
             </div>
           )}
+          {section === "catalog" &&
+            data?.recognition.enabled &&
+            data.recognition.counts && (
+              <section
+                className={styles.recognitionSummary}
+                aria-label="Распознавание каталога"
+                aria-live="polite"
+              >
+                <div>
+                  <strong>Автоматические субтитры</strong>
+                  <p>
+                    Новые аудио распознаются на сервере. Оригинал сохраняется на
+                    языке записи; публикация не ждёт распознавания.
+                  </p>
+                </div>
+                <dl>
+                  {(
+                    [
+                      ["В очереди", "queued"],
+                      ["Обрабатывается", "processing"],
+                      ["Готово", "ready"],
+                      ["Проверить текст", "review"],
+                      ["Ошибка", "failed"],
+                      ["Без результата", "missing"],
+                    ] as const
+                  ).map(([label, key]) => (
+                    <div key={key}>
+                      <dt>{label}</dt>
+                      <dd>{data.recognition.counts![key]}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            )}
           {notice && (
             <p className={styles.notice} role="status">
               <Check size={16} />
@@ -587,9 +627,9 @@ export const AdminConsole = ({
                           {t.language.toUpperCase()} ·{" "}
                           {t.captionsRevision > 0
                             ? `${t.captions.length} строк субтитров`
-                            : "Без редакторских субтитров"}
+                            : "Субтитры ещё не опубликованы"}
                           {t.recognition
-                            ? " · " + recognitionLabels[t.recognition.status]
+                            ? " · " + recognitionLabel(t.recognition)
                             : ""}
                         </small>
                       </div>
@@ -824,6 +864,20 @@ const TrackEditor = ({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [phase, setPhase] = useState("");
+  const recognition = useQuery({
+    queryKey: ["muwa-recognition", track?.id],
+    queryFn: () =>
+      postAdminAction({ action: "get-recognition", trackId: track!.id }),
+    enabled: !!track && !disabled,
+    retry: false,
+    refetchInterval: (query) =>
+      ["queued", "processing"].includes(
+        query.state.data?.recognition?.status ?? "",
+      )
+        ? 5000
+        : false,
+  });
+  const suggestion = recognition.data?.titleSuggestion;
   const dirty =
     title !== (track?.title ?? "") ||
     artist !== (track?.artist ?? "") ||
@@ -958,6 +1012,42 @@ const TrackEditor = ({
             />
           </label>
         </div>
+        {suggestion && !audio && (
+          <section
+            className={styles.recognition}
+            aria-label="Предложение названия"
+          >
+            <div>
+              <strong>
+                Название из{" "}
+                {suggestion.method === "refrain"
+                  ? "повторяющейся фразы"
+                  : "первых слов"}
+              </strong>
+              <p dir="auto">{suggestion.title}</p>
+              <p>
+                Это предложение по записи, а не установленное название.{" "}
+                {suggestion.needsReview
+                  ? "Распознавание требует проверки по аудио. "
+                  : ""}
+                Изменение сохранится только после нажатия «Сохранить».
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => setTitle(suggestion.title)}
+            >
+              Подставить название
+            </Button>
+          </section>
+        )}
+        {recognition.error && (
+          <p className={styles.error} role="alert">
+            {message(recognition.error)}
+          </p>
+        )}
         <label className={styles.filePicker}>
           <Upload size={20} />
           <strong>
@@ -1160,7 +1250,7 @@ const CaptionEditor = ({
           <div>
             <strong>
               {recognized
-                ? recognitionLabels[recognized.status]
+                ? recognitionLabel(recognized)
                 : "Автоматические субтитры"}
             </strong>
             <p>
@@ -1178,6 +1268,27 @@ const CaptionEditor = ({
                 перед сохранением.
               </p>
             )}
+            {recognized?.errorCode && (
+              <p>
+                Причина: {recognized.errorCode}. Результат можно повторить
+                кнопкой ниже.
+              </p>
+            )}
+            {recognized?.status === "processing" && (
+              <progress
+                aria-label="Распознавание оригинала"
+                max={track.duration}
+                value={Math.min(track.duration, recognized.progressSeconds)}
+              />
+            )}
+            {recognition.data?.trackRevision !== undefined &&
+              recognition.data.trackRevision !== track.revision && (
+                <p className={styles.warning}>
+                  Запись обновилась после открытия редактора. Закройте его и
+                  откройте заново, чтобы сохранить текст без конфликта с новыми
+                  изменениями.
+                </p>
+              )}
             {recognition.error && <p>{message(recognition.error)}</p>}
           </div>
           <div>

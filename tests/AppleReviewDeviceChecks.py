@@ -49,6 +49,15 @@ class AppleReviewDeviceChecks(unittest.TestCase):
             self.assertEqual(selected[0]["runtimeBuild"], "fixture-build")
             self.assertTrue(selected[0]["deviceTypeIdentifier"].startswith("com.apple.CoreSimulator.SimDeviceType."))
 
+    def test_reported_phone_requires_the_actual_model_without_relabelling(self):
+        with self.assertRaisesRegex(ValueError, "Review device unavailable"):
+            select_devices(self.records, "reported-phone")
+        record = {**self.records[0], "name": "iPhone 17 Pro", "udid": "actual-17-pro",
+                  "runtimeVersion": "27.0"}
+        selected = select_devices([*self.records, record], "reported-phone")
+        self.assertEqual(selected[0]["udid"], "actual-17-pro")
+        self.assertEqual(request_status([record], selected, "iPhone 17 Pro", "27.2")["status"], "unavailable")
+
     def test_preview_and_newer_sdk_runtime_never_selected(self):
         self.assertNotIn("beta-phone", [item["udid"] for item in self.records])
         self.assertNotIn("newer-unsupported-sdk", [item["udid"] for item in self.records])

@@ -64,13 +64,14 @@ struct AuditChecks {
       let pad: CGFloat = phone ? 5 : (w < 600 ? 18 : 28)
       let limit: CGFloat = phone ? min(h < 740 ? 210 : 310, w * 0.68) : min(420, h * 0.48, w * 0.68)
       let g = PlayerGeometry(width: w, height: h, safeTop: top,
-        chromeDrop: phone ? max(bottom - 5, 11) : 0, phone: phone,
+        chromeBottomPadding: BottomChromeLayout(phone: phone).bottomPadding, phone: phone,
         contentWidth: w - pad * 2, artworkLimit: limit)
       precondition(g.artworkSize > 0)
       precondition(g.actionsY + 22 <= g.chromeTop - 10, "Actions collide with bottom bar at \(w)x\(h)")
       precondition(g.transportY + (phone ? 29 : 34) + 4 <= g.actionsY - 22, "Transport/actions overlap")
       precondition(g.progressY + 24 + 8 <= g.transportY - (phone ? 29 : 34), "Progress/transport overlap")
       precondition(g.metadataY - 30 >= top + 49, "Metadata overlaps top bar")
+      precondition(g.chromeTop == h + top - 62 - (phone ? 9 : 0), "Bottom navigation left its safe-area anchor")
       precondition(g.controlsX - g.controlsWidth / 2 >= 0)
       precondition(g.controlsX + g.controlsWidth / 2 <= w)
       print("PASS: geometry \(Int(w))x\(Int(h))")
@@ -101,7 +102,7 @@ struct AuditChecks {
     for c in cases {
       let side = max(c.padding, max(c.leading, c.trailing))
       let g = PlayerGeometry(width: c.width, height: c.height, safeTop: c.top,
-        chromeDrop: c.phone ? max(c.bottom - 5, 11) : 0, phone: c.phone,
+        chromeBottomPadding: BottomChromeLayout(phone: c.phone).bottomPadding, phone: c.phone,
         contentWidth: min(c.contentLimit, c.width - side * 2), artworkLimit: c.artworkLimit)
       let originalCover = CGRect(x: g.artworkX - g.artworkSize / 2,
         y: g.artworkY - g.artworkSize / 2, width: g.artworkSize, height: g.artworkSize)
@@ -116,7 +117,7 @@ struct AuditChecks {
       let coverWidth = g.artworkSize * active.coverScale
       let cover = CGRect(x: g.artworkX + active.coverShift - coverWidth / 2,
         y: g.artworkY - coverWidth / 2, width: coverWidth, height: coverWidth)
-      let railHeight = min(170, max(96, g.artworkSize * 0.72))
+      let railHeight = min(220, max(120, g.artworkSize * 0.78))
       let rail = CGRect(x: g.artworkX + active.railOffset - active.railWidth / 2,
         y: g.artworkY - railHeight / 2, width: active.railWidth, height: railHeight)
       precondition([active.coverScale, active.coverShift, active.railWidth, active.railOffset]
@@ -125,7 +126,7 @@ struct AuditChecks {
         "Captions must leave a visible, reduced cover: \(c.name)")
       precondition(coverWidth >= g.artworkSize * 0.60,
         "Caption layout shrank the cover excessively: \(c.name)")
-      precondition(active.railWidth >= 64 && active.railWidth <= 116,
+      precondition(active.railWidth >= 80 && active.railWidth <= 164,
         "Caption rail is unreadably narrow or exceeds its width budget: \(c.name)")
       precondition(column.insetBy(dx: -tolerance, dy: -tolerance).contains(cover),
         "Reduced artwork escaped its safe column: \(c.name)")

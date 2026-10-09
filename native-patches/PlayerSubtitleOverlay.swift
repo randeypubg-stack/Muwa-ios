@@ -29,7 +29,6 @@ struct PlayerSubtitleOverlay: View {
       }
     }
     .frame(height: height)
-    .allowsHitTesting(false)
     .preference(key: PlayerSubtitleRailAvailabilityKey.self, value: segments.isEmpty ? [] : [track.id])
     .task(id: track.id) { subtitles.load(for: track) }
   }
@@ -60,12 +59,14 @@ struct AISubtitleExperience: View {
               if active {
                 AISubtitleLine(segment: segment, time: timeline.snapshot.time, rtl: document.isRTL)
                   .font(.system(size: 18, weight: .semibold))
-                  .lineLimit(compactHeight >= 130 ? 2 : 1)
+                  .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let translated = manager.translations[language.rawValue]?.segments[segment.id] {
                   Text(translated)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.white.opacity(0.75))
-                    .lineLimit(compactHeight >= 130 ? 2 : 1)
+                    .lineLimit(nil)
+                  .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
                     .environment(\.layoutDirection, .leftToRight)
                 }
@@ -73,7 +74,8 @@ struct AISubtitleExperience: View {
                 Text(segment.original)
                   .font(.system(size: 12, weight: .medium))
                   .foregroundStyle(.white)
-                  .lineLimit(1)
+                  .lineLimit(nil)
+                  .fixedSize(horizontal: false, vertical: true)
                   .multilineTextAlignment(document.isRTL ? .trailing : .leading)
                   .environment(\.layoutDirection, document.isRTL ? .rightToLeft : .leftToRight)
               }
@@ -140,14 +142,16 @@ private struct LegacySubtitleRail: View {
         Text(segment.ar)
           .font(.system(size: active ? 18 : 12, weight: active ? .semibold : .medium))
           .foregroundStyle(.white)
-          .lineLimit(active && height >= 130 ? 2 : 1)
+          .lineLimit(nil)
+          .fixedSize(horizontal: false, vertical: true)
           .multilineTextAlignment(.trailing)
           .environment(\.layoutDirection, .rightToLeft)
         if active, language != .arabic {
           Text(segment.text(for: language))
             .font(.system(size: 10, weight: .medium))
             .foregroundStyle(.white.opacity(0.78))
-            .lineLimit(height >= 130 ? 2 : 1)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
             .multilineTextAlignment(.leading)
             .environment(\.layoutDirection, .leftToRight)
         }
@@ -184,10 +188,25 @@ private struct SubtitleRail<Line: View>: View {
     ZStack {
       ForEach(window, id: \.self) { index in
         let delta = index - activeIndex
-        line(index, delta == 0)
+        Group {
+          if delta == 0 {
+            ScrollView(.vertical) {
+              line(index, true)
+                .accessibilityIdentifier("subtitle-current-text")
+                .padding(.vertical, 4)
+            }
+            .scrollIndicators(.hidden)
+            .frame(height: height * 0.64)
+            .accessibilityIdentifier("subtitle-current-scroll")
+          } else {
+            line(index, false)
+              .frame(height: height * 0.15)
+              .clipped()
+          }
+        }
           .scaleEffect(delta == 0 ? 1 : 0.88)
           .opacity(delta == 0 ? 1 : 0.28)
-          .offset(y: CGFloat(delta) * min(62, height * 0.38))
+          .offset(y: CGFloat(delta) * height * 0.43)
           .transition(reduceMotion ? .opacity : .asymmetric(
             insertion: .opacity.combined(with: .offset(y: 28)),
             removal: .opacity.combined(with: .offset(y: -28))

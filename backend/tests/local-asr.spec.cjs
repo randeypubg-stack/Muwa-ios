@@ -38,6 +38,16 @@ async function claim(token = randomUUID()) {
   const rows = await query("SELECT * FROM muwa_claim_asr($1)", [token]);
   return rows.length ? { job: rows[0], token } : null;
 }
+async function state() {
+  const response = await adminService.handle(
+    new Request("https://muwa-app.floot.app/_api/admin/state?section=catalog", {
+      headers: { "x-fixture-user": "1" },
+    }),
+    "GET",
+  );
+  expect(response.status).toBe(200);
+  return response.json();
+}
 const doc = (id) => ({
   version: 2,
   id,
@@ -97,18 +107,53 @@ describe("Local recognition queue and protected captions", () => {
     else process.env.MUWA_LOCAL_ASR_ENABLED = enabled;
   });
   it("maps Arabic regional and dialect tags to original Arabic transcription", async () => {
-    for (const language of ["ar", "ar-Arab-EG", "ar-EG", "ar-SA", "ar-IQ", "ar-MA", "ar-DZ", "ar-SY", "ar-AE", "ar-TN", "ar-YE", "arz", "ary", "acm", "apc", "arb", "apd", "ars", "acq", "shu", "abv", "aao", "ayp"]) {
-      expect((await query("select muwa_asr_language($1) as language", [language]))[0].language).toBe("ar");
+    for (const language of [
+      "ar",
+      "ar-Arab-EG",
+      "ar-EG",
+      "ar-SA",
+      "ar-IQ",
+      "ar-MA",
+      "ar-DZ",
+      "ar-SY",
+      "ar-AE",
+      "ar-TN",
+      "ar-YE",
+      "arz",
+      "ary",
+      "acm",
+      "apc",
+      "arb",
+      "apd",
+      "ars",
+      "acq",
+      "shu",
+      "abv",
+      "aao",
+      "ayp",
+    ]) {
+      expect(
+        (await query("select muwa_asr_language($1) as language", [language]))[0]
+          .language,
+      ).toBe("ar");
     }
-    expect((await query("select muwa_asr_language('und') as language"))[0].language).toBe("und");
-    expect((await query("select muwa_asr_language('ru') as language"))[0].language).toBe("ru");
+    expect(
+      (await query("select muwa_asr_language('und') as language"))[0].language,
+    ).toBe("und");
+    expect(
+      (await query("select muwa_asr_language('ru') as language"))[0].language,
+    ).toBe("ru");
     const id = await create();
     await query("update catalog_tracks set language='ar-EG'");
-    expect((await query("select muwa_enqueue_asr('asr-fixture') as id"))[0].id).toBe(id);
+    expect(
+      (await query("select muwa_enqueue_asr('asr-fixture') as id"))[0].id,
+    ).toBe(id);
     const c = await claim();
     expect(c.job.language).toBe("ar");
     expect(await finish(c)).toBeTrue();
-    expect((await query("select captions from catalog_tracks"))[0].captions[0].ar).toBe("مرحبا");
+    expect(
+      (await query("select captions from catalog_tracks"))[0].captions[0].ar,
+    ).toBe("مرحبا");
   });
   it("automatically queues a verified upload and deduplicates subsequent metadata saves", async () => {
     const p = await (
@@ -189,6 +234,53 @@ describe("Local recognition queue and protected captions", () => {
     expect(t.captions[0].words.length).toBe(1);
     expect(t.captions_revision).toBe(1);
     expect(await finish(c)).toBeFalse();
+  });
+  it("counts current recognition, exposes title suggestions privately and never renames a track", async () => {
+    await create();
+    const c = await claim();
+    const original = "يا رب إن القلب يرجو رحمتك";
+    const value = doc(c.job.id);
+    value.segments[0].original = original;
+    value.segments[0].words = [];
+    value.segments[0].timing = "phrase";
+    expect(
+      await finish(c, value, { ...quality, needsReview: true }),
+    ).toBeTrue();
+    const result = await (
+      await request({ action: "get-recognition", trackId: "asr-fixture" })
+    ).json();
+    expect(result.titleSuggestion.title).toBe(original);
+    expect(result.titleSuggestion.needsReview).toBeTrue();
+    expect(result.trackRevision).toBe(1);
+    expect(
+      (await query("select title,captions from catalog_tracks"))[0],
+    ).toEqual({ title: "Nasheed", captions: [] });
+    const overview = await state();
+    expect(overview.recognition.counts).toEqual({
+      queued: 0,
+      processing: 0,
+      ready: 0,
+      review: 1,
+      failed: 0,
+      missing: 0,
+    });
+    expect(
+      (await request({ action: "get-recognition", trackId: "asr-fixture" }, 2))
+        .status,
+    ).toBe(403);
+    await query("update catalog_audio_fingerprints set sha256=$1", [
+      "b".repeat(64),
+    ]);
+    const replaced = await state();
+    expect(replaced.recognition.counts.review).toBe(0);
+    expect(replaced.recognition.counts.missing).toBe(1);
+    expect(
+      (
+        await (
+          await request({ action: "get-recognition", trackId: "asr-fixture" })
+        ).json()
+      ).titleSuggestion,
+    ).toBeNull();
   });
   it("preserves a manual edit performed while the model is running", async () => {
     await create();

@@ -106,6 +106,15 @@ s=manager.read_text()
 needle='  func load(_ track: Track, retry: Bool = false) async {'
 fixture='\n    if ProcessInfo.processInfo.arguments.contains("--audit-ai") {\n      document = AISubtitleDocument(version: 2, id: "fixture", language: "ar", segments: [\n        AISubtitleSegment(id: "s0", start: 0, end: 8, original: "السلام عليكم ورحمة الله", words: [\n          SubtitleWord(text: "السلام", start: 0, end: 2), SubtitleWord(text: "عليكم", start: 2, end: 4),\n          SubtitleWord(text: "ورحمة", start: 4, end: 6), SubtitleWord(text: "الله", start: 6, end: 8)], timing: "estimated"),\n        AISubtitleSegment(id: "s1", start: 9, end: 15, original: "مرحبا بكم", words: [], timing: "phrase")])\n      translations["ru"] = AISubtitleTranslation(documentId: "fixture", language: "ru", segments: ["s0": "Мир вам и милость Аллаха", "s1": "Добро пожаловать"])\n      return\n    }\n'
 assert needle in s
+fixture=fixture.replace('      return\n', '''      if ProcessInfo.processInfo.arguments.contains("--audit-long-caption") {
+        document = AISubtitleDocument(version: 2, id: "fixture", language: "ar", segments: [
+          AISubtitleSegment(id: "s0", start: 0, end: 30,
+            original: "يا رب إن القلب يرجو رحمتك ويعود نحو النور حين يطول درب الحياة وتبقى في الأرواح كلمات السلام والرحمة والسكينة والأمل في كل يوم وليلة",
+            words: [], timing: "phrase")])
+        translations = [:]
+      }
+      return
+''',1)
 manager.write_text(s.replace(needle,needle+fixture))
 player=root/'Sources/Views/Player/FullPlayerView.swift'
 s=player.read_text().replace('    .onChange(of: expansion)', '    .task { if ProcessInfo.processInfo.arguments.contains("--audit-ai") { subtitlesVisible = true } }\n    .onChange(of: expansion)',1)

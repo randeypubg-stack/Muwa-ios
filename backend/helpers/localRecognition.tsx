@@ -1,7 +1,11 @@
 import { sql, type Transaction } from "kysely";
 import { db } from "./db";
 import type { DB } from "./schema";
-import type { RecognitionResult, RecognitionSummary } from "./adminValidation";
+import type {
+  RecognitionCounts,
+  RecognitionResult,
+  RecognitionSummary,
+} from "./adminValidation";
 export function localRecognitionEnabled() {
   return process.env.MUWA_LOCAL_ASR_ENABLED === "1";
 }
@@ -35,4 +39,28 @@ export async function recognitionResults(
 export function recognitionSummary(r: RecognitionResult): RecognitionSummary {
   const { document, trackId, ...summary } = r;
   return summary;
+}
+
+export async function recognitionCounts(): Promise<
+  RecognitionCounts | undefined
+> {
+  if (!localRecognitionEnabled()) return undefined;
+  // Match only the current audio hash, file and language. Old recognition must
+  // not make a replaced recording appear ready. No full transcript is fetched.
+  const result = await sql<RecognitionCounts>`
+    select count(*) filter (where j.status='queued')::integer as queued,
+      count(*) filter (where j.status='processing')::integer as processing,
+      count(*) filter (where j.status='ready' and not coalesce((j.quality->>'needsReview')::boolean,true))::integer as ready,
+      count(*) filter (where j.status='ready' and coalesce((j.quality->>'needsReview')::boolean,true))::integer as review,
+      count(*) filter (where j.status='failed')::integer as failed,
+      count(*) filter (where j.id is null)::integer as missing
+    from catalog_tracks t
+    join catalog_audio_fingerprints h on h.track_id=t.id
+    left join catalog_asr_jobs j on j.track_id=t.id and j.audio_sha256=h.sha256
+      and j.audio_filename=t.audio_filename and j.language=muwa_asr_language(t.language)
+      and j.status<>'stale'
+    where t.status<>'archived' and t.duration>0 and t.duration<=3600
+      and t.audio_filename ~ '^catalog/[a-f0-9-]{36}/audio\\.(mp3|m4a|wav)$'
+  `.execute(db);
+  return result.rows[0];
 }

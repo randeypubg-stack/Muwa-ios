@@ -5,6 +5,7 @@ import { db } from "./db";
 import type { DB, Json } from "./schema";
 import { getServerUserSession } from "./getServerUserSession";
 import { NotAuthenticatedError, setServerSession } from "./getSetServerSession";
+import { suggestTitle } from "./titleSuggestions";
 import {
   adminValidation,
   type AdminAction,
@@ -32,6 +33,7 @@ import {
   localRecognitionEnabled,
   recognitionResults,
   recognitionSummary,
+  recognitionCounts,
 } from "./localRecognition";
 import {
   findTelegramSource,
@@ -398,13 +400,20 @@ async function execute(
   if (input.action === "get-recognition") {
     const row = await db
       .selectFrom("catalogTracks")
-      .select("id")
+      .select(["id", "title", "revision"])
       .where("id", "=", input.trackId)
       .executeTakeFirst();
     if (!row) fail("Нашид не найден.", 404);
+    const recognition = (await recognitionResults([row.id], true))[0] ?? null;
     return {
       ok: true,
-      recognition: (await recognitionResults([row.id], true))[0] ?? null,
+      recognition,
+      trackRevision: row.revision,
+      titleSuggestion: suggestTitle(
+        row.title,
+        recognition?.document ?? null,
+        recognition?.quality?.needsReview ?? true,
+      ),
     };
   }
   if (input.action === "recognize-track") {
@@ -743,6 +752,7 @@ async function state(input: AdminQuery): Promise<AdminState> {
     },
     recognition: {
       enabled: localRecognitionEnabled(),
+      counts: await recognitionCounts(),
       message: localRecognitionEnabled()
         ? "После загрузки сервер распознаёт оригинал в отдельной очереди. Проверяйте текст по аудио; ручные исправления сохраняются."
         : "Автораспознавание пока не подключено. Редактирование и импорт готовых субтитров доступны.",

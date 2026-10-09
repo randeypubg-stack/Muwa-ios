@@ -39,6 +39,8 @@ async function main() {
       "runtimeConfig.spec.tsx",
       "requestSecurity.tsx",
       "requestSecurity.spec.tsx",
+      "titleSuggestions.ts",
+      "titleSuggestions.spec.tsx",
     ];
     if (databaseTests)
       names.push(

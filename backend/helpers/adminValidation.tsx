@@ -241,7 +241,19 @@ export type AdminState = {
   total: number;
   page: number;
   stats: { published: number; drafts: number; pending: number };
-  recognition: { enabled: boolean; message: string };
+  recognition: {
+    enabled: boolean;
+    message: string;
+    counts?: RecognitionCounts;
+  };
+};
+export type RecognitionCounts = {
+  queued: number;
+  processing: number;
+  ready: number;
+  review: number;
+  failed: number;
+  missing: number;
 };
 export type UploadFile = {
   part: "audio" | "cover";
@@ -258,6 +270,8 @@ export type UploadFile = {
 export type AdminResult = {
   ok: true;
   recognition?: RecognitionResult | null;
+  trackRevision?: number;
+  titleSuggestion?: import("./titleSuggestions").TitleSuggestion | null;
   jobId?: string;
   importStatus?: "missing" | "existing" | "duplicate" | "created";
   trackId?: string;

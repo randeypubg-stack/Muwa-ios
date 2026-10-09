@@ -698,6 +698,41 @@
   font-size: 13px;
   line-height: 1.5;
 }
+.recognition progress {
+  display: block;
+  width: min(100%, 320px);
+  height: 5px;
+  margin-top: 12px;
+  accent-color: #98c8de;
+}
+.recognitionSummary {
+  padding: 18px 22px;
+  margin-bottom: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(120, 174, 199, 0.06);
+}
+.recognitionSummary p {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #91a8b7;
+  margin-top: 6px;
+}
+.recognitionSummary dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 14px;
+  margin: 16px 0 0;
+}
+.recognitionSummary dt {
+  font-size: 12px;
+  color: #91a8b7;
+}
+.recognitionSummary dd {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 4px 0 0;
+}
 .recognition > div:last-child {
   display: flex;
   flex-wrap: wrap;

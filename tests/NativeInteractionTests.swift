@@ -27,6 +27,67 @@ final class NativeInteractionTests: XCTestCase {
   }
   private var queueButtons: [XCUIElement] { queueQuery.allElementsBoundByIndex }
 
+  private func assertNavigationAnchor(_ name: String, expectedBottom: CGFloat? = nil) -> CGFloat {
+    let navigation = app.descendants(matching: .any).matching(identifier: "bottom-navigation").firstMatch
+    XCTAssertTrue(navigation.waitForExistence(timeout: 15))
+    let frame = navigation.frame
+    let viewport = app.frame
+    XCTAssertEqual(frame.height, 62, accuracy: 1)
+    XCTAssertTrue(viewport.contains(frame), "Navigation moved outside the application")
+    let clearance = viewport.maxY - frame.maxY
+    let phone = UIDevice.current.userInterfaceIdiom == .phone
+    // Real notched review phones keep a home-indicator safe area. The same
+    // 9-point content margin is covered separately for home-button devices.
+    XCTAssertGreaterThanOrEqual(clearance, phone ? 28 : 16,
+                                "Navigation was shifted back into the bottom safe area")
+    XCTAssertLessThan(clearance, 80, "Navigation was moved too far above the safe area")
+    if let expectedBottom { XCTAssertEqual(frame.maxY, expectedBottom, accuracy: 1) }
+    shot(name)
+    return frame.maxY
+  }
+
+  func testNavigationKeepsItsAnchorAcrossScreensAndSubtitles() throws {
+    app.launchArguments = ["--audit-player", "--audit-ai"]
+    app.launch()
+    XCTAssertTrue(app.buttons["Субтитры. Открыть полный текст"].firstMatch.waitForExistence(timeout: 30))
+    let bottom = assertNavigationAnchor("navigation-player-subtitles")
+    for label in ["Главная", "Библиотека", "Профиль", "Плеер"] {
+      let item = app.buttons[label].firstMatch
+      XCTAssertTrue(item.waitForExistence(timeout: 10))
+      XCTAssertTrue(item.isHittable)
+      item.tap()
+      _ = assertNavigationAnchor("navigation-" + label, expectedBottom: bottom)
+    }
+  }
+
+  func testLongArabicCaptionWrapsAndScrollsWithoutChangingTheTrack() throws {
+    app.launchArguments = ["--audit-player", "--audit-ai", "--audit-long-caption"]
+    app.launch()
+    let rail = app.buttons["Субтитры. Открыть полный текст"].firstMatch
+    XCTAssertTrue(rail.waitForExistence(timeout: 30))
+    let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Оригинальный текст доступен"), object: rail)
+    XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
+    let title = app.staticTexts["Muwa Nasheeds"].firstMatch
+    let frame = rail.frame
+    XCTAssertGreaterThan(frame.width, 80)
+    let before = rail.screenshot().pngRepresentation
+    shot("long-arabic-caption-before-scroll")
+    // Use the real caption area, outside the artwork. Its vertical drag must
+    // scroll text rather than dismiss the player or start artwork paging.
+    rail.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.73))
+      .press(forDuration: 0.05, thenDragTo: rail.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.30)))
+    XCTAssertFalse(app.navigationBars["Оригинал и перевод"].exists, "Scrolling opened the reader")
+    XCTAssertTrue(rail.exists && rail.isHittable, "Caption scroll dismissed the player")
+    XCTAssertTrue(title.exists, "Caption scroll changed the current track")
+    XCTAssertNotEqual(before, rail.screenshot().pngRepresentation, "The long phrase did not scroll inside its caption viewport")
+    shot("long-arabic-caption-after-scroll")
+    rail.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+    XCTAssertTrue(app.navigationBars["Оригинал и перевод"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "الأمل في كل يوم وليلة")).firstMatch.exists,
+                  "The end of the original Arabic phrase was lost")
+    shot("long-arabic-caption-full-reader")
+  }
+
   func testPortraitArtworkFillsThePlayerFrame() throws {
     app.launchArguments = ["--audit-player", "--audit-portrait"]
     app.launch()

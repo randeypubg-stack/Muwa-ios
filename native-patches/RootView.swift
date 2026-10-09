@@ -65,10 +65,7 @@ struct RootView: View {
         max(0, layout.viewportWidth - chromeSideInset * 2)
       )
 
-      let chromeDrop: CGFloat =
-        layout.isPhone
-        ? max(safeBottom - 5, 11)
-        : 0
+      let chrome = BottomChromeLayout(phone: layout.isPhone)
 
       ZStack(alignment: .bottom) {
         tabContent
@@ -77,7 +74,7 @@ struct RootView: View {
         if player.hasStartedPlaybackThisSession, player.currentTrack != nil {
           MorphingPlayerView(
             expansion: $playerExpansion,
-            chromeDrop: chromeDrop,
+            chromeBottomPadding: chrome.bottomPadding,
             safeTopInset: safeTop,
             safeBottomInset: safeBottom,
             safeLeadingInset: safeLeading,
@@ -111,11 +108,9 @@ struct RootView: View {
             }
           )
           .padding(.horizontal, layout.isPhone ? 4 : 0)
-          .offset(y: layout.isPhone ? -3 : 0)
         }
         .frame(width: chromeWidth)
-        .padding(.bottom, layout.isPhone ? 6 : 0)
-        .offset(y: chromeDrop)
+        .padding(.bottom, chrome.bottomPadding)
         .zIndex(40)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)

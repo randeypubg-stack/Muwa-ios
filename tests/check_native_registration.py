@@ -25,6 +25,12 @@ with tempfile.TemporaryDirectory() as directory:
         assert first.count(f'/* {name} in Sources */ ='.encode()) == 1, f'Duplicate compiled implementation: {name}'
         assert first.count(f'/* {name} */ ='.encode()) == 1, f'Duplicate source reference: {name}'
     assert first.count(b'/* QueueList.swift in Sources */ =') == 1, 'Native queue implementation must be registered once'
+    # Preparation must ship the reviewed implementation, not an immutable base
+    # copy or another file with the same Swift type name.
+    for name in ['RootView.swift', 'BottomBar.swift', 'FullPlayerView.swift', 'PlayerSubtitleOverlay.swift']:
+        matches = list((root / 'Sources').rglob(name))
+        assert len(matches) == 1, f'Duplicate native implementation: {name}'
+        assert matches[0].read_bytes() == (script.parents[1] / 'native-patches' / name).read_bytes(), f'Unreviewed assembled source: {name}'
     scenes = plistlib.loads(info.read_bytes())['UIApplicationSceneManifest']['UISceneConfigurations']
     assert scenes['UIWindowSceneSessionRoleApplication'] == phone, 'Phone scene was replaced'
     assert len(scenes['CPTemplateApplicationSceneSessionRoleApplication']) == 1
