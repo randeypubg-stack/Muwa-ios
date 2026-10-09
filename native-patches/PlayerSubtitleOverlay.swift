@@ -203,6 +203,7 @@ private struct SubtitleRail<Line: View>: View {
             insertion: .opacity.combined(with: .offset(y: 8)),
             removal: .opacity
           ))
+          .allowsHitTesting(delta == 0)
           .accessibilityHidden(delta != 0)
           .accessibilityIdentifier(delta == 0 ? "subtitle-current-scroll" : "subtitle-context-scroll-\(index)")
       }

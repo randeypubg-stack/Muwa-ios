@@ -12,6 +12,7 @@ Compose reader, without a new playback clock, recognition provider or UI library
   stay constant when a phrase becomes active, preserving its wrapping.
 - The current phrase keeps its full-height scroll viewport. Context is masked
   through a drawing transform; long current phrases remain manually scrollable.
+  Context rows never intercept hit testing in the current phrase's scroll area.
   Entering context fades over 8 pt; leaving context only fades. At most three
   phrases are mounted, with no looping effect or separate timer.
 - The full reader softly changes text opacity and its existing focus surface.
