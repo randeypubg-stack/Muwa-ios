@@ -66,7 +66,11 @@ struct RootView: View {
       )
 
       let windowHeight = layout.viewportHeight + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom
-      let chrome = BottomChromeLayout(viewportHeight: windowHeight, safeBottom: safeBottom)
+      // Keyboard avoidance can increase the proposed root inset. It must not
+      // change the physical navigation reference or the system gesture margin.
+      let systemBottom = activeWindow?.safeAreaInsets.bottom ?? proxy.safeAreaInsets.bottom
+      let chrome = BottomChromeLayout(viewportHeight: windowHeight, safeBottom: systemBottom,
+                                     rootBottomInset: safeBottom)
 
       ZStack(alignment: .bottom) {
         tabContent
@@ -170,12 +174,15 @@ struct RootView: View {
   }
 
   private var activeWindowSafeAreaInsets: UIEdgeInsets {
+    activeWindow?.safeAreaInsets ?? .zero
+  }
+
+  private var activeWindow: UIWindow? {
     UIApplication.shared.connectedScenes
       .compactMap { $0 as? UIWindowScene }
       .filter { $0.activationState == .foregroundActive }
       .flatMap { $0.windows }
-      .first(where: \ .isKeyWindow)?
-      .safeAreaInsets ?? .zero
+      .first(where: \ .isKeyWindow)
   }
 
   private func smoothStep(_ value: CGFloat) -> CGFloat {

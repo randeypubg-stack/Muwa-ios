@@ -1247,7 +1247,7 @@ struct BottomChromeLayout {
   static let maximumSafeAreaUnderlap: CGFloat = 16
   let physicalBottomClearance: CGFloat
   let bottomPadding: CGFloat
-  init(viewportHeight: CGFloat, safeBottom: CGFloat) {
+  init(viewportHeight: CGFloat, safeBottom: CGFloat, rootBottomInset: CGFloat? = nil) {
     let height = viewportHeight.isFinite && viewportHeight > 0 ? viewportHeight : Self.referenceHeight
     let inset = safeBottom.isFinite ? max(0, safeBottom) : 0
     let proportional = min(Self.maximumClearance, max(Self.minimumClearance,
@@ -1255,7 +1255,8 @@ struct BottomChromeLayout {
     physicalBottomClearance = max(proportional, inset - Self.maximumSafeAreaUnderlap)
     // Root coordinates end at the safe area; translate this one physical anchor
     // once. Navigation, mini player and full-player morph must share the result.
-    bottomPadding = physicalBottomClearance - inset
+    let rootInset = rootBottomInset.flatMap { $0.isFinite ? max(0, $0) : nil } ?? inset
+    bottomPadding = physicalBottomClearance - rootInset
   }
 }
 

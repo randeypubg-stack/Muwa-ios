@@ -100,6 +100,9 @@ struct AuditChecks {
     }
     precondition(BottomChromeLayout.barHeight == 62 && BottomChromeLayout.playerGap == 8,
       "Approved touch-target height or mini-player gap changed")
+    let keyboard = BottomChromeLayout(viewportHeight: 874, safeBottom: 34, rootBottomInset: 303)
+    precondition(keyboard.physicalBottomClearance == 18 && keyboard.bottomPadding == -285,
+      "Keyboard inset changed the approved system navigation anchor")
     print("PASS: approved navigation anchor and proportional screen/window clearances")
   }
 
