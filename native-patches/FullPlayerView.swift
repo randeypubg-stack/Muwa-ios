@@ -730,7 +730,7 @@ struct MorphingPlayerView: View {
       fullTopBar(width: min(layout.contentMaxWidth, layout.viewportWidth - layout.horizontalPadding * 2))
         .position(
           x: layout.viewportWidth / 2,
-          y: containerTop + safeTopInset + 28
+          y: containerTop + geometry.topBarY
         )
 
       Button {
@@ -1185,6 +1185,7 @@ struct MorphingPlayerView: View {
 
 // Pure geometry shared with regression checks; coordinates are local to the full surface.
 struct PlayerGeometry {
+  let topBarY: CGFloat
   let artworkSize: CGFloat
   let artworkX: CGFloat
   let artworkY: CGFloat
@@ -1201,6 +1202,9 @@ struct PlayerGeometry {
     chromeTop = height + safeTop - BottomChromeLayout.barHeight - chromeBottomPadding
     let landscape = width > height * 1.2 && height < 520
     let short = phone && height < 740
+    // A 355 pt landscape window needs four more points below its top controls.
+    // Keep their 42 pt targets inside the safe area; portrait stays unchanged.
+    topBarY = safeTop + (landscape && phone && height < 370 ? 24 : 28)
     if landscape {
       controlsWidth = min(420, contentWidth * 0.56)
       controlsX = (width + contentWidth) / 2 - controlsWidth / 2

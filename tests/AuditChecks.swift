@@ -71,7 +71,8 @@ struct AuditChecks {
       precondition(g.actionsY + 22 <= g.chromeTop - 10, "Actions collide with bottom bar at \(w)x\(h)")
       precondition(g.transportY + (phone ? 29 : 34) + 4 <= g.actionsY - 22, "Transport/actions overlap")
       precondition(g.progressY + 24 + 8 <= g.transportY - (phone ? 29 : 34), "Progress/transport overlap")
-      precondition(g.metadataY - 30 >= top + 49, "Metadata overlaps top bar")
+      precondition(g.topBarY - 21 >= top, "Top controls leave the safe area")
+      precondition(g.metadataY - 30 >= g.topBarY + 21, "Metadata overlaps top bar at \(w)x\(h)")
       let screenBottom = h + top + bottom
       let barBottom = g.chromeTop + 62
       let expectedClearance = max(min(28, max(12, screenBottom * 18 / 874)), bottom - 16)
