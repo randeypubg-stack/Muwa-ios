@@ -83,9 +83,12 @@ final class NativeInteractionTests: XCTestCase {
     shot("long-arabic-caption-after-scroll")
     rail.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
     XCTAssertTrue(app.navigationBars["Оригинал и перевод"].waitForExistence(timeout: 10))
-    XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "الأمل في كل يوم وليلة")).firstMatch.exists,
-                  "The end of the original Arabic phrase was lost")
     shot("long-arabic-caption-full-reader")
+    // Reader rows are seek buttons. Query the actual accessible row rather
+    // than demand a separate static-text element hidden by SwiftUI's button.
+    let phrase = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "الأمل في كل يوم وليلة")).firstMatch
+    XCTAssertTrue(phrase.waitForExistence(timeout: 10),
+                  "The end of the original Arabic phrase was lost")
   }
 
   func testPortraitArtworkFillsThePlayerFrame() throws {
