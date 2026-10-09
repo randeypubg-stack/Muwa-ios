@@ -8,7 +8,11 @@ const {
   takeRateLimit,
   uploadPolicy,
 } = require("./uploadSecurity");
-const { checkMediaHeader, catalogueMediaURL } = require("./mediaSecurity");
+const {
+  checkMediaHeader,
+  catalogueMediaURL,
+  MediaHeaderProbe,
+} = require("./mediaSecurity");
 const { adminService } = require("./adminService");
 const publication = require("../endpoints/publicationUpload_POST");
 const media = require("../endpoints/catalog/media_GET");
@@ -237,6 +241,89 @@ describe("Muwa security boundaries with disposable PostgreSQL", () => {
     png.writeUInt32BE(20000, 16);
     png.writeUInt32BE(20000, 20);
     expect(() => checkMediaHeader(png, "image/png", png.length)).toThrow();
+  });
+  it("accepts MP3 audio after a large ID3 block without changing its complete fingerprint", async () => {
+    const tagSize = 8 * 1024 * 1024;
+    const bytes = Buffer.alloc(10 + tagSize + audio.length);
+    bytes.write("ID3");
+    bytes[3] = 4;
+    for (let i = 0; i < 4; i++)
+      bytes[6 + i] = (tagSize >>> ((3 - i) * 7)) & 127;
+    audio.copy(bytes, 10 + tagSize);
+    const prepared = await admin({
+      action: "prepare-upload",
+      files: [
+        { part: "audio", contentType: "audio/mpeg", sizeBytes: bytes.length },
+      ],
+    });
+    expect(prepared.status).toBe(200);
+    const plan = await prepared.json();
+    storage.files.set(plan.files[0].filename, {
+      sizeBytes: bytes.length,
+      bytes,
+    });
+    const response = await admin({
+      action: "save-track",
+      uploadId: plan.uploadId,
+      ...meta,
+    });
+    expect(response.status).toBe(200);
+    const id = (await response.json()).trackId;
+    expect(
+      (
+        await testPool.query(
+          "SELECT sha256 FROM catalog_audio_fingerprints WHERE track_id=$1",
+          [id],
+        )
+      ).rows[0].sha256,
+    ).toBe(sha(bytes));
+  });
+  it("bounds MP3 sampling across tiny chunks and rejects frames hidden only inside tags", () => {
+    const tagSize = 8 * 1024 * 1024;
+    const bytes = Buffer.alloc(10 + tagSize + 20000);
+    bytes.write("ID3");
+    bytes[3] = 4;
+    bytes[5] = 16;
+    for (let i = 0; i < 4; i++)
+      bytes[6 + i] = (tagSize >>> ((3 - i) * 7)) & 127;
+    const offset = 20 + tagSize;
+    audio.copy(bytes, 100); // An embedded image/tag is never treated as audio.
+    function sample(input) {
+      const probe = new MediaHeaderProbe(
+        "audio/mpeg",
+        input.length,
+        6 * 1024 * 1024,
+      );
+      for (let i = 0; i < 10; i++) probe.add(input.subarray(i, i + 1));
+      probe.add(input.subarray(10, offset - 1));
+      for (let i = offset - 1; i < offset + 20; i++)
+        probe.add(input.subarray(i, i + 1));
+      probe.add(input.subarray(offset + 20));
+      return probe.bytes();
+    }
+    expect(sample(bytes).length).toBe(8195);
+    expect(() =>
+      checkMediaHeader(sample(bytes), "audio/mpeg", bytes.length),
+    ).toThrow();
+    audio.copy(bytes, offset);
+    expect(() =>
+      checkMediaHeader(sample(bytes), "audio/mpeg", bytes.length),
+    ).not.toThrow();
+    bytes[6] = 128;
+    expect(() => sample(bytes)).toThrow();
+    const truncated = Buffer.from(bytes);
+    truncated[6] = 127;
+    expect(() => sample(truncated)).toThrow();
+    const plain = new MediaHeaderProbe(
+      "audio/mpeg",
+      audio.length,
+      6 * 1024 * 1024,
+    );
+    for (const b of audio) plain.add(Uint8Array.of(b));
+    expect(plain.bytes()).toEqual(audio);
+    expect(() =>
+      checkMediaHeader(plain.bytes(), "audio/mpeg", audio.length),
+    ).not.toThrow();
   });
   it("preserves signed headers, blocks other accounts and reuses identical completed uploads", async () => {
     const id = randomUUID(),

@@ -25,21 +25,65 @@ function dimensions(width: number, height: number) {
   )
     invalid();
 }
+function mp3AudioOffset(data: Buffer, size: number) {
+  if (data.length < 10) invalid();
+  if (data.toString("ascii", 0, 3) !== "ID3") return 0;
+  if (![2, 3, 4].includes(data[3]) || data.subarray(6, 10).some((b) => b > 127))
+    invalid();
+  let offset =
+    10 + ((data[6] << 21) | (data[7] << 14) | (data[8] << 7) | data[9]);
+  if (data[3] === 4 && data[5] & 16) offset += 10;
+  if (offset > size - 4) invalid();
+  return offset;
+}
+
+// MP3 album art can occupy most of a Telegram file. Skip the declared ID3
+// span while hashing the entire stream; retain only its header and the same
+// bounded MPEG frame search used below. Other containers keep their prefix.
+export class MediaHeaderProbe {
+  private chunks: Buffer[] = [];
+  private position = 0;
+  private retained = 0;
+  private header = Buffer.alloc(10);
+  private audioOffset: number | undefined;
+  constructor(
+    private type: string,
+    private size: number,
+    private limit: number,
+  ) {}
+  add(chunk: Uint8Array) {
+    const start = this.position;
+    this.position += chunk.byteLength;
+    if (this.type !== "audio/mpeg") {
+      if (this.retained < this.limit) {
+        const bytes = Buffer.from(
+          chunk.subarray(0, this.limit - this.retained),
+        );
+        this.chunks.push(bytes);
+        this.retained += bytes.length;
+      }
+      return;
+    }
+    if (start < 10) this.header.set(chunk.subarray(0, 10 - start), start);
+    if (this.position < 10) return;
+    if (this.audioOffset === undefined) {
+      this.audioOffset = mp3AudioOffset(this.header, this.size);
+      if (this.audioOffset === 0) this.chunks.push(Buffer.from(this.header));
+    }
+    const from = Math.max(start, 10, this.audioOffset);
+    const to = Math.min(this.position, this.audioOffset + 8195);
+    if (to > from)
+      this.chunks.push(Buffer.from(chunk.subarray(from - start, to - start)));
+  }
+  bytes() {
+    return Buffer.concat(this.chunks);
+  }
+}
 // A bounded container check, not a decoder or an antivirus. Never execute uploads.
 export function checkMediaHeader(data: Buffer, type: string, size: number) {
   if (data.length < 12) invalid();
   if (type === "audio/mpeg") {
-    let offset = 0;
-    if (data.toString("ascii", 0, 3) === "ID3") {
-      if (
-        ![2, 3, 4].includes(data[3]) ||
-        data.subarray(6, 10).some((b) => b > 127)
-      )
-        invalid();
-      offset =
-        10 + ((data[6] << 21) | (data[7] << 14) | (data[8] << 7) | data[9]);
-      if (data[3] === 4 && data[5] & 16) offset += 10;
-    }
+    const offset = mp3AudioOffset(data, size);
     let frame = false;
     for (let i = offset; i < Math.min(data.length - 3, offset + 8192); i++) {
       if (
@@ -190,7 +234,14 @@ export async function inspectStoredMedia(
   const etag = "etag" in info && typeof info.etag === "string" ? info.etag : "";
   if (!etag) throw new SecurityError("Хранилище не вернуло версию файла.", 503);
   const source = await getUrl({ visibility, filename, expiresInSeconds: 120 });
-  if (!source.ok || (new URL(source.url).protocol !== "https:" && !(process.env.MUWA_RUNTIME_TEST === "1" && new URL(source.url).origin === publicOrigin())))
+  if (
+    !source.ok ||
+    (new URL(source.url).protocol !== "https:" &&
+      !(
+        process.env.MUWA_RUNTIME_TEST === "1" &&
+        new URL(source.url).origin === publicOrigin()
+      ))
+  )
     throw new SecurityError("Файл недоступен.", 503);
   // Only SDK-issued URLs for an already owned storage key; no URL supplied by the client.
   const response = await fetch(source.url, {
@@ -202,10 +253,11 @@ export async function inspectStoredMedia(
     throw new SecurityError("Файл изменён или недоступен.", 409);
   const hash = createHash("sha256"),
     reader = response.body.getReader();
-  const chunks: Buffer[] = [];
-  let size = 0,
-    retained = 0;
+  let size = 0;
   const probeLimit = part === "audio" ? 6 * MiB : limit;
+  const contentType =
+    expectedType ?? (part === "submission" ? "application/json" : "");
+  const probe = new MediaHeaderProbe(contentType, info.sizeBytes, probeLimit);
   try {
     while (true) {
       const next = await reader.read();
@@ -216,22 +268,15 @@ export async function inspectStoredMedia(
         throw new SecurityError("Файл превышает заявленный размер.");
       }
       hash.update(next.value);
-      if (retained < probeLimit) {
-        const bytes = Buffer.from(
-          next.value.subarray(0, probeLimit - retained),
-        );
-        chunks.push(bytes);
-        retained += bytes.length;
-      }
+      probe.add(next.value);
     }
   } finally {
+    await reader.cancel().catch(() => {});
     reader.releaseLock();
   }
   if (size !== info.sizeBytes)
     throw new SecurityError("Файл загружен не полностью.");
-  const data = Buffer.concat(chunks),
-    contentType =
-      expectedType ?? (part === "submission" ? "application/json" : "");
+  const data = probe.bytes();
   checkMediaHeader(data, contentType, size);
   let json: unknown;
   if (part === "submission") {
