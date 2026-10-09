@@ -35,10 +35,10 @@ final class NativeInteractionTests: XCTestCase {
     XCTAssertEqual(frame.height, 62, accuracy: 1)
     XCTAssertTrue(viewport.contains(frame), "Navigation moved outside the application")
     let clearance = viewport.maxY - frame.maxY
-    let phone = UIDevice.current.userInterfaceIdiom == .phone
     // Physical-screen clearance, not a broad safe-area range: Build 49's
     // 43-point gap passed the old <=80 check but was visibly too high.
-    XCTAssertEqual(clearance, phone ? 18 : 20, accuracy: 2,
+    let expected = min(28, max(12, viewport.height * 18 / 874))
+    XCTAssertEqual(clearance, expected, accuracy: 1,
                    "Navigation capsule differs from the reviewed screen-bottom anchor")
     if let expectedBottom { XCTAssertEqual(frame.maxY, expectedBottom, accuracy: 1) }
     shot(name)
@@ -481,8 +481,10 @@ final class NativeInteractionTests: XCTestCase {
     let home = app.staticTexts["Нашиды без музыки"].firstMatch
     XCTAssertTrue(home.waitForExistence(timeout: 30))
     try rotationShot("rotation-home-portrait", landscape: false, visibleElement: home)
+    _ = assertNavigationAnchor("navigation-home-portrait")
     device.orientation = .landscapeRight
     try rotationShot("rotation-home-landscape", landscape: true, visibleElement: home)
+    _ = assertNavigationAnchor("navigation-home-landscape")
     app.terminate()
 
     device.orientation = .portrait
@@ -493,9 +495,12 @@ final class NativeInteractionTests: XCTestCase {
     let position = app.sliders["Позиция воспроизведения"].firstMatch
     XCTAssertTrue(position.waitForExistence(timeout: 30))
     try rotationShot("rotation-player-portrait", landscape: false, visibleElement: position)
+    _ = assertNavigationAnchor("navigation-player-portrait")
     device.orientation = .landscapeRight
     try rotationShot("rotation-player-landscape", landscape: true, visibleElement: position)
+    _ = assertNavigationAnchor("navigation-player-landscape")
     device.orientation = .portrait
     try rotationShot("rotation-player-return-portrait", landscape: false, visibleElement: position)
+    _ = assertNavigationAnchor("navigation-player-return-portrait")
   }
 }

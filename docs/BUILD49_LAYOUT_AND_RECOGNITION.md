@@ -1,11 +1,18 @@
-# Muwa builds 49–50: layout and recognition contracts
+# Muwa builds 49–51: layout and recognition contracts
 
 ## Navigation and player
 
-The root content already respects the scene safe area. Bottom navigation keeps a
-physical-screen clearance of 18 points on home-indicator iPhones (9 points on
-home-button phones) and no extra margin on iPad. Build 49 used a 9-point margin
-above the safe area and visibly raised the bar too far. Its 62-point height
+The owner approved Build 50 on 9 October 2026. Its iPhone 17 Pro position is the
+locked visual reference: 18 points above the physical bottom of an 874-point
+window. Build 51 scales only the outer gap as `windowHeight * 18 / 874`, bounded
+to 12–28 points/dp, using the current window (including system insets), not raw
+pixels. Rotation and resizable iPad windows recalculate the same anchor. iOS
+preserves at most the approved 16-point underlap into its bottom safe area;
+Android keeps the entire capsule above system buttons or gestures. Insets are
+applied once. On the approved iPhone the gap stays exactly 18 points.
+
+Build 49 used a 9-point margin above the safe area and visibly raised the bar too
+far. The bar's 62-point iOS height
 and the 8-point mini-player gap share `BottomChromeLayout`; never add the system
 bottom inset a second time. Player geometry uses the same anchor. Short landscape
 layouts preserve the title clearance and full transport/action touch targets.
@@ -57,6 +64,22 @@ existing explicit action and revision check; metadata is never renamed by ASR.
 Keep commits, artifact hashes, source equivalence and observed CI results with the
 release. These checks detect regressions; they do not make code immutable or
 replace repository branch protections. No branch protection was changed here.
+
+## Owner-approved navigation contract
+
+`BottomChromeLayout` is the single iOS geometry owner. Android uses
+`BottomNavigationLayout` in its existing Compose shell; its system navigation
+area is reserved rather than duplicated. Touch targets and font sizes retain
+their existing platform sizes. Do not introduce per-tab or per-player offsets.
+`AGENTS.md` requires a new explicit owner request before changing this reference.
+Golden tests lock the approved device and short/tall/resizable-window outputs.
+Native UI tests measure the rendered capsule across all tabs, with the mini/full
+player and after portrait → landscape → portrait rotation. These checks must
+fail if a future edit changes the reference, not derive expected values from
+production constants. Android instrumentation also rejects system-bar/cutout
+overlap. Navigation-only CI retains release compilation, foundation checks and
+the full native interaction suite on all four Apple profiles; supplemental
+screen capture, CarPlay and subtitle-motion videos are outside that focused run.
 
 ## Build 50 subtitle states
 

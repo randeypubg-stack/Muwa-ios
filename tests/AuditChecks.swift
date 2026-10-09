@@ -51,6 +51,7 @@ struct AuditChecks {
     precondition(LibraryStore(defaults: defaults).playlists.isEmpty, "Deleted legacy playlist resurrected")
     print("PASS: playlist migration, restart, isolation, deduplication, order, deletion, empty queue")
 
+    checkBottomChromeAnchor()
     // Safe-area content sizes: small/modern iPhones, landscape, iPad and narrow iPad window.
     let cases: [(CGFloat, CGFloat, CGFloat, CGFloat, Bool)] = [
       (320, 548, 20, 0, true), (375, 647, 20, 0, true),
@@ -64,7 +65,7 @@ struct AuditChecks {
       let pad: CGFloat = phone ? 5 : (w < 600 ? 18 : 28)
       let limit: CGFloat = phone ? min(h < 740 ? 210 : 310, w * 0.68) : min(420, h * 0.48, w * 0.68)
       let g = PlayerGeometry(width: w, height: h, safeTop: top,
-        chromeBottomPadding: BottomChromeLayout(phone: phone, safeBottom: bottom).bottomPadding, phone: phone,
+        chromeBottomPadding: BottomChromeLayout(viewportHeight: h + top + bottom, safeBottom: bottom).bottomPadding, phone: phone,
         contentWidth: w - pad * 2, artworkLimit: limit)
       precondition(g.artworkSize > 0)
       precondition(g.actionsY + 22 <= g.chromeTop - 10, "Actions collide with bottom bar at \(w)x\(h)")
@@ -73,7 +74,7 @@ struct AuditChecks {
       precondition(g.metadataY - 30 >= top + 49, "Metadata overlaps top bar")
       let screenBottom = h + top + bottom
       let barBottom = g.chromeTop + 62
-      let expectedClearance: CGFloat = phone ? (bottom > 0 ? min(bottom, 18) : 9) : bottom
+      let expectedClearance = max(min(28, max(12, screenBottom * 18 / 874)), bottom - 16)
       precondition(abs(screenBottom - barBottom - expectedClearance) < 0.001, "Navigation clearance differs from the reviewed physical-screen anchor")
       precondition(g.controlsX - g.controlsWidth / 2 >= 0)
       precondition(g.controlsX + g.controlsWidth / 2 <= w)
@@ -81,6 +82,25 @@ struct AuditChecks {
     }
 
     checkSubtitleGeometry()
+  }
+
+  private static func checkBottomChromeAnchor() {
+    // Golden point-space clearances, independent of production constants.
+    let cases: [(CGFloat, CGFloat, CGFloat)] = [
+      (874, 34, 18), (956, 34, 19.688787185), (568, 0, 12),
+      (667, 0, 13.736842105), (402, 21, 12), (1133, 20, 23.334096110),
+      (1376, 20, 28), (400, 20, 12), (874, 60, 44), (0, 34, 18)
+    ]
+    for (height, inset, expected) in cases {
+      let chrome = BottomChromeLayout(viewportHeight: height, safeBottom: inset)
+      precondition(abs(chrome.physicalBottomClearance - expected) < 0.001,
+        "Owner-approved proportional anchor changed at \(height) / inset \(inset)")
+      precondition(abs(chrome.bottomPadding + inset - expected) < 0.001,
+        "System inset was applied more than once")
+    }
+    precondition(BottomChromeLayout.barHeight == 62 && BottomChromeLayout.playerGap == 8,
+      "Approved touch-target height or mini-player gap changed")
+    print("PASS: approved navigation anchor and proportional screen/window clearances")
   }
 
   private static func checkSubtitleGeometry() {
@@ -105,7 +125,7 @@ struct AuditChecks {
     for c in cases {
       let side = max(c.padding, max(c.leading, c.trailing))
       let g = PlayerGeometry(width: c.width, height: c.height, safeTop: c.top,
-        chromeBottomPadding: BottomChromeLayout(phone: c.phone, safeBottom: c.bottom).bottomPadding, phone: c.phone,
+        chromeBottomPadding: BottomChromeLayout(viewportHeight: c.height + c.top + c.bottom, safeBottom: c.bottom).bottomPadding, phone: c.phone,
         contentWidth: min(c.contentLimit, c.width - side * 2), artworkLimit: c.artworkLimit)
       let originalCover = CGRect(x: g.artworkX - g.artworkSize / 2,
         y: g.artworkY - g.artworkSize / 2, width: g.artworkSize, height: g.artworkSize)

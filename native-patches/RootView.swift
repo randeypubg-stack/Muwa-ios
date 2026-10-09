@@ -65,7 +65,8 @@ struct RootView: View {
         max(0, layout.viewportWidth - chromeSideInset * 2)
       )
 
-      let chrome = BottomChromeLayout(phone: layout.isPhone, safeBottom: safeBottom)
+      let windowHeight = layout.viewportHeight + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom
+      let chrome = BottomChromeLayout(viewportHeight: windowHeight, safeBottom: safeBottom)
 
       ZStack(alignment: .bottom) {
         tabContent
@@ -89,7 +90,7 @@ struct RootView: View {
           .zIndex(20)
         }
 
-        VStack(spacing: 8) {
+        VStack(spacing: BottomChromeLayout.playerGap) {
           if player.hasStartedPlaybackThisSession, player.currentTrack != nil {
             MiniPlayerView(openPlayer: expandPlayer)
               .opacity(Double(1 - smoothStep(progress / 0.18)))

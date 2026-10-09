@@ -27,6 +27,61 @@ class NavigationAndQueueTest {
     @get:Rule val compose = createEmptyComposeRule()
 
     @Test
+    fun navigationKeepsApprovedWindowAnchorAcrossTabsAndRotation() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        ActivityScenario.launch<MainActivity>(
+            Intent(context, MainActivity::class.java).putExtra("review.route", "home")
+        ).use { scenario ->
+            for (orientation in listOf(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE, ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)) {
+                scenario.onActivity { it.requestedOrientation = orientation }
+                compose.waitUntil(timeoutMillis = 20_000) {
+                    var settled = false
+                    scenario.onActivity {
+                        val view = it.window.decorView
+                        settled = view.width > 0 && view.height > 0 &&
+                            (view.width > view.height) == (orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
+                    }
+                    settled
+                }
+                for (tab in listOf("home", "library", "profile")) {
+                    compose.onNodeWithTag("tab.$tab").assertIsDisplayed().performClick()
+                    assertBottomAnchor(scenario)
+                }
+                scenario.onActivity { ViewModelProvider(it)[MuwaModel::class.java]
+                    .play(AppGraph.library.catalog.first(), autoplay = false) }
+                compose.waitUntil(timeoutMillis = 20_000) {
+                    compose.onAllNodesWithTag("mini-player").fetchSemanticsNodes().isNotEmpty()
+                }
+                assertBottomAnchor(scenario)
+                compose.onNodeWithTag("mini-player").assertIsDisplayed()
+            }
+        }
+    }
+
+    private fun assertBottomAnchor(scenario: ActivityScenario<MainActivity>) {
+        compose.waitForIdle()
+        val bar = compose.onNodeWithTag("bottom-navigation").assertIsDisplayed()
+            .getUnclippedBoundsInRoot()
+        scenario.onActivity { activity ->
+            val view = activity.window.decorView
+            val density = activity.resources.displayMetrics.density
+            val height = view.height / density
+            val insets = ViewCompat.getRootWindowInsets(view)!!.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            // Independent visual reference; changing production constants must fail this check.
+            val expected = maxOf((height * 18f / 874f).coerceIn(12f, 28f), insets.bottom / density)
+            assertEquals("Navigation changed its approved physical-window anchor",
+                expected, height - bar.bottom.value, 1f)
+            assertTrue("Navigation controls overlap Android system navigation",
+                bar.bottom.value <= (view.height - insets.bottom) / density + 1f)
+            assertTrue("Navigation exceeds the left safe edge", bar.left.value >= insets.left / density)
+            assertTrue("Navigation exceeds the right safe edge",
+                bar.right.value <= (view.width - insets.right) / density)
+        }
+    }
+
+    @Test
     fun popularPagesBrowseTheWholeCatalogInBothDirections() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         ActivityScenario.launch<MainActivity>(

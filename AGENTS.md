@@ -17,6 +17,14 @@
   unused.
 - Verify changed behavior with suitable checks. State clearly what was tested
   and what still requires backend deployment or a physical device.
+- The owner approved the Build 50 navigation position on 9 October 2026.
+  Preserve the iPhone 17 Pro reference: 18 pt physical-bottom clearance on an
+  874 pt window, 62 pt iOS bar height and 8 pt mini-player gap. Adapt only the
+  outer clearance proportionally to the current window, within 12–28 pt/dp,
+  while respecting system controls. Keep one geometry owner per platform;
+  tabs, playback state, captions and text size must not choose separate offsets.
+  Do not change this approved geometry without a new explicit owner request.
+  Preserve its golden geometry tests and actual rotation/tab regression checks.
 - On 7 October 2026 the owner resumed automatic subtitle recognition on the
   rented server. Use a local worker; preserve manual/cached captions and keep
   upload/publication independent of recognition. Do not activate paid providers

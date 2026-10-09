@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
@@ -79,15 +80,21 @@ fun MuwaApp(
         model.play(it)
         requestNotifications()
     }
-    Box(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val density = LocalDensity.current
+        val systemInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
+        val systemBottomDp = with(density) { systemInsets.getBottom(this).toDp().value }
+        val bottomClearanceDp = BottomNavigationLayout.bottomClearanceDp(maxHeight.value, systemBottomDp)
+        val extraBottomPadding = (bottomClearanceDp - systemBottomDp).coerceAtLeast(0f).dp
         MuwaAmbientBackground(Modifier.fillMaxSize())
         Scaffold(
             modifier = if (expanded) Modifier.clearAndSetSemantics {} else Modifier,
             containerColor = Color.Transparent,
             bottomBar = {
                 Column(
-                    Modifier.navigationBarsPadding().padding(horizontal = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    Modifier.windowInsetsPadding(systemInsets.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
+                        .padding(start = 8.dp, end = 8.dp, bottom = extraBottomPadding),
+                    verticalArrangement = Arrangement.spacedBy(BottomNavigationLayout.playerGapDp.dp),
                 ) {
                     if (model.track != null && !expanded) {
                         Surface(
@@ -126,6 +133,7 @@ fun MuwaApp(
                     }
                     Row(
                         Modifier.fillMaxWidth()
+                            .testTag("bottom-navigation")
                             .clip(RoundedCornerShape(28.dp))
                             .background(Color(0xEE171D26))
                             .pointerInput(Unit) {
