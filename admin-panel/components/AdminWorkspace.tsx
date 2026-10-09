@@ -977,6 +977,7 @@ const TrackEditor = ({
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              dir="auto"
               maxLength={180}
               disabled={busy}
             />

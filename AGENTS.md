@@ -35,3 +35,9 @@
   Record the actual simulator device type, OS/runtime, SDK/toolchain and capture
   dimensions. Screen-size overrides do not establish testing on a physical model;
   never relabel an older runtime or mockup as the requested device.
+- The owner reported a navigation/subtitle regression in build 48 on iPhone 17 Pro
+  / iOS 27.2. Safe-area changes must check the bottom bar, mini/full-player morph,
+  every main tab and short landscape layouts. Subtitle changes must check long
+  Arabic phrases, scrolling, artwork paging and reader open/close. Record actual
+  tested runtimes and preserve the regression checks; see
+  `docs/BUILD49_LAYOUT_AND_RECOGNITION.md`.

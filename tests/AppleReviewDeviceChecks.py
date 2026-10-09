@@ -8,7 +8,7 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
-from select_apple_review_devices import boot_selected_device, main, normalize_inventory, open_simulator_gui, request_status, select_devices
+from select_apple_review_devices import boot_selected_device, ensure_reported_phone, main, normalize_inventory, open_simulator_gui, request_status, select_devices
 
 
 def runtime(version, available=True, name=None):
@@ -57,6 +57,21 @@ class AppleReviewDeviceChecks(unittest.TestCase):
         selected = select_devices([*self.records, record], "reported-phone")
         self.assertEqual(selected[0]["udid"], "actual-17-pro")
         self.assertEqual(request_status([record], selected, "iPhone 17 Pro", "27.2")["status"], "unavailable")
+
+    def test_reported_phone_is_created_from_the_verified_installed_type_on_the_current_runtime(self):
+        kind = {'name':'iPhone 17 Pro', 'identifier':'com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro'}
+        self.types.append(kind)
+        udid = '43ac2f71-676e-4809-9d99-3cb47e5c8a66'
+        with patch('select_apple_review_devices.command', return_value=udid) as create:
+            records = ensure_reported_phone(self.devices, self.runtimes, self.types, '27.0', '27.0')
+            create.assert_called_once_with('xcrun','simctl','create','Muwa iPhone 17 Pro',kind['identifier'],'com.apple.CoreSimulator.SimRuntime.iOS-27-0')
+        selected = select_devices(records, 'reported-phone', '27.0')[0]
+        self.assertEqual(selected['name'], 'iPhone 17 Pro')
+        self.assertEqual(selected['deviceTypeIdentifier'], kind['identifier'])
+        self.assertEqual(selected['udid'], udid)
+        with patch('select_apple_review_devices.command') as create:
+            ensure_reported_phone(self.devices, self.runtimes, self.types, '27.0', '27.0')
+            create.assert_not_called()
 
     def test_preview_and_newer_sdk_runtime_never_selected(self):
         self.assertNotIn("beta-phone", [item["udid"] for item in self.records])

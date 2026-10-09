@@ -12,7 +12,8 @@ No third-party fonts, embedded credentials or separate account service are requi
 
 First owner login is described in [deployment instructions](../docs/BEGET-BETA-DEPLOYMENT.md).
 The one-time setup link remains in a private root file on the VPS. Public
-registration and anonymous catalog access are disabled during the owner-only beta.
+registration is disabled during the owner-only beta. Published catalog entries,
+audio and captions are available without login; drafts and admin actions remain private.
 Server-side user role is checked on every admin request, including uploads.
 
 - Audio/cover upload uses private signed PUT tickets on NVMe, then server-side

@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from uuid import UUID
 
 
 KINDS = ("phone", "large-phone", "tablet", "small-tablet", "small-phone")
@@ -209,12 +210,39 @@ def boot_selected_device(device):
             'bootstatusOutput':boot_output}
 
 
+def ensure_reported_phone(devices, runtimes, device_types, sdk_version, runtime_version=None):
+    records = normalize_inventory(devices, runtimes, device_types, sdk_version)
+    eligible = [record for record in records if not runtime_version or version_key(record['runtimeVersion']) == version_key(runtime_version)]
+    if not eligible:
+        raise ValueError("No compatible stable runtime for the reported iPhone")
+    newest = max(version_key(record['runtimeVersion']) for record in eligible)
+    if any(record['name'] == 'iPhone 17 Pro' and version_key(record['runtimeVersion']) == newest for record in eligible):
+        return records
+    device_type = next((item for item in device_types if item['name'] == 'iPhone 17 Pro'), None)
+    if device_type is None:
+        raise ValueError('Actual iPhone 17 Pro device type is unavailable')
+    runtime = next(item for item in runtimes if is_ios(item) and item.get('isAvailable')
+                   and not runtime_is_preview(item) and version_key(item['version']) == newest)
+    # Create the real installed device type on the selected runtime, rather than
+    # rename another model or silently test it on an older OS.
+    udid = command('xcrun', 'simctl', 'create', 'Muwa iPhone 17 Pro',
+                   device_type['identifier'], runtime['identifier'])
+    UUID(udid)
+    devices.setdefault(runtime['identifier'], []).append({
+        'name': 'Muwa iPhone 17 Pro', 'udid': udid, 'isAvailable': True,
+        'deviceTypeIdentifier': device_type['identifier'], 'state': 'Shutdown',
+    })
+    return normalize_inventory(devices, runtimes, device_types, sdk_version)
+
+
 def load_selection(kind=None, requested_device=None, requested_ios=None, runtime_version=None):
     devices = json.loads(command("xcrun", "simctl", "list", "devices", "available", "--json"))["devices"]
     runtimes = json.loads(command("xcrun", "simctl", "list", "runtimes", "--json"))["runtimes"]
     device_types = json.loads(command("xcrun", "simctl", "list", "devicetypes", "--json"))["devicetypes"]
     sdk_version = command("xcrun", "--sdk", "iphonesimulator", "--show-sdk-version")
     records = normalize_inventory(devices, runtimes, device_types, sdk_version)
+    if kind == 'reported-phone':
+        records = ensure_reported_phone(devices, runtimes, device_types, sdk_version, runtime_version)
     selected = select_devices(records, kind, runtime_version)
     report = {
         "schemaVersion": 1,

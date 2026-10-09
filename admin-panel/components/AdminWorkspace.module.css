@@ -14,8 +14,18 @@
   color-scheme: dark;
 }
 .workspace *,
-.gate * {
+.gate *,
+.dialog,
+.dialog * {
   box-sizing: border-box;
+}
+.dialog {
+  font-family: var(--font-family-base, Inter, system-ui, sans-serif);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.dialog button {
+  min-height: 40px;
 }
 .workspace {
   display: grid;
@@ -942,6 +952,15 @@
   }
 }
 @media (max-width: 560px) {
+  .sidebar nav {
+    flex-wrap: wrap;
+  }
+  .workspace .navItem {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+    gap: 8px;
+    padding-inline: 8px;
+  }
   .content {
     padding: 24px 15px 15px;
   }
