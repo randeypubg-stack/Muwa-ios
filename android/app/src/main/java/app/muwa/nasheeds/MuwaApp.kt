@@ -179,7 +179,9 @@ fun MuwaApp(
                 }
             },
             topBar = {
-                if (!expanded)
+                // The reader already has language/follow controls. A second
+                // 64dp toolbar leaves only 20dp of captions on a short window.
+                if (!expanded && !(route == "subtitles" && maxWidth >= 440.dp && maxHeight <= 420.dp))
                     TopAppBar(
                         title = {
                             Text(
