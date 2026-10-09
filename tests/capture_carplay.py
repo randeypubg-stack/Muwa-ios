@@ -342,16 +342,10 @@ def capture():
                                             'nativeTarget': target, 'windowBounds': [wx, wy, ww, wh]}
             save_status()
             run('screencapture', '-x', str(out / 'desktop-before-input.png'))
-            # AXRaise orders the window but does not guarantee it is the key window.
-            # Focus its title bar first; otherwise Simulator may consume the icon
-            # click just to activate the external-display window.
-            run('cliclick', f'c:{round(wx + ww / 2)},{round(wy + 14)}')
-            time.sleep(0.2)
-            # A cold Simulator may consume the first input while activating its
-            # external display. Keep a real pointer press long enough to span a
-            # guest input frame, and retry only while the fresh framebuffer still
-            # positively identifies Muwa's launcher tile. Never click coordinates
-            # from the launcher once the app has opened.
+            # A title-bar click followed by a drag press moved the entire
+            # Simulator window in the recorded failure. Use ordinary clicks on
+            # the app tile. A first click may only focus the window, so retry
+            # only after fresh native OCR confirms the launcher is still visible.
             status['launcher_attempts'] = []
             for attempt in range(3):
                 if proof.exists():
@@ -365,13 +359,21 @@ def capture():
                                                           out / f'launcher-retry-{attempt}-ocr')
                         if retry_target['label'].lower() != 'muwa' or retry_target['confidence'] < 0.5:
                             break
-                        x = round(wx + retry_target['x'] * scale)
-                        y = round(wy + wh - retry_target['height'] * scale + retry_target['y'] * scale)
+                        target = retry_target
                     except (RuntimeError, AssertionError, ValueError):
                         break
-                status['launcher_attempts'].append({'attempt': attempt + 1, 'x': x, 'y': y})
+                # Window position can change on focus or host auto-placement.
+                # Re-measure immediately before every click, never reuse bounds
+                # taken before activation or another pointer event.
+                wx, wy, ww, wh = map(float, run('osascript', '-e', bounds_script).strip().split(','))
+                scale = ww / target['width']
+                x = round(wx + target['x'] * scale)
+                y = round(wy + wh - target['height'] * scale + target['y'] * scale)
+                status['launcher_attempts'].append({'attempt': attempt + 1, 'x': x, 'y': y,
+                                                     'windowBounds': [wx, wy, ww, wh],
+                                                     'input': 'click'})
                 save_status()
-                run('cliclick', f'm:{x},{y}', 'w:300', f'dd:{x},{y}', 'w:150', f'du:{x},{y}')
+                run('cliclick', f'c:{x},{y}')
                 input_deadline = time.monotonic() + 5
                 while time.monotonic() < input_deadline and not proof.exists():
                     time.sleep(0.2)
