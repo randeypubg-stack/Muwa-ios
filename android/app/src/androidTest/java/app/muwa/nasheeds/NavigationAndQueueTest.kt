@@ -352,7 +352,7 @@ class NavigationAndQueueTest {
                         compose.onNodeWithTag("player.screen").assertDoesNotExist()
                         compose.onNodeWithTag("mini-player").performClick()
                         compose.onNodeWithTag("player.subtitles").performClick()
-                        compose.onNodeWithText("Субтитры").assertIsDisplayed()
+                        compose.onNodeWithTag("subtitles.screen").assertIsDisplayed()
                         compose.waitUntil(timeoutMillis = 10_000) {
                             compose
                                 .onAllNodesWithText("نص محفوظ", useUnmergedTree = true)
@@ -362,7 +362,7 @@ class NavigationAndQueueTest {
                         compose.onNodeWithTag("player.screen").assertDoesNotExist()
                         compose.onNodeWithTag("mini-player").performClick()
                         compose.onNodeWithTag("player.close").performClick()
-                        compose.onNodeWithText("Субтитры").assertIsDisplayed()
+                        compose.onNodeWithTag("subtitles.screen").assertIsDisplayed()
                         compose.onNodeWithTag("mini-player").performClick()
                     }
                 }
