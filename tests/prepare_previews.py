@@ -120,7 +120,7 @@ player=root/'Sources/Views/Player/FullPlayerView.swift'
 s=player.read_text().replace('    .onChange(of: expansion)', '    .task { if ProcessInfo.processInfo.arguments.contains("--audit-ai") { subtitlesVisible = true } }\n    .onChange(of: expansion)',1)
 player.write_text(s)
 overlay=root/'Sources/Views/Player/PlayerSubtitleOverlay.swift'
-s=overlay.read_text().replace('      if manager.document == nil { await manager.load(track) }', '      if manager.document == nil { await manager.load(track) }; if ProcessInfo.processInfo.arguments.contains("--audit-ai") { language = .ru }; if ProcessInfo.processInfo.arguments.contains("--audit-ai-expanded") { expanded = true }')
+s=overlay.read_text().replace('      await manager.load(track)', '      await manager.load(track); if ProcessInfo.processInfo.arguments.contains("--audit-ai") { language = .ru }; if ProcessInfo.processInfo.arguments.contains("--audit-ai-expanded") { expanded = true }')
 overlay.write_text(s)
 rootview=root/'Sources/App/RootView.swift'
 s=rootview.read_text().replace('        playerExpansion = 1', '        playerExpansion = 1\n        if args.contains("--audit-ai") { player.currentTime = 3 }')
@@ -144,7 +144,7 @@ player=root/'Sources/Views/Player/FullPlayerView.swift'
 s=player.read_text().replace('if ProcessInfo.processInfo.arguments.contains("--audit-ai") { subtitlesVisible = true }','if ProcessInfo.processInfo.arguments.contains("--audit-ai") || ProcessInfo.processInfo.arguments.contains("--audit-ai-unavailable") { subtitlesVisible = true }')
 player.write_text(s)
 manager=root/'Sources/Services/SubtitleManager.swift'
-s=manager.read_text().replace('  func load(_ track: Track, retry: Bool = false) async {','  func load(_ track: Track, retry: Bool = false) async {\n    if ProcessInfo.processInfo.arguments.contains("--audit-ai-unavailable") { error = "Автоматическое распознавание пока не подключено."; return }',1)
+s=manager.read_text().replace('  func load(_ track: Track, retry: Bool = false) async {','  func load(_ track: Track, retry: Bool = false) async {\n    if ProcessInfo.processInfo.arguments.contains("--audit-ai-unavailable") { document = nil; publishedSource = "manual"; availability = .review; error = nil; return }',1)
 manager.write_text(s)
 
 # Exercise the real player actions in Simulator without entitlement bypass fixtures.

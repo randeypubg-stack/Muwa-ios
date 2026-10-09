@@ -89,7 +89,7 @@ def package_attachments(source, output, inventory=None):
                 excluded.append({**provenance, "reason": "Video or non-PNG/non-JSON attachment; retained in original xcresult/export"})
                 continue
             destinations = ["primary"]
-            for marker, group in [("popular-", "popular"), ("portrait-artwork", "artwork"), ("buffering-ring", "loading"), ("navigation-", "layout"), ("long-arabic-caption", "layout")]:
+            for marker, group in [("popular-", "popular"), ("portrait-artwork", "artwork"), ("buffering-ring", "loading"), ("navigation-", "layout"), ("long-arabic-caption", "layout"), ("unpublished-subtitles", "layout")]:
                 if marker in str(label).lower(): destinations.append(group)
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
             for group in destinations:

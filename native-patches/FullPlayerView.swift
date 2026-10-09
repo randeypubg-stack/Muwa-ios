@@ -564,7 +564,7 @@ struct MorphingPlayerView: View {
       // Only the current cover owns captions; incoming covers never show stale text.
       if showSubtitle, subtitlesVisible, progress > 0.74 {
         AISubtitleExperience(
-          timeline: player.timeline, track: pageTrack,
+          timeline: player.timeline, track: pageTrack, isVisible: $subtitlesVisible,
           compactWidth: subtitleLayout.railWidth, compactHeight: railHeight
         )
         .id("\(pageTrack.id)-r\(pageTrack.captionsRevision ?? 0)")
@@ -1239,7 +1239,12 @@ struct BottomChromeLayout {
   static let barHeight: CGFloat = 62
   static let playerGap: CGFloat = 8
   let bottomPadding: CGFloat
-  init(phone: Bool) { bottomPadding = phone ? 9 : 0 }
+  init(phone: Bool, safeBottom: CGFloat) {
+    // The root ends at the safe-area boundary. On home-indicator phones place
+    // the capsule 18 pt from the physical bottom, not 9 pt above that boundary.
+    // Its controls remain above the indicator; mini and full player share this.
+    bottomPadding = phone ? (safeBottom > 0 ? min(safeBottom, 18) - safeBottom : 9) : 0
+  }
 }
 
 // Fit the transparent caption rail beside the reduced cover, inside the safe

@@ -7,6 +7,7 @@ export type OutputType = {
   segments: Caption[];
   source: "manual" | "automatic";
   revision: number;
+  availability: "available" | "processing" | "review" | "unavailable";
 };
 export async function getCatalogCaptions(
   trackId: string,

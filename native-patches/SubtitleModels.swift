@@ -1,5 +1,25 @@
 import Foundation
 
+enum PublishedSubtitleAvailability: String, Codable {
+  case available, processing, review, unavailable
+  var title: String {
+    switch self {
+    case .available: return "Текст нашида"
+    case .processing: return "Распознаём текст"
+    case .review: return "Текст на проверке"
+    case .unavailable: return "Текст пока недоступен"
+    }
+  }
+  var message: String {
+    switch self {
+    case .available: return ""
+    case .processing: return "Субтитры появятся после распознавания. Можно продолжать слушать нашид."
+    case .review: return "Арабский текст распознан, но в нём есть сомнительные фразы. Он появится после проверки владельцем."
+    case .unavailable: return "Для этого нашида ещё нет опубликованных субтитров. Можно продолжать слушать."
+    }
+  }
+}
+
 enum SubtitleLanguage: String, CaseIterable, Identifiable, Codable, Sendable {
   case arabic = "AR"
   case russian = "RU"

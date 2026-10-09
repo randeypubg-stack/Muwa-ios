@@ -202,6 +202,8 @@ final class AISubtitleManager: ObservableObject {
   @Published private(set) var translatingLanguage: String?
   @Published private(set) var error: String?
   @Published private(set) var publishedSource: String?
+  @Published private(set) var availability: PublishedSubtitleAvailability = .unavailable
+  var isVerifiedByOwner: Bool { document != nil && publishedSource == "manual" }
   var availableLanguages: [AITranslationLanguage] {
     publishedSource == nil ? AITranslationLanguage.allCases
       : AITranslationLanguage.allCases.filter { $0 == .original || translations[$0.rawValue] != nil }
@@ -217,7 +219,9 @@ final class AISubtitleManager: ObservableObject {
     if source == key && (isRecognizing || (!retry && (document != nil || error != nil))) { return }
     if source == key && retry && Date() < retryAfter { return }
     let id = UUID(); requestID = id; translationID = UUID()
-    if source != key || !retry { document = nil; translations = [:]; publishedSource = nil }
+    if source != key || !retry {
+      document = nil; translations = [:]; publishedSource = nil; availability = .unavailable
+    }
     source = key; error = nil; translatingLanguage = nil
     isRecognizing = true
     defer { if requestID == id { isRecognizing = false } }
@@ -231,12 +235,15 @@ final class AISubtitleManager: ObservableObject {
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
         let payload = try JSONDecoder().decode(PublishedCaptions.self, from: data)
         guard requestID == id, !Task.isCancelled else { return }
-        publishedSource = payload.source
         guard !payload.segments.isEmpty else {
-          document = nil; translations = [:]
-          throw AISubtitleAPIError(message: "Текст ещё готовится или ожидает проверки владельцем. Попробуйте обновить позже.", code: "NOT_READY")
+          document = nil; translations = [:]; publishedSource = nil
+          availability = payload.availability ?? .unavailable
+          return
         }
         installPublished(track: track, captions: payload.segments, revision: payload.revision)
+        guard document != nil else { throw URLError(.cannotParseResponse) }
+        publishedSource = payload.source
+        availability = .available
         return
       }
       if let cached = await AISubtitleDisk.shared.load(key: key), let valid = try? cached.validated() {
@@ -284,6 +291,7 @@ final class AISubtitleManager: ObservableObject {
   }
   private struct PublishedCaptions: Decodable {
     let segments: [SubtitleSegment]; let source: String; let revision: Int
+    let availability: PublishedSubtitleAvailability?
   }
   func usePublishedFallback(_ track: Track, captions: [SubtitleSegment]) {
     guard document == nil, !captions.isEmpty else { return }
@@ -294,6 +302,7 @@ final class AISubtitleManager: ObservableObject {
   private func installPublished(track: Track, captions: [SubtitleSegment], revision: Int) {
     guard let doc = try? AISubtitleDocument.published(trackID: track.id, revision: revision, captions: captions) else { return }
     document = doc
+    availability = .available
     error = nil
     translations = [:]
     for language in [SubtitleLanguage.russian, .english] where language.rawValue.lowercased() != doc.language {

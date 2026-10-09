@@ -74,6 +74,20 @@ try {
  await status('catalog/captions?trackId='+id,undefined,404,{cookie:''});
  await status('admin/action',{action:'set-status',trackId:id,revision:1,status:'published'},200);
  const catalog=await request('catalog/tracks');const tracks=(await catalog.json()).tracks;assert.equal(tracks.length,1);assert.equal(tracks[0].id,id);assert(tracks[0].audio.startsWith(origin+'/_api/catalog/media'));checks++;
+ const emptyCaptionsResponse=await request('catalog/captions?trackId='+id,undefined,{cookie:''});
+ const emptyCaptions=await emptyCaptionsResponse.json();assert.equal(emptyCaptions.availability,'unavailable');assert.deepEqual(emptyCaptions.segments,[]);checks++;
+ process.env.MUWA_LOCAL_ASR_ENABLED='1';
+ const fixtureHash='a'.repeat(64);
+ await sql`update catalog_audio_fingerprints set sha256=${fixtureHash} where track_id=${id}`;
+ await sql`select muwa_enqueue_asr(${id})`;
+ const pendingCaptions=await request('catalog/captions?trackId='+id,undefined,{cookie:''});assert.equal((await pendingCaptions.json()).availability,'processing');checks++;
+ await sql`update catalog_asr_jobs set status='ready',quality='{"needsReview":true}',document='{"privateFixture":"must never be public"}' where track_id=${id}`;
+ const reviewCaptions=await request('catalog/captions?trackId='+id,undefined,{cookie:''});const reviewPayload=await reviewCaptions.json();
+ assert.equal(reviewPayload.availability,'review');assert.deepEqual(reviewPayload.segments,[]);
+ assert.deepEqual(Object.keys(reviewPayload).sort(),['availability','revision','segments','source']);checks++;
+ await sql`update catalog_asr_jobs set audio_sha256=${'b'.repeat(64)} where track_id=${id}`;
+ const staleCaptions=await request('catalog/captions?trackId='+id,undefined,{cookie:''});assert.equal((await staleCaptions.json()).availability,'unavailable');checks++;
+ delete process.env.MUWA_LOCAL_ASR_ENABLED;
  const guest=await fetch(tracks[0].audio,{headers:{Range:'bytes=0-43'}});assert.equal(guest.status,206);assert.deepEqual(Buffer.from(await guest.arrayBuffer()),audio.subarray(0,44));checks++;
  const guestHead=await fetch(tracks[0].audio,{method:'HEAD'});assert.equal(guestHead.status,200);assert.equal(guestHead.headers.get('content-length'),String(audio.length));assert.equal((await guestHead.arrayBuffer()).byteLength,0);checks++;
  const publicCatalog=await request('catalog/tracks',undefined,{cookie:''});assert.equal((await publicCatalog.json()).tracks[0].id,id);checks++;
@@ -88,7 +102,7 @@ try {
  const range=await fetch(ticket.url,{headers:{Range:'bytes=999999-'}});assert.equal(range.status,416);checks++;
  const traversal=await storage.upload({visibility:'private',filename:'../outside.wav',contentType:'audio/wav',sizeBytes:1});assert(!traversal.ok);checks++;
  await status('admin/action',{action:'save-captions',trackId:id,revision:2,captions:[{start:0,end:1,ar:'تجربة',ru:'Проверка',en:'Test'}]},200);
- const captions=await request('catalog/captions?trackId='+id,undefined,{cookie:''});assert.equal(captions.status,200);assert.equal((await captions.json()).segments.length,1);checks++;
+ const captions=await request('catalog/captions?trackId='+id,undefined,{cookie:''});assert.equal(captions.status,200);const publishedCaptionPayload=await captions.json();assert.equal(publishedCaptionPayload.segments.length,1);assert.equal(publishedCaptionPayload.availability,'available');checks++;
  await status('diagnostics/events',{platform:'iOS',version:'1.4.0',build:'43',events:[{id:randomUUID(),occurredAt:new Date().toISOString(),area:'playback',errorType:'network',errorCode:-1009}]},200);
  await status('transcribe',{src:'/_cdn/static/test.mp3',title:'Test',durationSeconds:1},503,{superjson:true});
  // Public listening works with or without an account. Private beta data remains gated.

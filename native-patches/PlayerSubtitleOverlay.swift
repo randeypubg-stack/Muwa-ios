@@ -39,6 +39,7 @@ struct AISubtitleExperience: View {
   @EnvironmentObject private var legacySubtitles: SubtitleManager
   @ObservedObject var timeline: PlaybackTimeline
   let track: Track
+  @Binding var isVisible: Bool
   var compactWidth: CGFloat = 112
   var compactHeight: CGFloat = 150
   @State private var language: AITranslationLanguage = .original
@@ -89,8 +90,6 @@ struct AISubtitleExperience: View {
               language: SubtitleLanguage(rawValue: language.rawValue.uppercased()) ?? .arabic,
               height: compactHeight
             )
-          } else {
-            statusView
           }
         }
       }
@@ -98,35 +97,31 @@ struct AISubtitleExperience: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    .accessibilityHidden(!hasContent)
     .accessibilityLabel("Субтитры. Открыть полный текст")
     .accessibilityValue(manager.document != nil ? "Оригинальный текст доступен"
       : hasContent ? "Обычные субтитры доступны"
       : manager.isRecognizing ? "Загрузка текста" : "Текст пока недоступен")
     .preference(key: PlayerSubtitleRailAvailabilityKey.self, value: hasContent ? [track.id] : [])
     .task(id: track.id) { legacySubtitles.load(for: track) }
-    .task(id: track.audioURL) {
+    .task(id: "\(track.id)|\(track.audioURL)|\(track.captionsRevision ?? 0)") {
+      await manager.load(track)
       manager.usePublishedFallback(track, captions: legacySubtitles.segments(for: track))
-      if manager.document == nil { await manager.load(track) }
-      manager.usePublishedFallback(track, captions: legacySubtitles.segments(for: track))
+      if isVisible && !hasContent { expanded = true }
     }
     .onChange(of: legacySubtitles.segments(for: track)) { _, captions in
       manager.usePublishedFallback(track, captions: captions)
     }
-    .sheet(isPresented: $expanded) {
+    .onChange(of: isVisible) { _, visible in
+      if visible && !hasContent && !manager.isRecognizing { expanded = true }
+    }
+    .sheet(isPresented: $expanded, onDismiss: {
+      if !hasContent { isVisible = false }
+    }) {
       AISubtitleReader(manager: manager, timeline: timeline, track: track, language: $language)
     }
   }
 
-  private var statusView: some View {
-    HStack(spacing: 7) {
-      if manager.isRecognizing { ProgressView().tint(.white) }
-      else { Image(systemName: "captions.bubble") }
-      Text(manager.isRecognizing ? "Обработка" : "Текст")
-        .font(.caption.weight(.semibold))
-    }
-    .foregroundStyle(.white.opacity(0.66))
-    .frame(minHeight: 44)
-  }
 }
 
 private struct LegacySubtitleRail: View {
@@ -257,63 +252,59 @@ private struct AISubtitleReader: View {
   var body: some View {
     NavigationStack {
       VStack(spacing: 16) {
-        HStack {
-          Menu {
-            Picker("Перевод", selection: $language) {
-              ForEach(manager.availableLanguages) { value in Text(value.title).tag(value) }
-            }
-          } label: { Label(language.title, systemImage: "globe").font(.subheadline.weight(.medium)) }
-          Spacer()
-          Toggle("Следить", isOn: $followsPlayback).font(.caption).fixedSize()
-        }.padding(.horizontal, 20)
-        if manager.isRecognizing {
-          ProgressView("Загружаем субтитры…").padding()
-        }
-        if let message = manager.error {
-          VStack(spacing: 10) {
-            Text(message).font(.callout).foregroundStyle(.secondary)
-            Button("Повторить") {
-              Task {
-                if manager.document == nil { await manager.load(track, retry: true) }
-                else { await manager.translate(language) }
+        if manager.document != nil {
+          HStack {
+            Menu {
+              Picker("Перевод", selection: $language) {
+                ForEach(manager.availableLanguages) { value in Text(value.title).tag(value) }
               }
-            }
+            } label: { Label(language.title, systemImage: "globe").font(.subheadline.weight(.medium)) }
+            Spacer()
+            Toggle("Следить", isOn: $followsPlayback).font(.caption).fixedSize()
           }.padding(.horizontal, 20)
-        }
-        if manager.translatingLanguage != nil { ProgressView("Переводим. Оригинал уже доступен.").font(.caption) }
-        ScrollViewReader { proxy in
-          ScrollView {
-            LazyVStack(alignment: .leading, spacing: 22) {
-              if let doc = manager.document {
-                ForEach(doc.segments) { segment in
-                  segmentRow(segment, rtl: doc.isRTL)
+          if let message = manager.error {
+            Text(message).font(.callout).foregroundStyle(.secondary).padding(.horizontal, 20)
+          }
+          if manager.translatingLanguage != nil {
+            ProgressView("Переводим. Оригинал уже доступен.").font(.caption)
+          }
+          ScrollViewReader { proxy in
+            ScrollView {
+              LazyVStack(alignment: .leading, spacing: 22) {
+                if let doc = manager.document {
+                  ForEach(doc.segments) { segment in segmentRow(segment, rtl: doc.isRTL) }
                 }
-              }
-            }.padding(.horizontal, 8).padding(.vertical, 20)
+              }.padding(.horizontal, 8).padding(.vertical, 20)
+            }
+            .simultaneousGesture(DragGesture(minimumDistance: 10).onChanged { _ in followsPlayback = false })
+            .onChange(of: activeID) { _, id in
+              guard followsPlayback, let id else { return }
+              withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.28)) { proxy.scrollTo(id, anchor: .center) }
+            }
+            .onChange(of: followsPlayback) { _, follows in
+              if follows, let id = activeID { proxy.scrollTo(id, anchor: .center) }
+            }
           }
-          .simultaneousGesture(DragGesture(minimumDistance: 10).onChanged { _ in followsPlayback = false })
-          .onChange(of: activeID) { _, id in
-            guard followsPlayback, let id else { return }
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.28)) { proxy.scrollTo(id, anchor: .center) }
-          }
-          .onChange(of: followsPlayback) { _, follows in
-            if follows, let id = activeID { proxy.scrollTo(id, anchor: .center) }
-          }
+          Text(manager.isVerifiedByOwner ? "Текст проверен владельцем."
+            : "Арабский оригинал сохраняется без перевода. Автоматический текст может содержать ошибки.")
+            .font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 20).padding(.bottom, 8)
+        } else {
+          emptyContent
         }
-        Text(manager.publishedSource == "manual" ? "Текст проверен владельцем."
-          : "Арабский оригинал сохраняется без перевода. Автоматический текст может содержать ошибки.")
-          .font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 20).padding(.bottom, 8)
       }
-      .background(Color.black)
-      .navigationTitle("Оригинал и перевод")
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background { AppBackground().ignoresSafeArea() }
+      .navigationTitle(manager.document == nil ? "Текст нашида" : "Оригинал и перевод")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
-        ToolbarItem(placement: .topBarLeading) {
-          Button {
-            Task { await manager.load(track, retry: true) }
-          } label: { Image(systemName: "arrow.clockwise") }
-          .disabled(manager.isRecognizing)
-          .accessibilityLabel("Обновить субтитры")
+        if manager.document != nil {
+          ToolbarItem(placement: .topBarLeading) {
+            Button {
+              Task { await manager.load(track, retry: true) }
+            } label: { Image(systemName: "arrow.clockwise") }
+            .disabled(manager.isRecognizing)
+            .accessibilityLabel("Обновить субтитры")
+          }
         }
         ToolbarItem(placement: .topBarTrailing) { Button("Готово") { dismiss() } }
       }
@@ -322,6 +313,37 @@ private struct AISubtitleReader: View {
         if !available.contains(language) { language = .original }
       }
     }.preferredColorScheme(.dark)
+  }
+
+  private var emptyContent: some View {
+    ScrollView {
+      VStack(spacing: 18) {
+        ArtworkView(url: track.artworkURL, cornerRadius: 24,
+                    placeholderSystemImage: "music.note", contentMode: .fill)
+          .frame(width: 112, height: 112)
+          .accessibilityHidden(true)
+        Text(track.title).font(.title3.weight(.semibold))
+          .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+        if manager.isRecognizing {
+          ProgressView("Загружаем текст…").padding(.top, 12)
+        } else {
+          Label(manager.error == nil ? manager.availability.title : "Не удалось загрузить текст",
+                systemImage: "captions.bubble")
+            .font(.headline).padding(.top, 12)
+            .accessibilityIdentifier("subtitle-empty-state")
+          Text(manager.error ?? manager.availability.message)
+            .font(.callout).foregroundStyle(.secondary)
+            .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+          Button("Проверить снова") {
+            Task { await manager.load(track, retry: true) }
+          }
+          .buttonStyle(.bordered).controlSize(.large)
+          .accessibilityIdentifier("subtitle-retry")
+        }
+      }
+      .frame(maxWidth: 440).padding(24).padding(.top, 36)
+      .frame(maxWidth: .infinity)
+    }
   }
 
   private func segmentRow(_ segment: AISubtitleSegment, rtl: Bool) -> some View {

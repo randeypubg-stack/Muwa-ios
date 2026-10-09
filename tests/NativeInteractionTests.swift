@@ -36,11 +36,10 @@ final class NativeInteractionTests: XCTestCase {
     XCTAssertTrue(viewport.contains(frame), "Navigation moved outside the application")
     let clearance = viewport.maxY - frame.maxY
     let phone = UIDevice.current.userInterfaceIdiom == .phone
-    // Real notched review phones keep a home-indicator safe area. The same
-    // 9-point content margin is covered separately for home-button devices.
-    XCTAssertGreaterThanOrEqual(clearance, phone ? 28 : 16,
-                                "Navigation was shifted back into the bottom safe area")
-    XCTAssertLessThan(clearance, 80, "Navigation was moved too far above the safe area")
+    // Physical-screen clearance, not a broad safe-area range: Build 49's
+    // 43-point gap passed the old <=80 check but was visibly too high.
+    XCTAssertEqual(clearance, phone ? 18 : 20, accuracy: 2,
+                   "Navigation capsule differs from the reviewed screen-bottom anchor")
     if let expectedBottom { XCTAssertEqual(frame.maxY, expectedBottom, accuracy: 1) }
     shot(name)
     return frame.maxY
@@ -89,6 +88,22 @@ final class NativeInteractionTests: XCTestCase {
     let phrase = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "الأمل في كل يوم وليلة")).firstMatch
     XCTAssertTrue(phrase.waitForExistence(timeout: 10),
                   "The end of the original Arabic phrase was lost")
+  }
+
+  func testUnpublishedCaptionsShowAnHonestStateAndKeepArtworkClear() throws {
+    app.launchArguments = ["--audit-player", "--audit-ai-unavailable"]
+    app.launch()
+    XCTAssertTrue(app.navigationBars["Текст нашида"].waitForExistence(timeout: 30))
+    XCTAssertTrue(app.staticTexts["Текст на проверке"].exists)
+    XCTAssertFalse(app.staticTexts["Текст проверен владельцем."].exists)
+    XCTAssertFalse(app.switches["Следить"].exists)
+    XCTAssertTrue(app.buttons["subtitle-retry"].isHittable)
+    shot("unpublished-subtitles-reader")
+    app.buttons["Готово"].tap()
+    XCTAssertTrue(app.otherElements["player-artwork-frame"].waitForExistence(timeout: 10))
+    XCTAssertFalse(app.buttons["Субтитры. Открыть полный текст"].exists,
+                   "An unavailable subtitle placeholder is painted over the cover")
+    _ = assertNavigationAnchor("unpublished-subtitles-player")
   }
 
   func testPortraitArtworkFillsThePlayerFrame() throws {

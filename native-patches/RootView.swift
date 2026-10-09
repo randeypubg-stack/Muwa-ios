@@ -65,7 +65,7 @@ struct RootView: View {
         max(0, layout.viewportWidth - chromeSideInset * 2)
       )
 
-      let chrome = BottomChromeLayout(phone: layout.isPhone)
+      let chrome = BottomChromeLayout(phone: layout.isPhone, safeBottom: safeBottom)
 
       ZStack(alignment: .bottom) {
         tabContent
