@@ -1207,10 +1207,12 @@ struct PlayerGeometry {
       artworkSize = min(artworkLimit, contentWidth - controlsWidth - 24, chromeTop - safeTop - 76)
       artworkX = (width - contentWidth) / 2 + (contentWidth - controlsWidth - 16) / 2
       artworkY = safeTop + 56 + artworkSize / 2
-      actionsY = chromeTop - 34
-      transportY = actionsY - 58
-      progressY = transportY - 66
-      metadataY = progressY - 58
+      // Keep the title below the top controls on short landscape phones after
+      // restoring the bottom safe area. Gaps still include full touch targets.
+      actionsY = chromeTop - 32
+      transportY = actionsY - (phone ? 56 : 64)
+      progressY = transportY - (phone ? 62 : 68)
+      metadataY = progressY - 54
     } else {
       controlsWidth = contentWidth
       controlsX = width / 2
