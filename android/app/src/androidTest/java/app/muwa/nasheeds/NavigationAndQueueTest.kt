@@ -128,6 +128,22 @@ class NavigationAndQueueTest {
                         .fetchSemanticsNodes().size == 1
                 }
                 assertBottomAnchor(scenario)
+                val shots = File(context.getExternalFilesDir(null), "screenshots").apply { mkdirs() }
+                assertTrue(device.takeScreenshot(File(shots, "subtitle-reader-reduced-motion-portrait.png")))
+                scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
+                compose.waitUntil(timeoutMillis = 20_000) {
+                    var rotated = false
+                    scenario.onActivity { rotated = it.window.decorView.width > it.window.decorView.height }
+                    rotated
+                }
+                val list = compose.onNodeWithTag("subtitles.list").assertIsDisplayed()
+                assertTrue("Landscape header left no readable subtitle viewport",
+                    list.getUnclippedBoundsInRoot().height.value >= 40f)
+                list.performScrollToIndex(1)
+                compose.onNodeWithText(phrase, useUnmergedTree = true).assertIsDisplayed()
+                compose.onNodeWithTag("subtitles.follow").assertIsOff()
+                assertBottomAnchor(scenario)
+                assertTrue(device.takeScreenshot(File(shots, "subtitle-reader-reduced-motion-landscape.png")))
             }
         } finally {
             if (previous == null) file.delete() else file.writeBytes(previous)

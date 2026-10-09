@@ -26,6 +26,8 @@ Compose reader, without a new playback clock, recognition provider or UI library
 - Android's existing reader is moved out of AccountScreens.kt into
   ui/subtitles/SubtitleScreen.kt; the old implementation is removed. Arabic
   remains the default and displays with RTL direction, wrapping and no ellipsis.
+  A compact landscape header reserves a scrollable caption viewport; actual
+  reduced-motion UI tests check both orientations and the unchanged bottom bar.
 - Build 51 navigation geometry, account/media contracts, caches and IDs are
   preserved. Navigation remains covered by independent golden and real UI tests.
 

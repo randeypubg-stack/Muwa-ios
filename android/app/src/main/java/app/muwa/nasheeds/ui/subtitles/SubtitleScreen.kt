@@ -48,20 +48,28 @@ fun SubtitleScreen(model: MuwaModel) {
             positioned = true
         }
     }
-    Column(Modifier.padding(16.dp).testTag("subtitles.screen")) {
+    BoxWithConstraints(Modifier.fillMaxSize().padding(16.dp).testTag("subtitles.screen")) {
+      val compact = maxHeight < 260.dp && maxWidth >= 440.dp
+      Column {
         Row {
             listOf("ar", "ru", "en").forEach { lang ->
-                TextButton(onClick = { language = lang }, modifier = Modifier.weight(1f),
+                TextButton(onClick = { language = lang }, modifier = if (compact) Modifier else Modifier.weight(1f),
                     contentPadding = PaddingValues(horizontal = 4.dp)) { Text(lang.uppercase()) }
             }
+            if (compact) {
+                Spacer(Modifier.weight(1f))
+                Text("Следить", Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodyMedium)
+                Switch(follow, { follow = it }, Modifier.testTag("subtitles.follow"))
+                TextButton(onClick = model::loadSubtitles, enabled = !model.subtitleLoading) { Text("Обновить") }
+            }
         }
-        Row {
+        if (!compact) Row {
             Text("Следить за воспроизведением", Modifier.weight(1f).padding(top = 12.dp),
                 style = MaterialTheme.typography.bodyMedium)
             Switch(follow, { follow = it }, Modifier.testTag("subtitles.follow"))
         }
-        Text(model.subtitleStatus, color = Color.Gray)
-        TextButton(onClick = model::loadSubtitles, enabled = !model.subtitleLoading) {
+        if (!compact || model.subtitles.isEmpty()) Text(model.subtitleStatus, color = Color.Gray)
+        if (!compact) TextButton(onClick = model::loadSubtitles, enabled = !model.subtitleLoading) {
             Text(if (model.subtitleLoading) "Загрузка…" else "Обновить текст")
         }
         if (model.subtitleLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -115,5 +123,6 @@ fun SubtitleScreen(model: MuwaModel) {
                 }
             }
         }
+      }
     }
 }

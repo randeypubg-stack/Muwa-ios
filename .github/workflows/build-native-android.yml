@@ -177,6 +177,9 @@ jobs:
             adb shell input keyevent KEYCODE_WAKEUP
             adb shell wm dismiss-keyguard
             gradle -p android :app:connectedDebugAndroidTest --stacktrace
+            mkdir -p "$MUWA_ANDROID_OUTPUT/subtitle-reader"
+            adb pull /sdcard/Android/data/app.muwa.nasheeds/files/screenshots/subtitle-reader-reduced-motion-portrait.png "$MUWA_ANDROID_OUTPUT/subtitle-reader/portrait.png"
+            adb pull /sdcard/Android/data/app.muwa.nasheeds/files/screenshots/subtitle-reader-reduced-motion-landscape.png "$MUWA_ANDROID_OUTPUT/subtitle-reader/landscape.png"
             gradle -p android --stop
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
             python3 tests/capture_android.py
