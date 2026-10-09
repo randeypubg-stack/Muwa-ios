@@ -183,6 +183,18 @@ def run(*args, timeout=180):
         save_status()
         print(f"Completed in {step['elapsed_seconds']}s: {' '.join(command)}", flush=True)
 
+def capture_desktop_diagnostic(path):
+    """Host screenshots are optional diagnostics, never CarPlay scene proof."""
+    diagnostic = {'captured': False}
+    status.setdefault('desktopDiagnostics', {})[Path(path).name] = diagnostic
+    try:
+        run('screencapture', '-x', str(path), timeout=30)
+        diagnostic['captured'] = True
+    except (RuntimeError, subprocess.TimeoutExpired) as error:
+        diagnostic['reason'] = str(error)
+    save_status()
+
+
 def capture():
     global out, status
     out = Path('build/previews/carplay')
@@ -341,7 +353,7 @@ def capture():
             status['launcher_selection'] = {'label': target['label'], 'confidence': target['confidence'],
                                             'nativeTarget': target, 'windowBounds': [wx, wy, ww, wh]}
             save_status()
-            run('screencapture', '-x', str(out / 'desktop-before-input.png'))
+            capture_desktop_diagnostic(out / 'desktop-before-input.png')
             # A title-bar click followed by a drag press moved the entire
             # Simulator window in the recorded failure. Use ordinary clicks on
             # the app tile. A first click may only focus the window, so retry
@@ -378,7 +390,7 @@ def capture():
                 while time.monotonic() < input_deadline and not proof.exists():
                     time.sleep(0.2)
             status['mouse_position'] = run('cliclick', 'p').strip()
-            run('screencapture', '-x', str(out / 'desktop-after-input.png'))
+            capture_desktop_diagnostic(out / 'desktop-after-input.png')
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline and not proof.exists():
             time.sleep(0.5)
@@ -437,6 +449,30 @@ def self_test():
 
     class CarPlayEvidenceChecks(unittest.TestCase):
         label = ('Muwa', 96, 164, 363, 65, 23)
+
+        def test_host_capture_failure_does_not_establish_or_block_scene_proof(self):
+            from unittest.mock import patch
+            for error in [RuntimeError('could not create image from display'),
+                          subprocess.TimeoutExpired('screencapture', 30)]:
+                evidence = {'captured': False}
+                with self.subTest(error=type(error).__name__), \
+                     patch.dict(globals(), status=evidence), \
+                     patch(__name__ + '.run', side_effect=error), \
+                     patch(__name__ + '.save_status'):
+                    capture_desktop_diagnostic(Path('desktop.png'))
+                self.assertFalse(evidence['captured'])
+                self.assertFalse(evidence['desktopDiagnostics']['desktop.png']['captured'])
+                self.assertIn('reason', evidence['desktopDiagnostics']['desktop.png'])
+
+        def test_host_capture_success_is_still_not_scene_proof(self):
+            from unittest.mock import patch
+            evidence = {'captured': False}
+            with patch.dict(globals(), status=evidence), \
+                 patch(__name__ + '.run', return_value=''), \
+                 patch(__name__ + '.save_status'):
+                capture_desktop_diagnostic(Path('desktop.png'))
+            self.assertFalse(evidence['captured'])
+            self.assertTrue(evidence['desktopDiagnostics']['desktop.png']['captured'])
 
         def test_actual_launcher_label_selects_icon_above_it(self):
             target = carplay_target(tsv([self.label]), 800, 480)

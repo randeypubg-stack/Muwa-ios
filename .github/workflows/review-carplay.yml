@@ -14,12 +14,12 @@ on:
       source_run_id:
         description: Verified native build run ID
         type: string
-        default: "37655981843"
+        default: "37963968335"
         required: true
       source_artifact_name:
         description: Full-source artifact from that build
         type: string
-        default: Muwa-Full-Source-132
+        default: Muwa-Full-Source-150
         required: true
   push:
     branches: [feat/muwa-native-build35]
@@ -53,8 +53,8 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ${{ inputs.source_artifact_name || 'Muwa-Full-Source-132' }}
-          run-id: ${{ inputs.source_run_id || '37655981843' }}
+          name: ${{ inputs.source_artifact_name || 'Muwa-Full-Source-150' }}
+          run-id: ${{ inputs.source_run_id || '37963968335' }}
           github-token: ${{ github.token }}
           path: build/carplay-source
       - name: Build CarPlay review with Xcode simulator signing
