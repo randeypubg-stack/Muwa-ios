@@ -59,7 +59,7 @@ def verify_frame(frame, pid):
         raise AssertionError("Actual subtitle rail is clipped outside its native viewport")
 
 
-def verify_runtime_proof(ready, rail, clock, finished, frame, pid):
+def verify_runtime_proof(ready, rail, clock, finished, frame, pid, reduced_motion=False):
     """Verify observed UI indices and isolated clock ticks, not source strings."""
     objects = [ready, finished, frame, *rail, *clock]
     if not objects or any(item.get("pid") != pid for item in objects):
@@ -77,8 +77,8 @@ def verify_runtime_proof(ready, rail, clock, finished, frame, pid):
                 or not isinstance(timestamp, (float, int)) or not math.isfinite(timestamp)
                 or not index * 5 <= timestamp < (index + 1) * 5):
             raise AssertionError("Mounted native rail index does not match its playback time")
-        if item.get("reduceMotion") is not False:
-            raise AssertionError("Native animation review requires Reduce Motion to be disabled")
+        if item.get("reduceMotion") is not reduced_motion:
+            raise AssertionError("Mounted rail did not receive the requested Reduce Motion preference")
         if not indices or indices[-1] != index:
             indices.append(index)
     if indices != list(range(5)):
@@ -98,7 +98,7 @@ def verify_runtime_proof(ready, rail, clock, finished, frame, pid):
     return {"observedActiveIndices": indices, "clockTicks": len(clock),
             "broadNotificationsDuringTicks": 0, "ordinaryCaptionSource": True,
             "aiOptIn": False, "railInsideNativeViewport": True,
-            "finalTime": finished["time"], "reduceMotion": False}
+            "finalTime": finished["time"], "reduceMotion": reduced_motion}
 
 
 def self_test():
@@ -116,6 +116,8 @@ def self_test():
     frame = {"pid": pid, "x": 210, "y": 250, "width": 110, "height": 160,
              "screenWidth": 402, "screenHeight": 874}
     verify_runtime_proof(ready, rail, clock, finished, frame, pid)
+    reduced_rail = [{**item, "reduceMotion": True} for item in rail]
+    verify_runtime_proof(ready, reduced_rail, clock, finished, frame, pid, reduced_motion=True)
     cases = []
     def case(label, mutate):
         values = copy.deepcopy([ready, rail, clock, finished, frame])
@@ -158,7 +160,7 @@ def self_test():
             reuse_cases.append(key)
         else:
             raise AssertionError(f"Invalid same-job review was accepted: {key}")
-    print(json.dumps({"selfTestsPassed": 2 + len(cases) + len(reuse_cases),
+    print(json.dumps({"selfTestsPassed": 3 + len(cases) + len(reuse_cases),
                       "rejectedInvalidProofs": cases, "rejectedMismatchedReviewFields": reuse_cases}, indent=2))
 
 
@@ -169,6 +171,8 @@ def main():
                         default=Path("build/PreviewDerivedData/Build/Products/Debug-iphonesimulator"))
     parser.add_argument("--output", type=Path, default=Path("build/previews/subtitle-motion"))
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--reduce-motion", action="store_true",
+                        help="Verify the same mounted rail with Reduce Motion enabled")
     parser.add_argument("--review-manifest", type=Path,
                         help="Reuse the completed same-job screen review and verify its installed executable")
     args = parser.parse_args()
@@ -290,8 +294,11 @@ def main():
         for path in (data / "Documents").glob(PROOF_PREFIX + "*"):
             if path.is_file():
                 path.unlink()
+        launch_args = ["--audit-player", "--audit-subtitle-motion"]
+        if args.reduce_motion:
+            launch_args.append("--audit-reduce-motion")
         launch = run("xcrun", "simctl", "launch", "--terminate-running-process", udid,
-                     PACKAGE, "--audit-player", "--audit-subtitle-motion")
+                     PACKAGE, *launch_args)
         match = re.search(r"app\.muwa\.nasheeds:\s*(\d+)", launch)
         if match is None:
             raise AssertionError(f"Simulator did not report Muwa's launched PID: {launch}")
@@ -348,7 +355,8 @@ def main():
         rail = [json.loads(line) for line in (data / "Documents/subtitle-motion-rail.jsonl").read_text().splitlines()]
         clock = [json.loads(line) for line in (data / "Documents/subtitle-motion-clock.jsonl").read_text().splitlines()]
         frame = wait_json("subtitle-motion-frame.json", pid)
-        status["runtimeProof"] = verify_runtime_proof(ready, rail, clock, finished, frame, pid)
+        status["runtimeProof"] = verify_runtime_proof(ready, rail, clock, finished, frame, pid,
+                                                    reduced_motion=args.reduce_motion)
         dimensions = {(item["width"], item["height"]) for item in status["screenshots"]}
         if len(dimensions) != 1 or len({item["sha256"] for item in status["screenshots"]}) < 3:
             raise AssertionError("Native caption checkpoint framebuffers are inconsistent or unchanged")

@@ -57,29 +57,21 @@ struct AISubtitleExperience: View {
           SubtitleRail(count: document.segments.count, activeIndex: activeIndex, height: compactHeight) { index, active in
             let segment = document.segments[index]
             VStack(alignment: document.isRTL ? .trailing : .leading, spacing: 5) {
-              if active {
-                AISubtitleLine(segment: segment, time: timeline.snapshot.time, rtl: document.isRTL)
+                AISubtitleLine(segment: segment,
+                  time: active ? timeline.snapshot.time : segment.start - 1, rtl: document.isRTL)
                   .font(.system(size: 18, weight: .semibold))
                   .lineLimit(nil)
-                    .fixedSize(horizontal: false, vertical: true)
+                  .fixedSize(horizontal: false, vertical: true)
                 if let translated = manager.translations[language.rawValue]?.segments[segment.id] {
                   Text(translated)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.white.opacity(0.75))
                     .lineLimit(nil)
-                  .fixedSize(horizontal: false, vertical: true)
+                    .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
                     .environment(\.layoutDirection, .leftToRight)
+                    .opacity(active ? 1 : 0)
                 }
-              } else {
-                Text(segment.original)
-                  .font(.system(size: 12, weight: .medium))
-                  .foregroundStyle(.white)
-                  .lineLimit(nil)
-                  .fixedSize(horizontal: false, vertical: true)
-                  .multilineTextAlignment(document.isRTL ? .trailing : .leading)
-                  .environment(\.layoutDirection, document.isRTL ? .rightToLeft : .leftToRight)
-              }
             }
             .frame(maxWidth: .infinity, alignment: document.isRTL ? .trailing : .leading)
           }
@@ -135,13 +127,13 @@ private struct LegacySubtitleRail: View {
       let segment = segments[index]
       VStack(alignment: .trailing, spacing: 5) {
         Text(segment.ar)
-          .font(.system(size: active ? 18 : 12, weight: active ? .semibold : .medium))
+          .font(.system(size: 18, weight: .semibold))
           .foregroundStyle(.white)
           .lineLimit(nil)
           .fixedSize(horizontal: false, vertical: true)
           .multilineTextAlignment(.trailing)
           .environment(\.layoutDirection, .rightToLeft)
-        if active, language != .arabic {
+        if language != .arabic {
           Text(segment.text(for: language))
             .font(.system(size: 10, weight: .medium))
             .foregroundStyle(.white.opacity(0.78))
@@ -149,6 +141,7 @@ private struct LegacySubtitleRail: View {
             .fixedSize(horizontal: false, vertical: true)
             .multilineTextAlignment(.leading)
             .environment(\.layoutDirection, .leftToRight)
+            .opacity(active ? 1 : 0)
         }
       }
       .frame(maxWidth: .infinity, alignment: .trailing)
@@ -164,6 +157,11 @@ private struct SubtitleRail<Line: View>: View {
   let height: CGFloat
   let line: (Int, Bool) -> Line
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.scenePhase) private var scenePhase
+
+  private var animationsAllowed: Bool {
+    !reduceMotion && scenePhase == .active && !ProcessInfo.processInfo.isLowPowerModeEnabled
+  }
 
   init(count: Int, activeIndex: Int, height: CGFloat,
        @ViewBuilder line: @escaping (Int, Bool) -> Line) {
@@ -183,35 +181,37 @@ private struct SubtitleRail<Line: View>: View {
     ZStack {
       ForEach(window, id: \.self) { index in
         let delta = index - activeIndex
-        Group {
-          if delta == 0 {
-            ScrollView(.vertical) {
-              line(index, true)
-                .accessibilityIdentifier("subtitle-current-text")
-                .padding(.vertical, 4)
-            }
-            .scrollIndicators(.hidden)
-            .frame(height: height * 0.64)
-            .accessibilityIdentifier("subtitle-current-scroll")
-          } else {
-            line(index, false)
-              .frame(height: height * 0.15)
-              .clipped()
-          }
+        // Keep the same text/scroll identity and typography while its role
+        // changes. Only drawing transforms animate; Arabic wrapping is stable.
+        ScrollView(.vertical) {
+          line(index, delta == 0)
+            .accessibilityIdentifier(delta == 0 ? "subtitle-current-text" : "subtitle-context-text-\(index)")
+            .frame(minHeight: height * 0.64 - 8, alignment: .center)
+            .padding(.vertical, 4)
         }
-          .scaleEffect(delta == 0 ? 1 : 0.88)
-          .opacity(delta == 0 ? 1 : 0.28)
+          .scrollIndicators(.hidden)
+          .scrollDisabled(delta != 0)
+          .frame(height: height * 0.64)
+          .mask {
+            Rectangle().scaleEffect(x: 1, y: delta == 0 ? 1 : 0.15 / 0.64)
+          }
+          .scaleEffect(delta == 0 || !animationsAllowed ? 1 : 0.96)
+          .opacity(delta == 0 ? 1 : 0.32)
+          .blur(radius: delta == 0 || !animationsAllowed ? 0 : 1.2)
           .offset(y: CGFloat(delta) * height * 0.43)
-          .transition(reduceMotion ? .opacity : .asymmetric(
-            insertion: .opacity.combined(with: .offset(y: 28)),
-            removal: .opacity.combined(with: .offset(y: -28))
+          .transition(!animationsAllowed ? .identity : .asymmetric(
+            insertion: .opacity.combined(with: .offset(y: 8)),
+            removal: .opacity
           ))
+          .accessibilityHidden(delta != 0)
+          .accessibilityIdentifier(delta == 0 ? "subtitle-current-scroll" : "subtitle-context-scroll-\(index)")
       }
     }
     .frame(maxWidth: .infinity)
     .frame(height: height)
     .clipped()
-    .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.92), value: activeIndex)
+    .animation(animationsAllowed ? MuwaMotion.subtitleFocus : nil, value: activeIndex)
+    .transaction { if !animationsAllowed { $0.animation = nil } }
   }
 }
 
@@ -244,7 +244,11 @@ private struct AISubtitleReader: View {
   @Binding var language: AITranslationLanguage
   @Environment(\.dismiss) private var dismiss
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.scenePhase) private var scenePhase
   @State private var followsPlayback = true
+  private var animationsAllowed: Bool {
+    !reduceMotion && scenePhase == .active && !ProcessInfo.processInfo.isLowPowerModeEnabled
+  }
   private var activeID: String? {
     guard let doc = manager.document, let i = doc.activeIndex(at: timeline.snapshot.time) else { return nil }
     return doc.segments[i].id
@@ -279,11 +283,14 @@ private struct AISubtitleReader: View {
             .simultaneousGesture(DragGesture(minimumDistance: 10).onChanged { _ in followsPlayback = false })
             .onChange(of: activeID) { _, id in
               guard followsPlayback, let id else { return }
-              withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.28)) { proxy.scrollTo(id, anchor: .center) }
+              withAnimation(animationsAllowed ? MuwaMotion.subtitleFollow : nil) { proxy.scrollTo(id, anchor: .center) }
             }
             .onChange(of: followsPlayback) { _, follows in
-              if follows, let id = activeID { proxy.scrollTo(id, anchor: .center) }
+              if follows, let id = activeID {
+                withAnimation(animationsAllowed ? MuwaMotion.subtitleFollow : nil) { proxy.scrollTo(id, anchor: .center) }
+              }
             }
+            .onAppear { if let id = activeID { proxy.scrollTo(id, anchor: .center) } }
           }
           Text(manager.isVerifiedByOwner ? "Текст проверен владельцем."
             : "Арабский оригинал сохраняется без перевода. Автоматический текст может содержать ошибки.")
@@ -355,7 +362,8 @@ private struct AISubtitleReader: View {
     } label: {
       VStack(alignment: .leading, spacing: 8) {
         AISubtitleLine(segment: segment, time: timeline.snapshot.time, rtl: rtl)
-          .font(.system(size: 23, weight: isActive ? .semibold : .regular))
+          .font(.system(size: 23, weight: .semibold))
+          .lineLimit(nil).fixedSize(horizontal: false, vertical: true)
         if let translation {
           Text(translation).font(.body).foregroundStyle(.white.opacity(0.65))
             .multilineTextAlignment(.leading)
@@ -364,7 +372,8 @@ private struct AISubtitleReader: View {
       .padding(16)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(Color.white.opacity(isActive ? 0.065 : 0), in: RoundedRectangle(cornerRadius: 18))
-      .opacity(isActive ? 1 : 0.55)
+      .opacity(isActive ? 1 : 0.48)
+      .animation(animationsAllowed ? MuwaMotion.subtitleFocus : nil, value: isActive)
     }
     .buttonStyle(.plain).id(segment.id)
     .accessibilityHint("Перейти к этой фразе")

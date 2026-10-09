@@ -11,6 +11,8 @@ import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -22,6 +24,8 @@ object MuwaMotion {
     const val AmbientDuration = 24_000
 
     fun press() = spring<Float>(dampingRatio = 0.78f, stiffness = 620f)
+    fun <T> subtitleFocus() = tween<T>(durationMillis = 240,
+        easing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f))
 }
 
 @Composable

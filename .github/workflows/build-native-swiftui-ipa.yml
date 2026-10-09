@@ -23,6 +23,10 @@ on:
       ]
   workflow_dispatch:
     inputs:
+      subtitle_only:
+        description: Build, record subtitle motion and verify all four native device profiles
+        type: boolean
+        default: false
       navigation_only:
         description: Build and verify navigation on all four native device profiles
         type: boolean
@@ -224,7 +228,7 @@ jobs:
           test "$WIDTH" = "1024"
           test "$HEIGHT" = "1024"
 
-          sed -i '' 's/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = 51;/g' "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
+          sed -i '' 's/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = 52;/g' "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
           echo "SOURCE_ROOT=$ROOT" >> "$GITHUB_ENV"
 
       - name: Package full source archive
@@ -269,18 +273,18 @@ jobs:
           find build/full-source -name '.DS_Store' -delete
           (
             cd build/full-source
-            /usr/bin/zip -qry -y ../Muwa-v1.4.0-build51-FULL-SOURCE.zip .
+            /usr/bin/zip -qry -y ../Muwa-v1.4.0-build52-FULL-SOURCE.zip .
           )
-          shasum -a 256 build/Muwa-v1.4.0-build51-FULL-SOURCE.zip \
-            | tee build/Muwa-v1.4.0-build51-FULL-SOURCE.zip.sha256
+          shasum -a 256 build/Muwa-v1.4.0-build52-FULL-SOURCE.zip \
+            | tee build/Muwa-v1.4.0-build52-FULL-SOURCE.zip.sha256
 
       - name: Upload full source archive
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Muwa-Full-Source-${{ github.run_number }}
           path: |
-            build/Muwa-v1.4.0-build51-FULL-SOURCE.zip
-            build/Muwa-v1.4.0-build51-FULL-SOURCE.zip.sha256
+            build/Muwa-v1.4.0-build52-FULL-SOURCE.zip
+            build/Muwa-v1.4.0-build52-FULL-SOURCE.zip.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 90
@@ -299,7 +303,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
-          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='51'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='52'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
         shell: bash
@@ -332,10 +336,10 @@ jobs:
 
           (
             cd build/package
-            /usr/bin/zip -qry -y ../Muwa-v1.4.0-build51-native-unsigned.ipa Payload
+            /usr/bin/zip -qry -y ../Muwa-v1.4.0-build52-native-unsigned.ipa Payload
           )
 
-          shasum -a 256 build/Muwa-v1.4.0-build51-native-unsigned.ipa | tee build/Muwa-v1.4.0-build51-native-unsigned.ipa.sha256
+          shasum -a 256 build/Muwa-v1.4.0-build52-native-unsigned.ipa | tee build/Muwa-v1.4.0-build52-native-unsigned.ipa.sha256
 
           cat > build/build-info.json <<EOF
           {
@@ -359,8 +363,8 @@ jobs:
         with:
           name: Muwa-Native-IPA-${{ github.run_number }}
           path: |
-            build/Muwa-v1.4.0-build51-native-unsigned.ipa
-            build/Muwa-v1.4.0-build51-native-unsigned.ipa.sha256
+            build/Muwa-v1.4.0-build52-native-unsigned.ipa
+            build/Muwa-v1.4.0-build52-native-unsigned.ipa.sha256
             build/build-info.json
           if-no-files-found: error
           compression-level: 0
@@ -377,7 +381,7 @@ jobs:
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Muwa-build51-simulator-${{ github.run_id }}
+          name: Muwa-build52-simulator-${{ github.run_id }}
           path: build/muwa-review-app.tar.gz
           if-no-files-found: error
 
@@ -394,7 +398,7 @@ jobs:
           retention-days: 14
 
   review:
-    if: ${{ github.event.inputs.navigation_only != 'true' }}
+    if: ${{ github.event.inputs.navigation_only != 'true' && github.event.inputs.subtitle_only != 'true' }}
     name: Review iOS ${{ matrix.device }}
     needs: build
     # Official GitHub preview runner; select the stable Xcode 27.0 toolchain,
@@ -423,7 +427,7 @@ jobs:
           xcrun simctl list runtimes --json
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: Muwa-build51-simulator-${{ github.run_id }}
+          name: Muwa-build52-simulator-${{ github.run_id }}
           path: build
       - name: Unpack simulator app
         run: |
@@ -444,7 +448,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always() && matrix.device == 'tablet'
         with:
-          name: Muwa-build51-subtitle-motion-tablet
+          name: Muwa-build52-subtitle-motion-tablet
           overwrite: true
           path: build/previews/subtitle-motion
           if-no-files-found: error
@@ -462,7 +466,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build51-${{ matrix.device }}-screenshots
+          name: Muwa-build52-${{ matrix.device }}-screenshots
           overwrite: true
           # Keep individual downloadable archives below the attachment limit on
           # large iPads. All files remain unmodified native Simulator captures.
@@ -477,7 +481,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build51-${{ matrix.device }}-player-screenshots
+          name: Muwa-build52-${{ matrix.device }}-player-screenshots
           overwrite: true
           path: |
             build/previews/*player.png
@@ -490,7 +494,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build51-${{ matrix.device }}-account-screenshots
+          name: Muwa-build52-${{ matrix.device }}-account-screenshots
           overwrite: true
           path: |
             build/previews/*profile.png
@@ -501,7 +505,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always() && matrix.device == 'phone'
         with:
-          name: Muwa-build51-phone-launch-review
+          name: Muwa-build52-phone-launch-review
           overwrite: true
           path: build/previews/launch
           if-no-files-found: error
@@ -517,11 +521,11 @@ jobs:
       MUWA_REQUESTED_DEVICE: iPhone 18 Pro Max
       MUWA_REQUESTED_IOS: "27.0"
       MUWA_REVIEW_DEVICE: ${{ matrix.device }}
-    timeout-minutes: 15
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        device: [large-phone]
+        device: [reported-phone, large-phone, tablet]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -532,7 +536,7 @@ jobs:
           test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "27.0"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: Muwa-build51-simulator-${{ github.run_id }}
+          name: Muwa-build52-simulator-${{ github.run_id }}
           path: build
       - name: Unpack simulator app
         run: |
@@ -542,16 +546,21 @@ jobs:
         run: |
           python3 tests/RecorderSignalChecks.py
           python3 tests/capture_subtitle_motion.py
+          if [ "${{ matrix.device }}" = "reported-phone" ]; then
+            python3 tests/capture_subtitle_motion.py --reduce-motion --output build/previews/subtitle-motion-reduced
+          fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build51-subtitle-motion-${{ matrix.device }}
+          name: Muwa-build52-subtitle-motion-${{ matrix.device }}
           overwrite: true
-          path: build/previews/subtitle-motion
+          path: |
+            build/previews/subtitle-motion
+            build/previews/subtitle-motion-reduced
           if-no-files-found: error
 
   carplay-review:
-    if: ${{ github.event.inputs.navigation_only != 'true' }}
+    if: ${{ github.event.inputs.navigation_only != 'true' && github.event.inputs.subtitle_only != 'true' }}
     name: Review CarPlay external display
     needs: build
     uses: ./.github/workflows/review-carplay.yml
@@ -614,7 +623,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build51-native-interactions-${{ matrix.device }}
+          name: Muwa-build52-native-interactions-${{ matrix.device }}
           overwrite: true
           path: |
             build/interactions.xcresult
@@ -627,7 +636,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build51-rotation-primary-${{ matrix.device }}
+          name: Muwa-build52-rotation-primary-${{ matrix.device }}
           overwrite: true
           path: |
             build/interaction-proof/primary
@@ -638,7 +647,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build51-popular-${{ matrix.device }}
+          name: Muwa-build52-popular-${{ matrix.device }}
           overwrite: true
           path: build/interaction-proof/popular
           if-no-files-found: warn
@@ -646,7 +655,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build51-artwork-${{ matrix.device }}
+          name: Muwa-build52-artwork-${{ matrix.device }}
           overwrite: true
           path: build/interaction-proof/artwork
           if-no-files-found: warn
@@ -654,7 +663,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build51-loading-${{ matrix.device }}
+          name: Muwa-build52-loading-${{ matrix.device }}
           overwrite: true
           path: build/interaction-proof/loading
           if-no-files-found: warn
@@ -663,7 +672,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: Muwa-build51-layout-${{ matrix.device }}
+          name: Muwa-build52-layout-${{ matrix.device }}
           overwrite: true
           path: build/interaction-proof/layout
           if-no-files-found: error

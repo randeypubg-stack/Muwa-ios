@@ -33,6 +33,7 @@ import app.muwa.nasheeds.ui.library.LibraryScreen
 import app.muwa.nasheeds.ui.profile.ProfileScreen
 import app.muwa.nasheeds.ui.queue.QueueScreen
 import app.muwa.nasheeds.ui.search.SearchScreen
+import app.muwa.nasheeds.ui.subtitles.SubtitleScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

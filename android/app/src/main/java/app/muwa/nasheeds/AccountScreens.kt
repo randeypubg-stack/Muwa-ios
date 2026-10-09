@@ -101,23 +101,3 @@ import org.json.JSONObject
         Text("Системный размер текста и уменьшение анимаций учитываются автоматически.",color=Color.Gray)
     }
 }
-@Composable fun SubtitleScreen(model: MuwaModel) {
-    var language by rememberSaveableState("ar"); var follow by rememberSaveableState(true)
-    val listState=androidx.compose.foundation.lazy.rememberLazyListState()
-    val active=model.subtitles.indexOfFirst {model.position / 1000.0 >= it.optDouble("start") && model.position / 1000.0 < it.optDouble("end")}
-    LaunchedEffect(active,follow) {if(follow&&active>=0) listState.animateScrollToItem(active)}
-    Column(Modifier.padding(16.dp)) {
-        Row {listOf("ar","ru","en").forEach { lang -> TextButton(onClick={language=lang}) {Text(lang.uppercase())}};Switch(follow,{follow=it});Text("Следить",Modifier.padding(top=12.dp))}
-        Text(model.subtitleStatus,color=Color.Gray)
-        TextButton(onClick=model::loadSubtitles,enabled=!model.subtitleLoading) {Text(if(model.subtitleLoading) "Загрузка…" else "Обновить текст")}
-        if(model.subtitleLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        LazyColumn(state=listState,modifier=Modifier.pointerInput(Unit) {
-            awaitPointerEventScope { while (true) { val event = awaitPointerEvent(); if (event.changes.any { it.pressed && it.position != it.previousPosition }) follow=false } }
-        }) {items(model.subtitles.size) {index -> val item=model.subtitles[index]
-            Column(Modifier.fillMaxWidth().clickable {follow=false;model.seek((item.optDouble("start")*1000).toLong())}.padding(vertical=16.dp)) {
-                Text(item.optString("ar"),style=MaterialTheme.typography.titleLarge,color=if(index==active) MaterialTheme.colorScheme.primary else Color.Gray)
-                if(language!="ar") Text(item.optString(language),color=if(index==active) Color.White else Color.Gray)
-            }
-        }}
-    }
-}

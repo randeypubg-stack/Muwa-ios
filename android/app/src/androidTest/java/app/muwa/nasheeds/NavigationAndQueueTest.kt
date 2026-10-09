@@ -82,6 +82,61 @@ class NavigationAndQueueTest {
     }
 
     @Test
+    fun reducedMotionSubtitlesFollowSeekAndKeepTheWholeArabicPhrase() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        context.stopService(Intent(context, PlaybackService::class.java))
+        instrumentation.waitForIdleSync()
+        val device = UiDevice.getInstance(instrumentation)
+        val originalScale = device.executeShellCommand("settings get global animator_duration_scale").trim()
+        val track = AppGraph.library.catalog.first()
+        val file = File(context.cacheDir, if (track.captionsRevision > 0)
+            "subtitles-${track.id}-r${track.captionsRevision}.json" else "subtitles-${track.id}.json")
+        val previous = file.takeIf { it.exists() }?.readBytes()
+        val phrase = "نور في القلب وسلام في الروح ورحمة الله والأمل في كل يوم وليلة"
+        file.writeText("""{"segments":[{"start":0,"end":5,"ar":"السلام عليكم"},
+            {"start":5,"end":10,"ar":"$phrase"},{"start":10,"end":15,"ar":"رحمة وسكينة"}]}""")
+        try {
+            device.executeShellCommand("settings put global animator_duration_scale 0")
+            ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)
+                .putExtra("review.route", "player")).use { scenario ->
+                compose.waitUntil(timeoutMillis = 20_000) {
+                    var ready = false
+                    scenario.onActivity { ready = ViewModelProvider(it)[MuwaModel::class.java]
+                        .controller?.playbackState == Player.STATE_READY }
+                    ready
+                }
+                compose.onNodeWithTag("player.subtitles").performClick()
+                compose.waitUntil(timeoutMillis = 15_000) {
+                    compose.onAllNodes(hasTestTag("subtitle.line.0") and isSelected())
+                        .fetchSemanticsNodes().size == 1
+                }
+                scenario.onActivity {
+                    val model = ViewModelProvider(it)[MuwaModel::class.java]
+                    model.seek(6_000); model.seek(11_000)
+                }
+                compose.waitUntil(timeoutMillis = 10_000) {
+                    compose.onAllNodes(hasTestTag("subtitle.line.2") and isSelected())
+                        .fetchSemanticsNodes().size == 1
+                }
+                compose.onNodeWithTag("subtitles.list").performScrollToIndex(1)
+                compose.onNodeWithText(phrase, useUnmergedTree = true).assertExists()
+                compose.onNodeWithTag("subtitle.line.1").performClick()
+                compose.onNodeWithTag("subtitles.follow").assertIsOff()
+                compose.waitUntil(timeoutMillis = 10_000) {
+                    compose.onAllNodes(hasTestTag("subtitle.line.1") and isSelected())
+                        .fetchSemanticsNodes().size == 1
+                }
+                assertBottomAnchor(scenario)
+            }
+        } finally {
+            if (previous == null) file.delete() else file.writeBytes(previous)
+            if (originalScale == "null") device.executeShellCommand("settings delete global animator_duration_scale")
+            else device.executeShellCommand("settings put global animator_duration_scale $originalScale")
+        }
+    }
+
+    @Test
     fun popularPagesBrowseTheWholeCatalogInBothDirections() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         ActivityScenario.launch<MainActivity>(

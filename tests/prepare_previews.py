@@ -100,6 +100,16 @@ s=s.replace(needle, '''    .task {
 s=s.replace('      .coordinateSpace(name: "playerContainer")', '      .coordinateSpace(name: "playerContainer")\n      .onAppear {\n        if ProcessInfo.processInfo.arguments.contains("--audit-launch") {\n          precondition(auth.state == .checking, "Session finished before startup review")\n          try? String(ProcessInfo.processInfo.processIdentifier).write(to: URL.documentsDirectory.appendingPathComponent("launch-home-mounted.txt"), atomically: true, encoding: .utf8)\n        }\n      }', 1)
 view.write_text(s)
 
+# Override only a disposable review environment, never the release source.
+# The explicit preference also reaches the real rail and native reader sheet.
+s=view.read_text()
+needle='      .coordinateSpace(name: "playerContainer")'
+assert s.count(needle) == 1
+s=s.replace(needle, needle+'''\n      .transformEnvironment(\\.accessibilityReduceMotion) { value in
+        if ProcessInfo.processInfo.arguments.contains("--audit-reduce-motion") { value = true }
+      }''',1)
+view.write_text(s)
+
 # AI review fixture, injected only after production IPA/source packaging.
 manager=root/'Sources/Services/SubtitleManager.swift'
 s=manager.read_text()
@@ -192,7 +202,7 @@ s=p.read_text()
 needle='private struct SubtitleRail<Line: View>: View {'
 assert s.count(needle) == 1, 'Motion review must observe the shared production rail'
 s=s.replace(needle, needle+'\n  @EnvironmentObject private var reviewPlayer: PlayerManager\n  @EnvironmentObject private var reviewSubtitles: SubtitleManager',1)
-needle='    .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.92), value: activeIndex)'
+needle='    .animation(animationsAllowed ? MuwaMotion.subtitleFocus : nil, value: activeIndex)'
 assert s.count(needle) == 1, 'Motion review must observe the actual rail active index'
 s=s.replace(needle, needle+'''
     .background(GeometryReader { proxy in
@@ -329,7 +339,7 @@ enum ReviewSubtitleMotion {
           return
         }
       }
-      try? await Task.sleep(for: .milliseconds(60))
+      try? await Task.sleep(for: .milliseconds(200))
     }
     observation.cancel()
     write("subtitle-motion-finished.json", ["pid": pid, "ticks": 125,

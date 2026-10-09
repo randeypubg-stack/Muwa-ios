@@ -60,7 +60,16 @@ final class NativeInteractionTests: XCTestCase {
   }
 
   func testLongArabicCaptionWrapsAndScrollsWithoutChangingTheTrack() throws {
+    try verifyLongArabicCaption(reducedMotion: false)
+  }
+
+  func testReducedMotionKeepsArabicScrollableAndReaderTappable() throws {
+    try verifyLongArabicCaption(reducedMotion: true)
+  }
+
+  private func verifyLongArabicCaption(reducedMotion: Bool) throws {
     app.launchArguments = ["--audit-player", "--audit-ai", "--audit-long-caption"]
+    if reducedMotion { app.launchArguments.append("--audit-reduce-motion") }
     app.launch()
     let rail = app.buttons["Субтитры. Открыть полный текст"].firstMatch
     XCTAssertTrue(rail.waitForExistence(timeout: 30))
@@ -88,6 +97,9 @@ final class NativeInteractionTests: XCTestCase {
     let phrase = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "الأمل في كل يوم وليلة")).firstMatch
     XCTAssertTrue(phrase.waitForExistence(timeout: 10),
                   "The end of the original Arabic phrase was lost")
+    app.buttons["Готово"].tap()
+    XCTAssertTrue(rail.waitForExistence(timeout: 10))
+    _ = assertNavigationAnchor(reducedMotion ? "reduced-motion-long-arabic-navigation" : "long-arabic-navigation")
   }
 
   func testUnpublishedCaptionsShowAnHonestStateAndKeepArtworkClear() throws {
