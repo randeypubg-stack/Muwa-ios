@@ -311,7 +311,7 @@ jobs:
 
           test "$BUNDLE_ID" = "app.muwa.nasheeds"
           test "$VERSION" = "1.4.0"
-          test "$BUILD_NO" = "49"
+          test "$BUILD_NO" = "50"
           test -x "$APP_PATH/$EXECUTABLE"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist")" = "true"
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIColorName' "$APP_PATH/Info.plist")" = "LaunchBackground"
