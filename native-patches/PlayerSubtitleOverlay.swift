@@ -256,6 +256,7 @@ private struct AISubtitleReader: View {
   }
   var body: some View {
     NavigationStack {
+      GeometryReader { viewport in
       VStack(spacing: 16) {
         if manager.document != nil {
           HStack {
@@ -267,6 +268,8 @@ private struct AISubtitleReader: View {
             Spacer()
             Toggle("Следить", isOn: $followsPlayback).font(.caption).fixedSize()
           }.padding(.horizontal, 20)
+            .fixedSize(horizontal: false, vertical: true)
+            .layoutPriority(1)
           if let message = manager.error {
             Text(message).font(.callout).foregroundStyle(.secondary).padding(.horizontal, 20)
           }
@@ -300,8 +303,12 @@ private struct AISubtitleReader: View {
           emptyContent
         }
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      // Size against the presented reader, not the underlying player window.
+      // A fitted iPad sheet otherwise permits its intrinsic content to overflow
+      // underneath the toolbar and clips the follow control and Arabic lines.
+      .frame(width: viewport.size.width, height: viewport.size.height)
       .background { AppBackground().ignoresSafeArea() }
+      }
       .navigationTitle(manager.document == nil ? "Текст нашида" : "Оригинал и перевод")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {

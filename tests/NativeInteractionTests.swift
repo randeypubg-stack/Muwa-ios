@@ -366,6 +366,7 @@ final class NativeInteractionTests: XCTestCase {
     rail.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
     XCTAssertTrue(reader.waitForExistence(timeout: 10), "Tapping the actual rail did not open the native reader")
     XCTAssertTrue(follow.waitForExistence(timeout: 10), "The native reader's playback-follow control is missing")
+    shot("subtitle-reader-before-follow-hit-check")
     XCTAssertTrue(follow.isHittable)
     shot("subtitle-reader-opened-by-tap")
     let proof: [String: Any] = [
