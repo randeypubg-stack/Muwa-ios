@@ -128,7 +128,11 @@ class NavigationAndQueueTest {
                         .fetchSemanticsNodes().size == 1
                 }
                 assertBottomAnchor(scenario)
-                val shots = File(context.getExternalFilesDir(null), "screenshots").apply { mkdirs() }
+                // Connected-test cleanup uninstalls the APK, removing app-scoped
+                // external storage. Keep disposable fixture evidence in shell-owned
+                // shared storage until the workflow pulls it.
+                val shots = File("/sdcard/Download/muwa-subtitle-review")
+                device.executeShellCommand("mkdir -p ${shots.path}")
                 assertTrue(device.takeScreenshot(File(shots, "subtitle-reader-reduced-motion-portrait.png")))
                 scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
                 compose.waitUntil(timeoutMillis = 20_000) {
@@ -138,7 +142,8 @@ class NavigationAndQueueTest {
                 }
                 val list = compose.onNodeWithTag("subtitles.list").assertIsDisplayed()
                 val bounds = list.getUnclippedBoundsInRoot()
-                assertTrue("Landscape header left no readable subtitle viewport",
+                assertTrue(device.takeScreenshot(File(shots, "subtitle-reader-reduced-motion-landscape.png")))
+                assertTrue("Landscape subtitle viewport: ${bounds.bottom - bounds.top}; expected at least 40dp",
                     (bounds.bottom - bounds.top).value >= 40f)
                 list.performScrollToIndex(1)
                 compose.onNodeWithText(phrase, useUnmergedTree = true).assertIsDisplayed()

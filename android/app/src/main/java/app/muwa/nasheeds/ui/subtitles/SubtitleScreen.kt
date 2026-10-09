@@ -50,7 +50,7 @@ fun SubtitleScreen(model: MuwaModel) {
     }
     BoxWithConstraints(Modifier.fillMaxSize().testTag("subtitles.screen")) {
       val compact = maxHeight < 260.dp && maxWidth >= 440.dp
-      Column(Modifier.padding(horizontal = 16.dp, vertical = if (compact) 4.dp else 16.dp)) {
+      Column(Modifier.padding(horizontal = 16.dp, vertical = if (compact) 0.dp else 16.dp)) {
         Row {
             listOf("ar", "ru", "en").forEach { lang ->
                 TextButton(onClick = { language = lang }, modifier = if (compact) Modifier else Modifier.weight(1f),

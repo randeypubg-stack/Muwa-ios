@@ -178,12 +178,17 @@ jobs:
             adb shell wm dismiss-keyguard
             gradle -p android :app:connectedDebugAndroidTest --stacktrace
             mkdir -p "$MUWA_ANDROID_OUTPUT/subtitle-reader"
-            adb pull /sdcard/Android/data/app.muwa.nasheeds/files/screenshots/subtitle-reader-reduced-motion-portrait.png "$MUWA_ANDROID_OUTPUT/subtitle-reader/portrait.png"
-            adb pull /sdcard/Android/data/app.muwa.nasheeds/files/screenshots/subtitle-reader-reduced-motion-landscape.png "$MUWA_ANDROID_OUTPUT/subtitle-reader/landscape.png"
+            adb pull /sdcard/Download/muwa-subtitle-review/subtitle-reader-reduced-motion-portrait.png "$MUWA_ANDROID_OUTPUT/subtitle-reader/portrait.png"
+            adb pull /sdcard/Download/muwa-subtitle-review/subtitle-reader-reduced-motion-landscape.png "$MUWA_ANDROID_OUTPUT/subtitle-reader/landscape.png"
             gradle -p android --stop
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
             python3 tests/capture_android.py
             MUWA_ANDROID_LAUNCH_VIDEO=${{ inputs.record_launch_video && '1' || '0' }} python3 tests/capture_launch_android.py
+      - name: Preserve subtitle evidence even if an interaction check fails
+        if: always()
+        run: |
+          mkdir -p "$MUWA_ANDROID_OUTPUT/subtitle-reader"
+          adb pull /sdcard/Download/muwa-subtitle-review/. "$MUWA_ANDROID_OUTPUT/subtitle-reader/" || true
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
