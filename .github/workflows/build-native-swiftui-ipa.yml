@@ -86,6 +86,7 @@ jobs:
     # not its separately installed Xcode 27.1/27.2 preview toolchains.
     runs-on: xcode-27
     env:
+      MUWA_BUILD_NUMBER: "52"
       DEVELOPER_DIR: /Applications/Xcode_27.app/Contents/Developer
       MUWA_REVIEW_RUNTIME_VERSION: "27.0"
       MUWA_REQUESTED_DEVICE: iPhone 18 Pro Max
@@ -228,7 +229,7 @@ jobs:
           test "$WIDTH" = "1024"
           test "$HEIGHT" = "1024"
 
-          sed -i '' 's/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = 52;/g' "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
+          sed -i '' "s/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = ${MUWA_BUILD_NUMBER};/g" "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
           echo "SOURCE_ROOT=$ROOT" >> "$GITHUB_ENV"
 
       - name: Package full source archive
@@ -246,7 +247,7 @@ jobs:
           cat > build/full-source/README-SOURCE.txt <<EOF
           Muwa — Full Source Archive
           Version: 1.4.0
-          Build: 51
+          Build: 52
           Commit: ${GITHUB_SHA}
 
           Contents:
@@ -264,7 +265,7 @@ jobs:
 
           Notes:
           - This archive contains source code and project resources, not only the IPA.
-          - The project is the same assembled source tree used for the build-51 IPA.
+          - The project is the same assembled source tree used for the build-52 IPA.
           - Application identity is preserved; the owner chose a fresh Beget database.
           - See Repository/docs for production deployment verification and device limitations.
           - Published catalog, audio and artwork are available to guests through Beget catalog endpoints; private storage uses signed access and media are not bundled locally.
@@ -303,7 +304,7 @@ jobs:
         run: |
           set -euo pipefail
           set -o pipefail
-          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION='52'             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
+          xcodebuild             -project "$SOURCE_ROOT/MuwaNasheeds.xcodeproj"             -scheme MuwaNasheeds             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             MARKETING_VERSION='1.4.0'             CURRENT_PROJECT_VERSION="$MUWA_BUILD_NUMBER"             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             build 2>&1 | tee build/xcodebuild.log
 
       - name: Package unsigned IPA
         shell: bash
@@ -320,7 +321,7 @@ jobs:
 
           test "$BUNDLE_ID" = "app.muwa.nasheeds"
           test "$VERSION" = "1.4.0"
-          test "$BUILD_NO" = "51"
+          test "$BUILD_NO" = "$MUWA_BUILD_NUMBER"
           test -x "$APP_PATH/$EXECUTABLE"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist")" = "true"
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIColorName' "$APP_PATH/Info.plist")" = "LaunchBackground"
