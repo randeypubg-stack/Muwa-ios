@@ -137,8 +137,9 @@ class NavigationAndQueueTest {
                     rotated
                 }
                 val list = compose.onNodeWithTag("subtitles.list").assertIsDisplayed()
+                val bounds = list.getUnclippedBoundsInRoot()
                 assertTrue("Landscape header left no readable subtitle viewport",
-                    list.getUnclippedBoundsInRoot().height.value >= 40f)
+                    (bounds.bottom - bounds.top).value >= 40f)
                 list.performScrollToIndex(1)
                 compose.onNodeWithText(phrase, useUnmergedTree = true).assertIsDisplayed()
                 compose.onNodeWithTag("subtitles.follow").assertIsOff()
