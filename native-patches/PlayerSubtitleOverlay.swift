@@ -19,7 +19,7 @@ struct SubtitleReaderPresentation: Identifiable {
   let didDismiss: () -> Void
   var id: String { track.id }
 
-  var reader: some View {
+  @MainActor var reader: some View {
     AISubtitleReader(manager: manager, timeline: timeline, track: track, language: language)
       .onDisappear(perform: didDismiss)
   }
