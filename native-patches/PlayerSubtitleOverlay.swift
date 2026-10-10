@@ -306,8 +306,15 @@ private struct AISubtitleLine: View {
     }
   }
   var body: some View {
-    text
-      .textRenderer(SubtitleInkRenderer(time: time, sweeps: animationsAllowed))
+    Group {
+      if #available(iOS 18.0, *) {
+        text.textRenderer(SubtitleInkRenderer(time: time, sweeps: animationsAllowed))
+      } else {
+        // Keep the existing iOS 17 deployment contract. Attributes are drawing
+        // hints; the normally shaped, complete white text remains readable.
+        text
+      }
+    }
       // Leading follows the explicit writing direction below: right for
       // Arabic, left for Latin. Trailing would misalign short Arabic lines.
       .multilineTextAlignment(.leading)

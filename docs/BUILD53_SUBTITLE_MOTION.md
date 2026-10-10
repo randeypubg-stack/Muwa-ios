@@ -17,7 +17,9 @@ TextRenderer draws the normally shaped Arabic text, then reveals white ink
 through the current word in that run's writing direction. Completed words stay
 bright; future words stay quieter. The renderer animates existing clock samples
 for 160 ms; there is no additional timer, periodic observer or queued transition.
-Manual captions and V2 captions use the same existing line renderer. Phrase-only
+Manual captions and V2 captions use the same existing line renderer. iOS 18+
+enables timed ink; iOS 17 retains the complete shaped text and phrase motion
+without changing the deployment target. Phrase-only
 captions remain phrase-based. If word text differs from the original, the full
 original wins: punctuation or dialect spelling must never be silently lost.
 
