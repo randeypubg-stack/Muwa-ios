@@ -97,6 +97,11 @@ final class NativeInteractionTests: XCTestCase {
     let phrase = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "الأمل في كل يوم وليلة")).firstMatch
     XCTAssertTrue(phrase.waitForExistence(timeout: 10),
                   "The end of the original Arabic phrase was lost")
+    let reader = app.navigationBars["Оригинал и перевод"].firstMatch
+    XCTAssertLessThanOrEqual(phrase.frame.width, reader.frame.width + 2,
+                            "Arabic row exceeds the presented sheet width")
+    XCTAssertTrue(app.switches["Следить"].firstMatch.isHittable,
+                  "Long Arabic displaced the reader controls")
     app.buttons["Готово"].tap()
     XCTAssertTrue(rail.waitForExistence(timeout: 10))
     _ = assertNavigationAnchor(reducedMotion ? "reduced-motion-long-arabic-navigation" : "long-arabic-navigation")
@@ -366,8 +371,12 @@ final class NativeInteractionTests: XCTestCase {
     rail.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
     XCTAssertTrue(reader.waitForExistence(timeout: 10), "Tapping the actual rail did not open the native reader")
     XCTAssertTrue(follow.waitForExistence(timeout: 10), "The native reader's playback-follow control is missing")
-    shot("subtitle-reader-before-follow-hit-check")
+    shot("subtitle-reader-opened-by-tap-before-follow-hit-check")
     XCTAssertTrue(follow.isHittable)
+    XCTAssertGreaterThanOrEqual(follow.frame.minY, reader.frame.maxY - 2,
+                                "Follow control overlaps the reader toolbar")
+    XCTAssertGreaterThanOrEqual(follow.frame.minX, reader.frame.minX - 2)
+    XCTAssertLessThanOrEqual(follow.frame.maxX, reader.frame.maxX + 2)
     shot("subtitle-reader-opened-by-tap")
     let proof: [String: Any] = [
       "method": "Native AI subtitle rail coordinate tap without auto-expanded fixture",

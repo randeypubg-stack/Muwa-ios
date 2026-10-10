@@ -255,6 +255,14 @@ private struct AISubtitleReader: View {
     return doc.segments[i].id
   }
   var body: some View {
+    if #available(iOS 18.0, *) {
+      reader.presentationSizing(.page)
+    } else {
+      reader
+    }
+  }
+
+  private var reader: some View {
     NavigationStack {
       GeometryReader { viewport in
       VStack(spacing: 16) {
@@ -280,7 +288,9 @@ private struct AISubtitleReader: View {
             ScrollView {
               LazyVStack(alignment: .leading, spacing: 22) {
                 if let doc = manager.document {
-                  ForEach(doc.segments) { segment in segmentRow(segment, rtl: doc.isRTL) }
+                  ForEach(doc.segments) { segment in
+                    segmentRow(segment, rtl: doc.isRTL, width: max(0, viewport.size.width - 16))
+                  }
                 }
               }.padding(.horizontal, 8).padding(.vertical, 20)
             }
@@ -361,7 +371,7 @@ private struct AISubtitleReader: View {
     }
   }
 
-  private func segmentRow(_ segment: AISubtitleSegment, rtl: Bool) -> some View {
+  private func segmentRow(_ segment: AISubtitleSegment, rtl: Bool, width: CGFloat) -> some View {
     let isActive = activeID == segment.id
     let translation = manager.translations[language.rawValue]?.segments[segment.id]
     return Button {
@@ -371,14 +381,16 @@ private struct AISubtitleReader: View {
       VStack(alignment: .leading, spacing: 8) {
         AISubtitleLine(segment: segment, time: timeline.snapshot.time, rtl: rtl)
           .font(.system(size: 23, weight: .semibold))
-          .lineLimit(nil).fixedSize(horizontal: false, vertical: true)
+          .lineLimit(nil)
+          .frame(width: max(0, width - 32), alignment: rtl ? .trailing : .leading)
+          .fixedSize(horizontal: false, vertical: true)
         if let translation {
           Text(translation).font(.body).foregroundStyle(.white.opacity(0.65))
             .multilineTextAlignment(.leading)
         }
       }
       .padding(16)
-      .frame(maxWidth: .infinity, alignment: .leading)
+      .frame(width: width, alignment: .leading)
       .background(Color.white.opacity(isActive ? 0.065 : 0), in: RoundedRectangle(cornerRadius: 18))
       .opacity(isActive ? 1 : 0.48)
       .animation(animationsAllowed ? MuwaMotion.subtitleFocus : nil, value: isActive)
