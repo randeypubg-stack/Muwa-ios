@@ -308,8 +308,10 @@ private struct AISubtitleLine: View {
   var body: some View {
     text
       .textRenderer(SubtitleInkRenderer(time: time, sweeps: animationsAllowed))
-      .multilineTextAlignment(rtl ? .trailing : .leading)
-      .frame(maxWidth: .infinity, alignment: rtl ? .trailing : .leading)
+      // Leading follows the explicit writing direction below: right for
+      // Arabic, left for Latin. Trailing would misalign short Arabic lines.
+      .multilineTextAlignment(.leading)
+      .frame(maxWidth: .infinity, alignment: .leading)
       .environment(\.layoutDirection, rtl ? .rightToLeft : .leftToRight)
       // Smooth ink between real clock samples. Seeking retargets the same
       // renderer; no animation queue or new playback observer is created.
