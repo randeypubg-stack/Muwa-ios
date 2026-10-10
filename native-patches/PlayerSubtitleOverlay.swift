@@ -271,13 +271,7 @@ private struct AISubtitleReader: View {
     guard let doc = manager.document, let i = doc.activeIndex(at: timeline.snapshot.time) else { return nil }
     return doc.segments[i].id
   }
-  var body: some View {
-    if #available(iOS 18.0, *) {
-      reader.presentationSizing(.page)
-    } else {
-      reader
-    }
-  }
+  var body: some View { reader }
 
   private var reader: some View {
     NavigationStack {
@@ -338,6 +332,11 @@ private struct AISubtitleReader: View {
         ToolbarItem(placement: .topBarTrailing) { Button("Готово") { dismiss() } }
       }
       .task(id: (manager.document?.id ?? "") + "|" + language.rawValue) { await manager.translate(language) }
+      .onChange(of: player.currentTrack?.id) { _, currentID in
+        // The stable presenter outlives a rail. Close its fixed-track reader
+        // when playback changes so a new audio clock cannot highlight old text.
+        if currentID != track.id { dismiss() }
+      }
       .onChange(of: manager.availableLanguages) { _, available in
         if !available.contains(language) { language = .original }
       }

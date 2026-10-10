@@ -223,7 +223,7 @@ struct MorphingPlayerView: View {
     .sheet(isPresented: $queuePresented) {
       QueueView()
     }
-    .sheet(item: $subtitleReader) { presentation in
+    .fullScreenCover(item: $subtitleReader) { presentation in
       presentation.reader
     }
     .sheet(isPresented: $playlistCreatePresented) {

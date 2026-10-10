@@ -18,8 +18,9 @@ Compose reader, without a new playback clock, recognition provider or UI library
 - The full reader softly changes text opacity and its existing focus surface.
   The stable player shell presents that same reader and retains its manager and
   language binding; the shifted artwork rail no longer owns a modal presenter.
-  On iOS 18 and later it requests the standard page presentation instead of an
-  intrinsic fitted sheet. Its scroll view uses the presented page proposal for Arabic wrapping.
+  The full text uses a native full-screen cover, so its layout proposal matches
+  the visible window on iPad as well as iPhone. The fixed-track reader closes
+  when playback changes to another track, preserving the caption/clock pairing. Its scroll view uses the presented page proposal for Arabic wrapping.
   Header controls and the verification footer reserve space with safe-area
   insets, so lyric content cannot displace them or the navigation toolbar.
   Playback following uses a 0.36 s zero-bounce settle. Manual dragging suspends
