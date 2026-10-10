@@ -31,6 +31,10 @@ on:
         description: Build and verify navigation on all four native device profiles
         type: boolean
         default: false
+      subtitle_reader_only:
+        description: Verify reader, player actions, navigation and rotation on all four native profiles
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -613,7 +617,13 @@ jobs:
           python3 tests/select_apple_review_devices.py --kind "${{ matrix.device }}" --open-gui --boot --output build/interaction-devices.json
           DEVICE_ID="$(python3 -c 'import json; report=json.load(open("build/interaction-devices.json")); assert report["simulatorBoot"]["completed"]; print(report["selected"][0]["udid"])')"
           set -o pipefail
-          xcodebuild -project build/interaction-source/native/MuwaNasheedsNative/MuwaNasheeds.xcodeproj -scheme MuwaInteractions -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE_ID" -derivedDataPath build/InteractionDerivedData -resultBundlePath build/interactions.xcresult -collect-test-diagnostics never CODE_SIGNING_ALLOWED=NO test 2>&1 | tee build/interactions.log
+          READER_TESTS=()
+          if [ "${{ github.event.inputs.subtitle_reader_only }}" = "true" ]; then
+            for CASE in testNavigationKeepsItsAnchorAcrossScreensAndSubtitles testLongArabicCaptionWrapsAndScrollsWithoutChangingTheTrack testReducedMotionKeepsArabicScrollableAndReaderTappable testUnpublishedCaptionsShowAnHonestStateAndKeepArtworkClear testPlayerButtonsAndBothSubtitleEntrypointsShareState testShiftedSubtitleRailOpensAndClosesNativeReader testHomeAndPlayerFollowActualDeviceRotation; do
+              READER_TESTS+=("-only-testing:MuwaInteractionTests/NativeInteractionTests/$CASE")
+            done
+          fi
+          xcodebuild -project build/interaction-source/native/MuwaNasheedsNative/MuwaNasheeds.xcodeproj -scheme MuwaInteractions -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE_ID" -derivedDataPath build/InteractionDerivedData -resultBundlePath build/interactions.xcresult -collect-test-diagnostics never "${READER_TESTS[@]}" CODE_SIGNING_ALLOWED=NO test 2>&1 | tee build/interactions.log
       - name: Export actual interaction screenshots
         if: always()
         run: |

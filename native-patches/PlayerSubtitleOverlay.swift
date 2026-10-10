@@ -9,6 +9,22 @@ struct PlayerSubtitleRailAvailabilityKey: PreferenceKey {
   }
 }
 
+// Present from the stable player shell, outside the artwork's frame/offsets.
+// Retain the existing manager and language binding; the reader owns no copy.
+struct SubtitleReaderPresentation: Identifiable {
+  let manager: AISubtitleManager
+  let timeline: PlaybackTimeline
+  let track: Track
+  let language: Binding<AITranslationLanguage>
+  let didDismiss: () -> Void
+  var id: String { track.id }
+
+  var reader: some View {
+    AISubtitleReader(manager: manager, timeline: timeline, track: track, language: language)
+      .onDisappear(perform: didDismiss)
+  }
+}
+
 struct PlayerSubtitleOverlay: View {
   @EnvironmentObject private var subtitles: SubtitleManager
   let track: Track
@@ -42,15 +58,15 @@ struct AISubtitleExperience: View {
   @Binding var isVisible: Bool
   var compactWidth: CGFloat = 112
   var compactHeight: CGFloat = 150
+  let presentReader: (SubtitleReaderPresentation) -> Void
   @State private var language: AITranslationLanguage = .original
-  @State private var expanded = false
 
   private var hasContent: Bool {
     !(manager.document?.segments.isEmpty ?? true) || !legacySubtitles.segments(for: track).isEmpty
   }
 
   var body: some View {
-    Button { expanded = true } label: {
+    Button { openReader() } label: {
       Group {
         if let document = manager.document,
            let activeIndex = document.activeIndex(at: timeline.snapshot.time) {
@@ -99,21 +115,22 @@ struct AISubtitleExperience: View {
     .task(id: "\(track.id)|\(track.audioURL)|\(track.captionsRevision ?? 0)") {
       await manager.load(track)
       manager.usePublishedFallback(track, captions: legacySubtitles.segments(for: track))
-      if isVisible && !hasContent { expanded = true }
+      if isVisible && !hasContent { openReader() }
     }
     .onChange(of: legacySubtitles.segments(for: track)) { _, captions in
       manager.usePublishedFallback(track, captions: captions)
     }
     .onChange(of: isVisible) { _, visible in
-      if visible && !hasContent && !manager.isRecognizing { expanded = true }
-    }
-    .sheet(isPresented: $expanded, onDismiss: {
-      if !hasContent { isVisible = false }
-    }) {
-      AISubtitleReader(manager: manager, timeline: timeline, track: track, language: $language)
+      if visible && !hasContent && !manager.isRecognizing { openReader() }
     }
   }
 
+  private func openReader() {
+    presentReader(SubtitleReaderPresentation(
+      manager: manager, timeline: timeline, track: track, language: $language,
+      didDismiss: { if !hasContent { isVisible = false } }
+    ))
+  }
 }
 
 private struct LegacySubtitleRail: View {

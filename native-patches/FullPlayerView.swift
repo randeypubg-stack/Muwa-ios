@@ -24,6 +24,7 @@ struct MorphingPlayerView: View {
   @State private var queuePresented = false
   @State private var playlistCreatePresented = false
   @State private var subtitlesVisible = false
+  @State private var subtitleReader: SubtitleReaderPresentation?
   @State private var subtitleContentTrackIDs: Set<String> = []
   @State private var downloadError: String?
   @State private var dragStartExpansion: CGFloat?
@@ -221,6 +222,9 @@ struct MorphingPlayerView: View {
     }
     .sheet(isPresented: $queuePresented) {
       QueueView()
+    }
+    .sheet(item: $subtitleReader) { presentation in
+      presentation.reader
     }
     .sheet(isPresented: $playlistCreatePresented) {
       PlaylistCreateSheet { name in
@@ -565,7 +569,8 @@ struct MorphingPlayerView: View {
       if showSubtitle, subtitlesVisible, progress > 0.74 {
         AISubtitleExperience(
           timeline: player.timeline, track: pageTrack, isVisible: $subtitlesVisible,
-          compactWidth: subtitleLayout.railWidth, compactHeight: railHeight
+          compactWidth: subtitleLayout.railWidth, compactHeight: railHeight,
+          presentReader: { subtitleReader = $0 }
         )
         .id("\(pageTrack.id)-r\(pageTrack.captionsRevision ?? 0)")
         .frame(width: subtitleLayout.railWidth, height: railHeight)

@@ -120,7 +120,7 @@ player=root/'Sources/Views/Player/FullPlayerView.swift'
 s=player.read_text().replace('    .onChange(of: expansion)', '    .task { if ProcessInfo.processInfo.arguments.contains("--audit-ai") { subtitlesVisible = true } }\n    .onChange(of: expansion)',1)
 player.write_text(s)
 overlay=root/'Sources/Views/Player/PlayerSubtitleOverlay.swift'
-s=overlay.read_text().replace('      await manager.load(track)', '      await manager.load(track); if ProcessInfo.processInfo.arguments.contains("--audit-ai") { language = .ru }; if ProcessInfo.processInfo.arguments.contains("--audit-ai-expanded") { expanded = true }')
+s=overlay.read_text().replace('      await manager.load(track)', '      await manager.load(track); if ProcessInfo.processInfo.arguments.contains("--audit-ai") { language = .ru }; if ProcessInfo.processInfo.arguments.contains("--audit-ai-expanded") { openReader() }')
 overlay.write_text(s)
 rootview=root/'Sources/App/RootView.swift'
 s=rootview.read_text().replace('        playerExpansion = 1', '        playerExpansion = 1\n        if args.contains("--audit-ai") { player.currentTime = 3 }')

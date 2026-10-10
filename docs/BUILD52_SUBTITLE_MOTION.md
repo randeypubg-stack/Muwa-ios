@@ -16,6 +16,8 @@ Compose reader, without a new playback clock, recognition provider or UI library
   Entering context fades over 8 pt; leaving context only fades. At most three
   phrases are mounted, with no looping effect or separate timer.
 - The full reader softly changes text opacity and its existing focus surface.
+  The stable player shell presents that same reader and retains its manager and
+  language binding; the shifted artwork rail no longer owns a modal presenter.
   On iOS 18 and later it requests the standard page presentation instead of an
   intrinsic fitted sheet. Its Arabic rows have an explicit width derived from
   the presented viewport; controls and text must remain inside that page.
