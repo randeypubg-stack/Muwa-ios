@@ -1,6 +1,7 @@
 package app.muwa.nasheeds.ui.subtitles
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,6 +15,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.selected
@@ -92,17 +96,26 @@ fun SubtitleScreen(model: MuwaModel) {
                 val item = model.subtitles[index]
                 val focused = index == active
                 val textColor by animateColorAsState(
-                    if (focused) Color.White else Color.White.copy(alpha = 0.48f),
+                    if (focused) Color.White else Color.White.copy(alpha = 0.42f),
                     if (motionAllowed) MuwaMotion.subtitleFocus() else snap(), label = "subtitle.text",
                 )
                 val surface by animateColorAsState(
-                    Color.White.copy(alpha = if (focused) 0.065f else 0f),
+                    Color.White.copy(alpha = if (focused) 0.055f else 0f),
                     if (motionAllowed) MuwaMotion.subtitleFocus() else snap(), label = "subtitle.focus",
+                )
+                val focusScale by animateFloatAsState(
+                    if (focused || !motionAllowed) 1f else 0.97f,
+                    if (motionAllowed) MuwaMotion.subtitleFocus() else snap(), label = "subtitle.depth",
                 )
                 Column(
                     Modifier.fillMaxWidth().testTag("subtitle.line.$index")
                         .semantics { selected = focused }
-                        .clip(RoundedCornerShape(18.dp)).background(surface)
+                        .graphicsLayer {
+                            scaleX = focusScale; scaleY = focusScale
+                            transformOrigin = TransformOrigin(1f, 0.5f)
+                        }
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Brush.horizontalGradient(listOf(Color.Transparent, surface)))
                         .clickable {
                             follow = false
                             model.seek((item.optDouble("start") * 1000).toLong())

@@ -163,11 +163,11 @@ s=s.replace(needle, needle+'''
     if ProcessInfo.processInfo.arguments.contains("--audit-subtitle-motion") {
       revisions[track.id] = track.captionsRevision ?? 0
       segmentsByTrack[track.id] = [
-        SubtitleSegment(start: 0, end: 5, ar: "السلام عليكم", ru: "Мир вам", en: "Peace be upon you", words: nil),
-        SubtitleSegment(start: 5, end: 10, ar: "ورحمة الله", ru: "И милость Аллаха", en: "And Allah's mercy", words: nil),
-        SubtitleSegment(start: 10, end: 15, ar: "نور في القلب", ru: "Свет в сердце", en: "Light in the heart", words: nil),
-        SubtitleSegment(start: 15, end: 20, ar: "سيروا في سلام", ru: "Идите с миром", en: "Walk in peace", words: nil),
-        SubtitleSegment(start: 20, end: 25, ar: "رحمة وسكينة", ru: "Милость и покой", en: "Mercy and calm", words: nil)
+        SubtitleSegment(start: 0, end: 5, ar: "السلام عليكم", ru: "Мир вам", en: "Peace be upon you", words: [SubtitleWord(text: "السلام", start: 0, end: 2.5), SubtitleWord(text: "عليكم", start: 2.5, end: 5)]),
+        SubtitleSegment(start: 5, end: 10, ar: "ورحمة الله", ru: "И милость Аллаха", en: "And Allah's mercy", words: [SubtitleWord(text: "ورحمة", start: 5, end: 7.5), SubtitleWord(text: "الله", start: 7.5, end: 10)]),
+        SubtitleSegment(start: 10, end: 15, ar: "نور في القلب", ru: "Свет в сердце", en: "Light in the heart", words: [SubtitleWord(text: "نور", start: 10, end: 11.5), SubtitleWord(text: "في", start: 11.5, end: 13), SubtitleWord(text: "القلب", start: 13, end: 15)]),
+        SubtitleSegment(start: 15, end: 20, ar: "سيروا في سلام", ru: "Идите с миром", en: "Walk in peace", words: [SubtitleWord(text: "سيروا", start: 15, end: 17), SubtitleWord(text: "في", start: 17, end: 18), SubtitleWord(text: "سلام", start: 18, end: 20)]),
+        SubtitleSegment(start: 20, end: 25, ar: "رحمة وسكينة", ru: "Милость и покой", en: "Mercy and calm", words: [SubtitleWord(text: "رحمة", start: 20, end: 22.5), SubtitleWord(text: "وسكينة", start: 22.5, end: 25)])
       ]
       stateByTrack[track.id] = .ready
       return
@@ -193,7 +193,7 @@ s=p.read_text()
 # decision input only in this disposable copy; the Release views still read
 # the real system preference. Exercise both existing rail and reader branches.
 needle='  @Environment(\\.accessibilityReduceMotion) private var reduceMotion'
-assert s.count(needle) == 2, 'Reduced motion must reach the rail and full reader'
+assert s.count(needle) == 3, 'Reduced motion must reach the rail, word ink and full reader'
 s=s.replace(needle, '''  @Environment(\\.accessibilityReduceMotion) private var systemReduceMotion
   private var reduceMotion: Bool {
     systemReduceMotion || ProcessInfo.processInfo.arguments.contains("--audit-reduce-motion")
@@ -237,6 +237,12 @@ s=s.replace(needle, needle+'''
                                  track: reviewPlayer.currentTrack)
     }
 ''',1)
+needle='        let width = bounds.width * progress'
+assert s.count(needle) == 1, 'Ink review must observe the existing native renderer'
+s=s.replace(needle, needle+'''
+        ReviewSubtitleMotion.recordInk(start: ink.start, end: ink.end, time: time, progress: progress,
+                                       bounds: bounds, rtl: rtl)
+''',1)
 p.write_text(s)
 
 p=root/'Sources/Services/PlayerManager.swift'
@@ -276,6 +282,17 @@ enum ReviewSubtitleMotion {
     let url = directory.appendingPathComponent(name)
     let previous = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     try? (previous + line + "\\n").write(to: url, atomically: true, encoding: .utf8)
+  }
+
+  private static var lastInkKey = ""
+  static func recordInk(start: Double, end: Double, time: Double, progress: Double,
+                        bounds: CGRect, rtl: Bool) {
+    guard ProcessInfo.processInfo.arguments.contains("--audit-subtitle-motion") else { return }
+    let key = "\\(start)|\\(Int(progress * 8))"
+    guard key != lastInkKey else { return }
+    lastInkKey = key
+    append("subtitle-motion-ink.jsonl", ["pid": pid, "wordStart": start, "wordEnd": end, "time": time,
+      "progress": progress, "rtl": rtl, "x": bounds.minX, "width": bounds.width])
   }
 
   static func recordFrame(_ frame: CGRect) {

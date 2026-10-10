@@ -40,7 +40,7 @@ struct PlayerSubtitleOverlay: View {
       Color.clear
       if let activeIndex, segments.indices.contains(activeIndex) {
         LegacySubtitleRail(
-          segments: segments, activeIndex: activeIndex, language: language, height: height
+          segments: segments, activeIndex: activeIndex, currentTime: currentTime, language: language, height: height
         )
       }
     }
@@ -75,7 +75,7 @@ struct AISubtitleExperience: View {
             VStack(alignment: document.isRTL ? .trailing : .leading, spacing: 5) {
                 AISubtitleLine(segment: segment,
                   time: active ? timeline.snapshot.time : segment.start - 1, rtl: document.isRTL)
-                  .font(.system(size: 18, weight: .semibold))
+                  .font(.system(size: 21, weight: .semibold))
                   .lineLimit(nil)
                   .fixedSize(horizontal: false, vertical: true)
                 if let translated = manager.translations[language.rawValue]?.segments[segment.id] {
@@ -136,6 +136,7 @@ struct AISubtitleExperience: View {
 private struct LegacySubtitleRail: View {
   let segments: [SubtitleSegment]
   let activeIndex: Int
+  let currentTime: TimeInterval
   let language: SubtitleLanguage
   let height: CGFloat
 
@@ -143,13 +144,13 @@ private struct LegacySubtitleRail: View {
     SubtitleRail(count: segments.count, activeIndex: activeIndex, height: height) { index, active in
       let segment = segments[index]
       VStack(alignment: .trailing, spacing: 5) {
-        Text(segment.ar)
-          .font(.system(size: 18, weight: .semibold))
-          .foregroundStyle(.white)
+        AISubtitleLine(segment: AISubtitleSegment(id: segment.id,
+          start: segment.start, end: segment.end, original: segment.ar,
+          words: segment.words ?? [], timing: segment.words?.isEmpty == false ? "word" : "phrase"),
+          time: active ? currentTime : segment.start - 1, rtl: true)
+          .font(.system(size: 21, weight: .semibold))
           .lineLimit(nil)
           .fixedSize(horizontal: false, vertical: true)
-          .multilineTextAlignment(.trailing)
-          .environment(\.layoutDirection, .rightToLeft)
         if language != .arabic {
           Text(segment.text(for: language))
             .font(.system(size: 10, weight: .medium))
@@ -166,8 +167,8 @@ private struct LegacySubtitleRail: View {
   }
 }
 
-// Both existing subtitle sources use the same transparent, vertically moving
-// rail. No material/card is painted over the artwork or player background.
+// A continuous lyric ribbon: stable rows travel through a soft-edged viewport.
+// Only the current row scrolls/hits; typography never reflows on focus changes.
 private struct SubtitleRail<Line: View>: View {
   let count: Int
   let activeIndex: Int
@@ -198,38 +199,85 @@ private struct SubtitleRail<Line: View>: View {
     ZStack {
       ForEach(window, id: \.self) { index in
         let delta = index - activeIndex
-        // Keep the same text/scroll identity and typography while its role
-        // changes. Only drawing transforms animate; Arabic wrapping is stable.
         ScrollView(.vertical) {
           line(index, delta == 0)
             .accessibilityIdentifier(delta == 0 ? "subtitle-current-text" : "subtitle-context-text-\(index)")
-            .frame(minHeight: height * 0.64 - 8, alignment: .center)
-            .padding(.vertical, 4)
+            .frame(minHeight: height * 0.68 - 12, alignment: .center)
+            .padding(.vertical, 6)
         }
-          .scrollIndicators(.hidden)
-          .scrollDisabled(delta != 0)
-          .frame(height: height * 0.64)
-          .mask {
-            Rectangle().scaleEffect(x: 1, y: delta == 0 ? 1 : 0.15 / 0.64)
-          }
-          .scaleEffect(delta == 0 || !animationsAllowed ? 1 : 0.96)
-          .opacity(delta == 0 ? 1 : 0.32)
-          .blur(radius: delta == 0 || !animationsAllowed ? 0 : 1.2)
-          .offset(y: CGFloat(delta) * height * 0.43)
-          .transition(!animationsAllowed ? .identity : .asymmetric(
-            insertion: .opacity.combined(with: .offset(y: 8)),
-            removal: .opacity
-          ))
-          .allowsHitTesting(delta == 0)
-          .accessibilityHidden(delta != 0)
-          .accessibilityIdentifier(delta == 0 ? "subtitle-current-scroll" : "subtitle-context-scroll-\(index)")
+        .scrollIndicators(.hidden)
+        .scrollDisabled(delta != 0)
+        .frame(height: height * 0.68)
+        .mask {
+          // Context can be long; its drawing mask must never shrink the
+          // current row's real scroll viewport or steal its gestures.
+          Rectangle().scaleEffect(x: 1, y: delta == 0 ? 1 : 0.19 / 0.68)
+        }
+        .scaleEffect(delta == 0 || !animationsAllowed ? 1 : 0.86, anchor: .trailing)
+        .opacity(delta == 0 ? 1 : delta < 0 ? 0.22 : 0.38)
+        .offset(x: delta == 0 || !animationsAllowed ? 0 : 3,
+                y: CGFloat(delta) * height * 0.42)
+        .transition(!animationsAllowed ? .identity : .asymmetric(
+          insertion: .opacity.combined(with: .offset(y: height * 0.12)),
+          removal: .opacity
+        ))
+        .allowsHitTesting(delta == 0)
+        .accessibilityHidden(delta != 0)
+        .accessibilityIdentifier(delta == 0 ? "subtitle-current-scroll" : "subtitle-context-scroll-\(index)")
       }
     }
     .frame(maxWidth: .infinity)
     .frame(height: height)
-    .clipped()
+    .mask {
+      // Feather the ribbon's ends, rather than permanently blurring words.
+      LinearGradient(stops: [.init(color: .clear, location: 0),
+        .init(color: .white, location: 0.12), .init(color: .white, location: 0.88),
+        .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom)
+    }
     .animation(animationsAllowed ? MuwaMotion.subtitleFocus : nil, value: activeIndex)
     .transaction { if !animationsAllowed { $0.animation = nil } }
+  }
+}
+
+// Attribute whole words, never individual Arabic characters. SwiftUI performs
+// the normal shaping/wrapping first; the renderer only changes the drawn ink.
+private struct SubtitleWordInk: TextAttribute {
+  let start: Double
+  let end: Double
+}
+
+private struct SubtitleInkRenderer: TextRenderer {
+  var time: Double
+  let sweeps: Bool
+  var animatableData: Double {
+    get { time }
+    set { time = newValue }
+  }
+  var displayPadding: EdgeInsets { EdgeInsets(top: 5, leading: 5, bottom: 5, trailing: 5) }
+
+  func draw(layout: Text.Layout, in context: inout GraphicsContext) {
+    for line in layout {
+      for run in line {
+        guard let ink = run[SubtitleWordInk.self] else { context.draw(run); continue }
+        let active = time >= ink.start && time < ink.end
+        var base = context
+        base.opacity *= time >= ink.end ? 0.96 : active && !sweeps ? 1 : 0.32
+        base.draw(run)
+        guard active && sweeps, ink.end > ink.start else { continue }
+        let progress = min(1, max(0, (time - ink.start) / (ink.end - ink.start)))
+        let bounds = run.typographicBounds.rect
+        // The reveal follows the shaped run's own direction, including mixed
+        // Arabic/Latin lines, without mirroring text or guessing word timings.
+        let rtl = run.layoutDirection == .rightToLeft
+        let width = bounds.width * progress
+        let reveal = CGRect(x: rtl ? bounds.maxX - width : bounds.minX,
+                            y: bounds.minY - 5, width: width, height: bounds.height + 10)
+        var light = context
+        light.clip(to: Path(reveal))
+        light.addFilter(.shadow(color: .white.opacity(0.35), radius: 3))
+        light.draw(run)
+      }
+    }
   }
 }
 
@@ -237,19 +285,35 @@ private struct AISubtitleLine: View {
   let segment: AISubtitleSegment
   let time: Double
   let rtl: Bool
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.scenePhase) private var scenePhase
+  private var animationsAllowed: Bool {
+    !reduceMotion && scenePhase == .active && !ProcessInfo.processInfo.isLowPowerModeEnabled
+  }
   private var text: Text {
-    guard !segment.words.isEmpty else { return Text(segment.original).foregroundColor(.white) }
+    let words = segment.words.map(\.text).joined(separator: " ")
+    let original = segment.original.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+    guard !segment.words.isEmpty, words == original else {
+      return Text(segment.original).foregroundColor(.white)
+    }
     return segment.words.enumerated().reduce(Text("")) { result, item in
       let word = item.element
-      let active = time >= word.start && time < word.end
-      return result + Text((item.offset == 0 ? "" : " ") + word.text)
-        .foregroundColor(active ? Color(red: 0.73, green: 0.83, blue: 1) : .white.opacity(time >= word.end ? 0.7 : 0.95))
+      // Leave separators outside the ink attribute so the word's reveal starts
+      // at its glyphs. No per-character layout, synthetic timing or extra clock.
+      return result + Text(item.offset == 0 ? "" : " ").foregroundColor(.white.opacity(0.32))
+        + Text(word.text).foregroundColor(.white)
+          .customAttribute(SubtitleWordInk(start: word.start, end: word.end))
     }
   }
   var body: some View {
-    text.multilineTextAlignment(rtl ? .trailing : .leading)
+    text
+      .textRenderer(SubtitleInkRenderer(time: time, sweeps: animationsAllowed))
+      .multilineTextAlignment(rtl ? .trailing : .leading)
       .frame(maxWidth: .infinity, alignment: rtl ? .trailing : .leading)
       .environment(\.layoutDirection, rtl ? .rightToLeft : .leftToRight)
+      // Smooth ink between real clock samples. Seeking retargets the same
+      // renderer; no animation queue or new playback observer is created.
+      .animation(animationsAllowed ? MuwaMotion.subtitleInk : nil, value: time)
       .accessibilityLabel(segment.original)
   }
 }
@@ -279,7 +343,7 @@ private struct AISubtitleReader: View {
         if manager.document != nil {
           ScrollViewReader { proxy in
             ScrollView {
-              LazyVStack(alignment: .leading, spacing: 22) {
+              LazyVStack(alignment: .leading, spacing: 26) {
                 if let doc = manager.document {
                   ForEach(doc.segments) { segment in
                     segmentRow(segment, rtl: doc.isRTL)
@@ -419,8 +483,14 @@ private struct AISubtitleReader: View {
       }
       .padding(16)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .background(Color.white.opacity(isActive ? 0.065 : 0), in: RoundedRectangle(cornerRadius: 18))
-      .opacity(isActive ? 1 : 0.48)
+      .background {
+        // The focus is a soft pool of light, not a rectangular selection card.
+        RoundedRectangle(cornerRadius: 22)
+          .fill(RadialGradient(colors: [.white.opacity(isActive ? 0.055 : 0), .clear],
+                               center: .trailing, startRadius: 0, endRadius: 280))
+      }
+      .scaleEffect(isActive || !animationsAllowed ? 1 : 0.97, anchor: rtl ? .trailing : .leading)
+      .opacity(isActive ? 1 : 0.42)
       .animation(animationsAllowed ? MuwaMotion.subtitleFocus : nil, value: isActive)
     }
     .buttonStyle(.plain).id(segment.id)

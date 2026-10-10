@@ -4,9 +4,10 @@ enum MuwaMotion {
   static let ambientDuration: TimeInterval = 24
   static let press = Animation.spring(response: 0.24, dampingFraction: 0.78)
   static let reorder = Animation.spring(response: 0.36, dampingFraction: 0.88)
-  // Frequent reading transitions: a short, interruptible settle, no bounce.
-  static let subtitleFocus = Animation.spring(duration: 0.32, bounce: 0)
-  static let subtitleFollow = Animation.spring(duration: 0.36, bounce: 0)
+  // Lyric movement is a continuous, interruptible settle; ink catches up faster.
+  static let subtitleFocus = Animation.spring(duration: 0.48, bounce: 0)
+  static let subtitleInk = Animation.linear(duration: 0.16)
+  static let subtitleFollow = Animation.spring(duration: 0.52, bounce: 0)
 }
 
 struct MuwaPressStyle: ButtonStyle {

@@ -101,6 +101,29 @@ def verify_runtime_proof(ready, rail, clock, finished, frame, pid, reduced_motio
             "finalTime": finished["time"], "reduceMotion": reduced_motion}
 
 
+def verify_ink_proof(ink, pid):
+    """Require the actual shaped Arabic runs and time-driven drawing sweep."""
+    if not ink:
+        raise AssertionError("The actual native word renderer never drew timed words")
+    for item in ink:
+        if item.get("pid") != pid or item.get("rtl") is not True:
+            raise AssertionError("Word ink belongs to a stale process or wrong writing direction")
+        keys = ("wordStart", "wordEnd", "time", "progress", "x", "width")
+        if any(not isinstance(item.get(k), (float, int)) or not math.isfinite(item[k]) for k in keys):
+            raise AssertionError("Ink proof has invalid native glyph/timing values")
+        if item["width"] <= 0 or not item["wordStart"] <= item["time"] < item["wordEnd"]:
+            raise AssertionError("Native ink drew outside its real word time/bounds")
+        expected = (item["time"] - item["wordStart"]) / (item["wordEnd"] - item["wordStart"])
+        if abs(expected - item["progress"]) > 0.0001:
+            raise AssertionError("Native word highlight invented its progress")
+    if len({int(i["wordStart"] / 5) for i in ink}) != 5:
+        raise AssertionError("Native word renderer skipped a caption")
+    if len({round(i["progress"], 1) for i in ink}) < 4:
+        raise AssertionError("Word ink never advanced through its glyphs")
+    return {"actualNativeSamples": len(ink), "captionCount": 5, "direction": "RTL",
+            "timingSource": "Disposable timed manual-caption fixture; no ASR claim"}
+
+
 def self_test():
     pid = 101
     ready = {"pid": pid, "count": 5, "duration": 25,
@@ -118,6 +141,16 @@ def self_test():
     verify_runtime_proof(ready, rail, clock, finished, frame, pid)
     reduced_rail = [{**item, "reduceMotion": True} for item in rail]
     verify_runtime_proof(ready, reduced_rail, clock, finished, frame, pid, reduced_motion=True)
+    ink = [{"pid": pid, "rtl": True, "wordStart": i * 5, "wordEnd": i * 5 + 2,
+            "time": i * 5 + p * 2, "progress": p, "x": 10, "width": 50}
+           for i in range(5) for p in [0.1, 0.3, 0.6, 0.9]]
+    verify_ink_proof(ink, pid)
+    for key, bad in [("pid", 9), ("rtl", False), ("width", 0),
+                     ("time", 100), ("progress", 0.99), ("x", float("nan"))]:
+        changed = copy.deepcopy(ink); changed[0][key] = bad
+        try: verify_ink_proof(changed, pid)
+        except AssertionError: pass
+        else: raise AssertionError(f"Invalid native ink proof accepted: {key}")
     cases = []
     def case(label, mutate):
         values = copy.deepcopy([ready, rail, clock, finished, frame])
@@ -160,7 +193,7 @@ def self_test():
             reuse_cases.append(key)
         else:
             raise AssertionError(f"Invalid same-job review was accepted: {key}")
-    print(json.dumps({"selfTestsPassed": 3 + len(cases) + len(reuse_cases),
+    print(json.dumps({"selfTestsPassed": 10 + len(cases) + len(reuse_cases),
                       "rejectedInvalidProofs": cases, "rejectedMismatchedReviewFields": reuse_cases}, indent=2))
 
 
@@ -357,6 +390,11 @@ def main():
         frame = wait_json("subtitle-motion-frame.json", pid)
         status["runtimeProof"] = verify_runtime_proof(ready, rail, clock, finished, frame, pid,
                                                     reduced_motion=args.reduce_motion)
+        if not args.reduce_motion:
+            ink = [json.loads(line) for line in (data / "Documents/subtitle-motion-ink.jsonl").read_text().splitlines()]
+            status["inkRuntimeProof"] = verify_ink_proof(ink, pid)
+        else:
+            status["inkRuntimeProof"] = {"sweepDisabled": True, "reason": "Reduce Motion decision input"}
         dimensions = {(item["width"], item["height"]) for item in status["screenshots"]}
         if len(dimensions) != 1 or len({item["sha256"] for item in status["screenshots"]}) < 3:
             raise AssertionError("Native caption checkpoint framebuffers are inconsistent or unchanged")
