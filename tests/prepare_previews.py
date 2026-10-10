@@ -198,6 +198,18 @@ s=s.replace(needle, '''  @Environment(\\.accessibilityReduceMotion) private var 
   private var reduceMotion: Bool {
     systemReduceMotion || ProcessInfo.processInfo.arguments.contains("--audit-reduce-motion")
   }''')
+# A disposable transport control delivers the real playback-change event while
+# the modal owns accessibility focus. Production source has no review button.
+needle='        ToolbarItem(placement: .topBarTrailing) { Button("Готово") { dismiss() } }'
+assert s.count(needle) == 1, 'Review transport must target the existing reader toolbar'
+s=s.replace(needle, needle+'''
+        if ProcessInfo.processInfo.arguments.contains("--audit-reader-next") {
+          ToolbarItem(placement: .topBarLeading) {
+            Button("Next fixture") { player.play(Track.reviewCatalog[1], autoplay: false) }
+              .accessibilityIdentifier("review-reader-next")
+          }
+        }
+''',1)
 needle='private struct SubtitleRail<Line: View>: View {'
 assert s.count(needle) == 1, 'Motion review must observe the shared production rail'
 s=s.replace(needle, needle+'\n  @EnvironmentObject private var reviewPlayer: PlayerManager\n  @EnvironmentObject private var reviewSubtitles: SubtitleManager',1)

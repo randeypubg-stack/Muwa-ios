@@ -619,7 +619,7 @@ jobs:
           set -o pipefail
           READER_TESTS=()
           if [ "${{ github.event.inputs.subtitle_reader_only }}" = "true" ]; then
-            for CASE in testNavigationKeepsItsAnchorAcrossScreensAndSubtitles testLongArabicCaptionWrapsAndScrollsWithoutChangingTheTrack testReducedMotionKeepsArabicScrollableAndReaderTappable testUnpublishedCaptionsShowAnHonestStateAndKeepArtworkClear testPlayerButtonsAndBothSubtitleEntrypointsShareState testShiftedSubtitleRailOpensAndClosesNativeReader testHomeAndPlayerFollowActualDeviceRotation; do
+            for CASE in testNavigationKeepsItsAnchorAcrossScreensAndSubtitles testLongArabicCaptionWrapsAndScrollsWithoutChangingTheTrack testReducedMotionKeepsArabicScrollableAndReaderTappable testUnpublishedCaptionsShowAnHonestStateAndKeepArtworkClear testPlayerButtonsAndBothSubtitleEntrypointsShareState testShiftedSubtitleRailOpensAndClosesNativeReader testReaderClosesWhenPlaybackChangesToAnotherTrack testHomeAndPlayerFollowActualDeviceRotation; do
               READER_TESTS+=("-only-testing:MuwaInteractionTests/NativeInteractionTests/$CASE")
             done
           fi

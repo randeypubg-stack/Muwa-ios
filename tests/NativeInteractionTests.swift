@@ -408,6 +408,28 @@ final class NativeInteractionTests: XCTestCase {
     shot("subtitle-rail-after-reader-dismiss")
   }
 
+  func testReaderClosesWhenPlaybackChangesToAnotherTrack() throws {
+    app.launchArguments = ["--audit-player", "--audit-ai", "--audit-reader-next"]
+    app.launch()
+    let rail = app.buttons["Субтитры. Открыть полный текст"].firstMatch
+    XCTAssertTrue(rail.waitForExistence(timeout: 30))
+    let ready = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "value == %@", "Оригинальный текст доступен"), object: rail)
+    XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
+    rail.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+    let reader = app.navigationBars["Оригинал и перевод"].firstMatch
+    XCTAssertTrue(reader.waitForExistence(timeout: 10))
+    let next = app.buttons["review-reader-next"]
+    XCTAssertTrue(next.waitForExistence(timeout: 10) && next.isHittable)
+    next.tap()
+    let closed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !reader.exists }, object: nil)
+    XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 10), .completed,
+                   "The previous track's text kept following another audio clock")
+    XCTAssertTrue(app.staticTexts["Muwa Nasheed"].firstMatch.waitForExistence(timeout: 10))
+    _ = assertNavigationAnchor("navigation-after-reader-track-change")
+    shot("subtitle-reader-dismissed-on-track-change")
+  }
+
   private func rotationShot(_ name: String, landscape: Bool,
                             visibleElement: XCUIElement) throws {
     // XCUIScreen preserves the complete natural framebuffer and its own EXIF
