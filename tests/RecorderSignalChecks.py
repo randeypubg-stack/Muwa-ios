@@ -1,0 +1,135 @@
+"""Exercise actual terminal signals, including an ignored signal from the host."""
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+
+from capture_launch_ios import (finish_recording, parse_home_proof,
+                                start_recording, wait_recording_ready)
+
+
+with tempfile.TemporaryDirectory() as folder:
+    logpath = Path(folder) / "recorder.log"
+    original = signal.getsignal(signal.SIGINT)
+    original_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
+    process = None
+    terminal = None
+    try:
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        child = """
+import os, signal, sys, time
+assert os.isatty(0)
+assert os.isatty(1) and os.isatty(2)
+assert os.tcgetpgrp(0) == os.getpgrp() == os.getpid()
+assert signal.getsignal(signal.SIGINT) != signal.SIG_IGN
+assert not ({signal.SIGINT, signal.SIGTERM} & signal.pthread_sigmask(signal.SIG_BLOCK, set()))
+def finish(signum, frame):
+    print('finalized', flush=True)
+    sys.exit(0)
+signal.signal(signal.SIGINT, finish)
+print('recording', flush=True)
+while True: time.sleep(0.05)
+"""
+        with logpath.open("w") as logfile:
+            process, terminal = start_recording([sys.executable, "-c", child], logfile)
+            deadline = time.monotonic() + 5
+            while "recording" not in logpath.read_text():
+                assert process.poll() is None, logpath.read_text()
+                assert time.monotonic() < deadline, "Recorder did not become ready"
+                time.sleep(0.01)
+            os.write(terminal, b"\x03")
+            assert process.wait(timeout=5) == 0
+            finish_recording(process, terminal, lambda *args, **kwargs: "", {})
+            terminal = None
+        assert logpath.read_text().splitlines() == ["recording", "finalized"]
+        print("Inherited SIGINT ignored and blocked: isolated recorder finalized via terminal Ctrl-C")
+    finally:
+        signal.signal(signal.SIGINT, original)
+        signal.pthread_sigmask(signal.SIG_SETMASK, original_mask)
+        if process is not None and process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=5)
+        if terminal is not None:
+            os.close(terminal)
+
+# Motion and launch share the same owned-group finalizer. Exercise the real
+# child rather than assuming a successful signal also finalized its output.
+with tempfile.TemporaryDirectory() as folder:
+    logpath = Path(folder) / "shared-recorder.log"
+    status = {}
+    with logpath.open("w") as logfile:
+        process, terminal = start_recording([sys.executable, "-c", child], logfile)
+        deadline = time.monotonic() + 5
+        while "recording" not in logpath.read_text():
+            assert process.poll() is None, logpath.read_text()
+            assert time.monotonic() < deadline, "Shared recorder did not become ready"
+            time.sleep(0.01)
+        def run(*command, timeout):
+            return subprocess.check_output(command, text=True, timeout=timeout)
+        try:
+            finish_recording(process, terminal, run, status)
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=5)
+    assert status["recorder_exit_code"] == 0
+    assert logpath.read_text().splitlines() == ["recording", "finalized"]
+    try:
+        os.fstat(terminal)
+    except OSError:
+        pass
+    else:
+        raise AssertionError("Shared finalizer left the terminal open")
+    print("PASS: owned recorder finalized via shared SIGINT helper, terminal closed")
+
+# Native C stdout is line buffered only on a terminal. Reproduce the missing
+# readiness message without a Python flush, then ensure large output cannot
+# block the recorder on a full PTY buffer.
+with tempfile.TemporaryDirectory() as folder:
+    logpath = Path(folder) / "buffered-recorder.log"
+    native_child = """
+import ctypes, signal, sys, time
+libc = ctypes.CDLL(None)
+def finish(signum, frame):
+    libc.printf(b'finalized\\n')
+    sys.exit(0)
+signal.signal(signal.SIGINT, finish)
+libc.printf(b'Recording started.\\n')
+libc.printf(b'x' * (512 * 1024) + b'\\n')
+while True: time.sleep(0.05)
+"""
+    status = {}
+    with logpath.open("w") as logfile:
+        process, terminal = start_recording([sys.executable, "-c", native_child], logfile)
+        try:
+            wait_recording_ready(process, logpath, seconds=5)
+            deadline = time.monotonic() + 5
+            while logpath.stat().st_size < 512 * 1024:
+                assert process.poll() is None
+                assert time.monotonic() < deadline, "Native output blocked on the PTY buffer"
+                time.sleep(0.01)
+        finally:
+            finish_recording(process, terminal,
+                             lambda *cmd, timeout: subprocess.check_output(cmd, text=True, timeout=timeout),
+                             status)
+    assert status["recorder_exit_code"] == 0
+    assert logpath.read_text().rstrip().endswith("finalized")
+    assert not process.muwa_output_reader.is_alive()
+    print("PASS: unflushed native readiness and large terminal output preserved")
+
+# Observed hosted Vision driver output must not corrupt a valid native proof.
+frame = {"homeVisible": True, "width": 1206, "height": 2622, "lines": ["Главная", "Нашиды без музыки"]}
+output = "IOServiceMatchingfailed for: AppleM2ScalerParavirtDriver\n" + json.dumps(frame) + "\n"
+assert parse_home_proof(output) == frame
+for invalid in ["driver diagnostic only", json.dumps({**frame, "homeVisible": False}), json.dumps(frame) + "\n" + json.dumps(frame)]:
+    try:
+        parse_home_proof(invalid)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("Missing/false/ambiguous Home proof was accepted")
+print("PASS: noisy Vision driver output, missing/false/ambiguous native proof rejection")

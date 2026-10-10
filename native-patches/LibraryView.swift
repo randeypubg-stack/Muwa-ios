@@ -25,10 +25,6 @@ struct LibraryView: View {
             .padding(.top, layout.isCompactLandscapePhone ? 6 : 10)
             .padding(.bottom, 10)
             .adaptiveFrame(maxWidth: layout.contentMaxWidth)
-            .background(
-              Color(red: 0.003, green: 0.004, blue: 0.006)
-                .opacity(0.98)
-            )
             .zIndex(10)
 
             ScrollView(showsIndicators: false) {
@@ -136,7 +132,8 @@ struct LibraryView: View {
             }
             .background(Color.clear)
           }
-          .background(Color.clear)
+          .background(AppBackground().ignoresSafeArea())
+          .navigationTitle("Библиотека")
           .navigationBarHidden(true)
           .toolbarBackground(.hidden, for: .navigationBar)
           .navigationDestination(for: LibraryDestination.self) { destination in

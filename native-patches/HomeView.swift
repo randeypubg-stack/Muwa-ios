@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeView: View {
   @EnvironmentObject private var player: PlayerManager
   @EnvironmentObject private var library: LibraryStore
+  @ObservedObject private var catalog = CatalogStore.shared
 
   let openPlayer: () -> Void
   let openSearch: () -> Void
@@ -27,21 +28,32 @@ struct HomeView: View {
               )
             }
 
+            Text("Нашиды без музыки")
+              .font(MuwaTypography.detail)
+              .foregroundStyle(MuwaPalette.secondary)
+
+            HomeCollections(
+              tracks: catalog.tracks,
+              contentWidth: min(layout.viewportWidth, layout.contentMaxWidth)
+                - 2 * (layout.isPhone ? MuwaSpacing.screen : layout.horizontalPadding)
+            )
+
             if layout.isWide {
               recommendationsGrid(layout: layout)
-              popularGrid(layout: layout)
             } else {
               recommendationsCarousel
-              popularList
             }
+            popularPages(layout: layout)
           }
-          .padding(.horizontal, layout.horizontalPadding)
+          .padding(.horizontal, layout.isPhone ? MuwaSpacing.screen : layout.horizontalPadding)
           .padding(.top, layout.isCompactLandscapePhone ? 4 : 8)
           .padding(.bottom, layout.isCompactLandscapePhone ? 132 : 170)
           .adaptiveFrame(maxWidth: layout.contentMaxWidth)
         }
         .scrollContentBackground(.hidden)
+        .modifier(HomeScrollEdgeVisibility())
       }
+      .background(AppBackground().ignoresSafeArea())
       .navigationTitle("Главная")
       .navigationBarTitleDisplayMode(.large)
       .toolbar {
@@ -194,13 +206,13 @@ struct HomeView: View {
 
   private var recommendationsCarousel: some View {
     VStack(alignment: .leading, spacing: 14) {
-      Text("Рекомендации")
-        .font(.title2.bold())
+      Text("Откройте для себя")
+        .font(MuwaTypography.section)
 
       ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 14) {
-          ForEach(Track.catalog) { track in
-            recommendationCard(track, width: 154)
+        LazyHStack(spacing: 14) {
+          ForEach(Array(catalog.tracks.prefix(12))) { track in
+            recommendationCard(track, width: 160)
           }
         }
       }
@@ -210,7 +222,7 @@ struct HomeView: View {
 
   private func recommendationsGrid(layout: AdaptiveLayout) -> some View {
     VStack(alignment: .leading, spacing: 14) {
-      Text("Рекомендации").font(.title2.bold())
+      Text("Откройте для себя").font(MuwaTypography.section)
 
       LazyVGrid(
         columns: Array(
@@ -219,7 +231,7 @@ struct HomeView: View {
         ),
         spacing: 18
       ) {
-        ForEach(Track.catalog) { track in
+        ForEach(Array(catalog.tracks.prefix(12))) { track in
           recommendationCard(track, width: nil)
         }
       }
@@ -228,7 +240,7 @@ struct HomeView: View {
 
   private func recommendationCard(_ track: Track, width: CGFloat?) -> some View {
     Button {
-      player.play(track)
+      player.play(track, in: catalog.tracks)
       openPlayer()
     } label: {
       VStack(alignment: .leading, spacing: 8) {
@@ -245,38 +257,41 @@ struct HomeView: View {
       }
       .frame(width: width, alignment: .leading)
     }
-    .buttonStyle(.plain)
+    .buttonStyle(MuwaPressStyle())
   }
 
-  private var popularList: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      Text("Популярное").font(.title2.bold())
-
-      ForEach(Track.catalog.prefix(5)) { track in
-        popularRow(track)
-
-        if track.id != Track.catalog.prefix(5).last?.id {
-          Divider().overlay(.white.opacity(0.05))
-        }
+  private func popularPages(layout: AdaptiveLayout) -> some View {
+    let tracks = catalog.tracks
+    let count = layout.isWide ? 6 : 5
+    let starts = Array(stride(from: 0, to: tracks.count, by: count))
+    let width = max(1, min(layout.viewportWidth, layout.contentMaxWidth)
+      - 2 * (layout.isPhone ? MuwaSpacing.screen : layout.horizontalPadding))
+    return VStack(alignment: .leading, spacing: 12) {
+      Text("Популярное").font(MuwaTypography.section)
+      if tracks.count > count {
+        Text("Листайте, чтобы открыть больше нашидов")
+          .font(.caption).foregroundStyle(.secondary)
       }
-    }
-  }
-
-  private func popularGrid(layout: AdaptiveLayout) -> some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Text("Популярное").font(.title2.bold())
-
-      LazyVGrid(
-        columns: Array(repeating: GridItem(.flexible(), spacing: 20), count: layout.listColumns),
-        spacing: 0
-      ) {
-        ForEach(Track.catalog.prefix(6)) { track in
-          popularRow(track)
-            .overlay(alignment: .bottom) {
-              Divider().overlay(.white.opacity(0.05))
+      ScrollView(.horizontal, showsIndicators: false) {
+        LazyHStack(alignment: .top, spacing: 16) {
+          ForEach(starts, id: \.self) { start in
+            let page = Array(tracks[start..<min(start + count, tracks.count)])
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 20), count: layout.isWide ? layout.listColumns : 1), spacing: 0) {
+              ForEach(page) { track in
+                popularRow(track)
+                  .overlay(alignment: .bottom) { Divider().overlay(.white.opacity(0.05)) }
+              }
             }
+            .frame(width: width)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Популярное, страница \(start / count + 1) из \(starts.count)")
+            .accessibilityIdentifier("popular-page-\(start / count)")
+          }
         }
+        .scrollTargetLayout()
       }
+      .scrollTargetBehavior(.viewAligned)
+      .accessibilityIdentifier("popular-pages")
     }
   }
 
@@ -285,11 +300,7 @@ struct HomeView: View {
       track: track,
       isPlaying: player.currentTrack?.id == track.id && player.isPlaying,
       action: {
-        player.play(track)
-      },
-      isInPlaylist: library.isInPlaylist(track),
-      togglePlaylistAction: {
-        library.togglePlaylist(track)
+        player.play(track, in: catalog.tracks)
       },
       playNextAction: {
         library.addNext(track, after: player.currentTrack)
@@ -303,5 +314,17 @@ struct HomeView: View {
   private func format(_ seconds: TimeInterval) -> String {
     guard seconds.isFinite, seconds >= 0 else { return "0:00" }
     return String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60)
+  }
+}
+
+// iOS 26+ adds a separate scroll-edge blur even with a hidden navigation
+// background. Hide that effect while retaining native large-title collapse.
+private struct HomeScrollEdgeVisibility: ViewModifier {
+  @ViewBuilder func body(content: Content) -> some View {
+    if #available(iOS 26.0, *) {
+      content.scrollEdgeEffectHidden(true, for: .top)
+    } else {
+      content
+    }
   }
 }

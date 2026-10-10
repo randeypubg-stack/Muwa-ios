@@ -1,0 +1,5 @@
+[Unit]
+Description=Back up Muwa PostgreSQL and immutable audio locally
+[Service]
+Type=oneshot
+ExecStart=/opt/muwa/infra/backup-muwa.sh

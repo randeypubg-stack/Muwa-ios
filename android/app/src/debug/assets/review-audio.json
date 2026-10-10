@@ -1,0 +1,12 @@
+{
+  "file": "review-audio.mp3",
+  "trackId": "muwa-01",
+  "sha256": "937463ec233bb39f895323ed5e09db0629b04a0ff86f07c4dcbbef65161f12ae",
+  "bytes": 1188512,
+  "durationSeconds": 297.072,
+  "codec": "mp3",
+  "sampleRateHz": 16000,
+  "channels": 1,
+  "content": "Generated silence; actual Media3 prepare/decode, paused by the review route",
+  "scope": "Debug APK and explicit review.route only; no network/CDN playback evidence"
+}

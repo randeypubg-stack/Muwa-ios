@@ -1,0 +1,12 @@
+{
+  "name": "Muwa",
+  "source_sha256": "a8f6c806587f0c0d17d0a67a3f2ccbef5a2c89ac7d6c930d10a2fb50891ed842",
+  "source_size": [
+    1254,
+    1254
+  ],
+  "assets": {
+    "AppIcon-1024.png": "7d6e3af660633d8b76112b33813762570531a212f62a6af4650a1cf11ea295ba",
+    "AppMark.png": "50913b3364be9430bc8efc535f6c1bc03bdf056576092e929a6b48cc28e86aec"
+  }
+}

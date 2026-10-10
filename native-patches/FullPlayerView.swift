@@ -7,14 +7,14 @@ private enum ArtworkGestureAxis: Equatable {
 }
 
 struct MorphingPlayerView: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @EnvironmentObject private var player: PlayerManager
   @EnvironmentObject private var library: LibraryStore
   @EnvironmentObject private var premium: PremiumManager
   @EnvironmentObject private var downloads: DownloadManager
 
-  @Binding var selection: AppTab
   @Binding var expansion: CGFloat
-  let chromeDrop: CGFloat
+  let chromeBottomPadding: CGFloat
   let safeTopInset: CGFloat
   let safeBottomInset: CGFloat
   let safeLeadingInset: CGFloat
@@ -24,6 +24,8 @@ struct MorphingPlayerView: View {
   @State private var queuePresented = false
   @State private var playlistCreatePresented = false
   @State private var subtitlesVisible = false
+  @State private var subtitleReader: SubtitleReaderPresentation?
+  @State private var subtitleContentTrackIDs: Set<String> = []
   @State private var downloadError: String?
   @State private var dragStartExpansion: CGFloat?
   @State private var coverDragX: CGFloat = 0
@@ -35,7 +37,7 @@ struct MorphingPlayerView: View {
   @State private var artworkVerticalStartExpansion: CGFloat?
 
   private var track: Track {
-    player.currentTrack ?? Track.catalog[0]
+    player.currentTrack ?? Track(id: "empty-player", title: "Выберите нашид", artist: "Muwa", duration: 0, artworkURL: nil, audioURL: URL(fileURLWithPath: "/dev/null"))
   }
 
   var body: some View {
@@ -57,15 +59,14 @@ struct MorphingPlayerView: View {
       let miniWidth = min(miniWidthLimit, usableWidth)
       let miniHeight: CGFloat = 58
 
-      let bottomBarHeight: CGFloat = 62
-      let playerBarGap: CGFloat = 8
+      let bottomBarHeight = BottomChromeLayout.barHeight
+      let playerBarGap = BottomChromeLayout.playerGap
       let miniCenterY =
         viewportHeight
         - bottomBarHeight
         - playerBarGap
         - (miniHeight / 2)
-        - (layout.isPhone ? 6 : 0)
-        + chromeDrop
+        - chromeBottomPadding
 
       let fullSurfaceHeight =
         viewportHeight
@@ -84,7 +85,7 @@ struct MorphingPlayerView: View {
       let artworkLimit = isShortPhone ? min(layout.playerArtworkSize, 210) : layout.playerArtworkSize
       let geometry = PlayerGeometry(
         width: viewportWidth, height: viewportHeight,
-        safeTop: safeTopInset, chromeDrop: chromeDrop, phone: layout.isPhone,
+        safeTop: safeTopInset, chromeBottomPadding: chromeBottomPadding, phone: layout.isPhone,
         contentWidth: min(layout.contentMaxWidth, usableWidth), artworkLimit: artworkLimit
       )
       let fullArtworkSize = geometry.artworkSize
@@ -147,6 +148,11 @@ struct MorphingPlayerView: View {
           progress: p,
           viewportWidth: viewportWidth,
           screenCenterX: artworkScreenX,
+          subtitleLeftSpace: max(0, artworkScreenX - safeSideInset),
+          subtitleRightSpace: max(0,
+            (geometry.controlsX > viewportWidth / 2 + 1
+              ? geometry.controlsX - geometry.controlsWidth / 2 - 12
+              : viewportWidth - safeSideInset) - artworkScreenX),
           expansionTravel: travel
         )
         .position(
@@ -175,7 +181,6 @@ struct MorphingPlayerView: View {
 
         miniControls(
           playerWidth: playerWidth,
-          playerHeight: playerHeight,
           centerY: playerCenterY,
           opacity: miniOpacity,
           viewportWidth: viewportWidth
@@ -191,16 +196,11 @@ struct MorphingPlayerView: View {
 
         fullControls(
           layout: layout,
-          playerWidth: playerWidth,
           playerHeight: playerHeight,
           centerY: playerCenterY,
           contentWidth: fullContentWidth,
-          artworkY: fullArtworkY,
-          artworkSize: fullArtworkSize,
           metadataY: fullMetadataY,
           opacity: fullOpacity,
-          isShortPhone: isShortPhone,
-          chromeDrop: chromeDrop,
           safeTopInset: safeTopInset,
           geometry: geometry
         )
@@ -222,6 +222,9 @@ struct MorphingPlayerView: View {
     }
     .sheet(isPresented: $queuePresented) {
       QueueView()
+    }
+    .fullScreenCover(item: $subtitleReader) { presentation in
+      presentation.reader
     }
     .sheet(isPresented: $playlistCreatePresented) {
       PlaylistCreateSheet { name in
@@ -287,6 +290,8 @@ struct MorphingPlayerView: View {
     progress: CGFloat,
     viewportWidth: CGFloat,
     screenCenterX: CGFloat,
+    subtitleLeftSpace: CGFloat,
+    subtitleRightSpace: CGFloat,
     expansionTravel: CGFloat
   ) -> some View {
     let leftEdgeTravel = max(1, screenCenterX + (size * 0.42))
@@ -317,7 +322,10 @@ struct MorphingPlayerView: View {
           size: size,
           cornerRadius: cornerRadius,
           showSubtitle: false,
-          progress: progress
+          progress: progress,
+          subtitleLeftSpace: subtitleLeftSpace,
+          subtitleRightSpace: subtitleRightSpace,
+          interactionDistance: interactionDistance, expansionTravel: expansionTravel
         )
         .offset(x: incomingX)
         .scaleEffect(incomingScale)
@@ -329,27 +337,26 @@ struct MorphingPlayerView: View {
         size: size,
         cornerRadius: cornerRadius,
         showSubtitle: true,
-        progress: progress
+        progress: progress,
+        subtitleLeftSpace: subtitleLeftSpace,
+        subtitleRightSpace: subtitleRightSpace,
+        interactionDistance: interactionDistance, expansionTravel: expansionTravel
       )
       .offset(x: coverSwipeDirection == 0 ? 0 : outgoingX)
       .scaleEffect(coverSwipeDirection == 0 ? 1 : currentScale)
       .opacity(Double(coverSwipeDirection == 0 ? 1 : currentOpacity))
     }
     .frame(width: size, height: size)
+    .onPreferenceChange(PlayerSubtitleRailAvailabilityKey.self) {
+      subtitleContentTrackIDs = $0
+    }
     .shadow(
       color: .black.opacity(Double(0.34 * smoothStep(progress))),
       radius: 28 * smoothStep(progress),
       y: 16 * smoothStep(progress)
     )
-    .contentShape(Rectangle())
     .allowsHitTesting((progress > 0.74 || artworkGestureActive) && !coverPaging)
-    .highPriorityGesture(
-      artworkDragGesture(
-        size: size,
-        interactionDistance: interactionDistance,
-        expansionTravel: expansionTravel
-      )
-    )
+
   }
 
   private func artworkDragGesture(
@@ -521,53 +528,64 @@ struct MorphingPlayerView: View {
     size: CGFloat,
     cornerRadius: CGFloat,
     showSubtitle: Bool,
-    progress: CGFloat
+    progress: CGFloat,
+    subtitleLeftSpace: CGFloat,
+    subtitleRightSpace: CGFloat,
+    interactionDistance: CGFloat,
+    expansionTravel: CGFloat
   ) -> some View {
-    let subtitleLayoutActive = subtitlesVisible && progress > 0.74
-    let coverScale: CGFloat = subtitleLayoutActive ? 0.82 : 1
-    let coverShift: CGFloat = subtitleLayoutActive ? -(size * 0.13) : 0
-    let railWidth = min(116, max(92, size * 0.42))
-    let railOffset = size * 0.47
+    let subtitleLayoutActive =
+      showSubtitle && subtitlesVisible && progress > 0.74
+      && subtitleContentTrackIDs.contains(pageTrack.id)
+    let subtitleLayout = PlayerSubtitleLayout(
+      size: size, leftSpace: subtitleLeftSpace, rightSpace: subtitleRightSpace,
+      active: subtitleLayoutActive
+    )
+    let railHeight = min(220, max(120, size * 0.78))
     let showRail =
-      showSubtitle
-      && subtitleLayoutActive
-      && !coverPaging
-      && abs(coverDragX) < 6
+      showSubtitle && progress > 0.74 && !coverPaging && abs(coverDragX) < 6
 
     return ZStack {
       ArtworkView(
         url: pageTrack.artworkURL,
         cornerRadius: cornerRadius,
-        placeholderSystemImage: "music.note"
+        placeholderSystemImage: "music.note",
+        contentMode: .fill
       )
       .frame(width: size, height: size)
-      .scaleEffect(coverScale)
-      .offset(x: coverShift)
+      .highPriorityGesture(
+        artworkDragGesture(size: size, interactionDistance: interactionDistance,
+                           expansionTravel: expansionTravel),
+        including: showSubtitle ? .all : .none
+      )
+      .accessibilityElement(children: .contain)
+      .accessibilityIdentifier(pageTrack.id == track.id ? "player-artwork-frame" : "incoming-artwork-frame")
+      .accessibilityHidden(pageTrack.id != track.id)
+      .scaleEffect(subtitleLayout.coverScale)
+      .offset(x: subtitleLayout.coverShift)
 
-      if showRail {
+      // Keep the presenter mounted while paging so its task/cache survives.
+      // Only the current cover owns captions; incoming covers never show stale text.
+      if showSubtitle, subtitlesVisible, progress > 0.74 {
         AISubtitleExperience(
-          timeline: player.timeline,
-          track: pageTrack,
-          compactWidth: railWidth
+          timeline: player.timeline, track: pageTrack, isVisible: $subtitlesVisible,
+          compactWidth: subtitleLayout.railWidth, compactHeight: railHeight,
+          presentReader: { subtitleReader = $0 }
         )
-        .frame(
-          width: railWidth,
-          height: min(170, size * 0.72)
-        )
-        .offset(x: railOffset)
-        .transition(.opacity)
-        .zIndex(4)
+        .id("\(pageTrack.id)-r\(pageTrack.captionsRevision ?? 0)")
+        .frame(width: subtitleLayout.railWidth, height: railHeight)
+        .offset(x: subtitleLayout.railOffset)
+        .opacity(showRail ? 1 : 0)
+        .allowsHitTesting(showRail)
+        .accessibilityHidden(!showRail)
       }
     }
     .frame(width: size, height: size)
-    .animation(
-      .spring(response: 0.34, dampingFraction: 0.94),
-      value: subtitleLayoutActive
-    )
+    .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.94), value: subtitleLayoutActive)
   }
 
   private func swipeNeighbor(direction: Int) -> Track? {
-    let queue = library.queueTracks.isEmpty ? Track.catalog : library.queueTracks
+    let queue = library.queueTracks
     guard !queue.isEmpty else { return nil }
 
     guard let currentIndex = queue.firstIndex(where: { $0.id == track.id }) else {
@@ -649,7 +667,6 @@ struct MorphingPlayerView: View {
 
   private func miniControls(
     playerWidth: CGFloat,
-    playerHeight: CGFloat,
     centerY: CGFloat,
     opacity: CGFloat,
     viewportWidth: CGFloat
@@ -700,16 +717,11 @@ struct MorphingPlayerView: View {
 
   private func fullControls(
     layout: AdaptiveLayout,
-    playerWidth: CGFloat,
     playerHeight: CGFloat,
     centerY: CGFloat,
     contentWidth: CGFloat,
-    artworkY: CGFloat,
-    artworkSize: CGFloat,
     metadataY: CGFloat,
     opacity: CGFloat,
-    isShortPhone: Bool,
-    chromeDrop: CGFloat,
     safeTopInset: CGFloat,
     geometry: PlayerGeometry
   ) -> some View {
@@ -723,7 +735,7 @@ struct MorphingPlayerView: View {
       fullTopBar(width: min(layout.contentMaxWidth, layout.viewportWidth - layout.horizontalPadding * 2))
         .position(
           x: layout.viewportWidth / 2,
-          y: containerTop + safeTopInset + 28
+          y: containerTop + geometry.topBarY
         )
 
       Button {
@@ -747,8 +759,16 @@ struct MorphingPlayerView: View {
         .frame(width: contentWidth)
         .position(x: localCenterX, y: transportY)
 
-      smallActions
-        .position(x: localCenterX, y: actionsY)
+      VStack(spacing: 6) {
+        smallActions
+        if player.playbackError != nil {
+          Button("Не удалось воспроизвести · Повторить") { player.retryPlayback() }
+            .font(.caption2).foregroundStyle(.orange)
+        }
+        if let progress = downloads.progress[track.id] {
+          ProgressView(value: progress).frame(width: 170)
+        }
+      }.position(x: localCenterX, y: actionsY)
     }
     .opacity(Double(opacity))
     .allowsHitTesting(opacity > 0.60)
@@ -776,6 +796,12 @@ struct MorphingPlayerView: View {
       Spacer()
 
       Menu {
+        Button {
+          toggleSubtitles()
+        } label: {
+          Label(subtitlesVisible ? "Скрыть субтитры" : "Показать субтитры", systemImage: subtitleSymbol)
+        }
+        Divider()
         Button {
           library.toggleLike(track)
         } label: {
@@ -819,14 +845,16 @@ struct MorphingPlayerView: View {
         Button {
           library.addNext(track, after: player.currentTrack)
         } label: {
-          Label("Воспроизвести следующим", systemImage: "text.insert")
+          Label(track.id == player.currentTrack?.id ? "Этот нашид уже играет" : "Воспроизвести следующим", systemImage: "text.insert")
         }
+        .disabled(track.id == player.currentTrack?.id)
 
         Button {
           library.ensureQueueContains(track)
         } label: {
-          Label("Добавить в очередь", systemImage: "text.badge.plus")
+          Label(library.queueTracks.contains(where: { $0.id == track.id }) ? "Уже в очереди" : "Добавить в очередь", systemImage: "text.badge.plus")
         }
+        .disabled(library.queueTracks.contains(where: { $0.id == track.id }))
 
         Menu {
           Button {
@@ -883,19 +911,37 @@ struct MorphingPlayerView: View {
           handleDownload()
         } label: {
           Label(
-            downloads.isDownloaded(track) ? "Сохранено офлайн" : "Скачать MP3",
+            downloads.isDownloaded(track) ? "Сохранено офлайн" : (downloads.downloadingIDs.contains(track.id) ? "Скачиваем…" : "Скачать офлайн"),
             systemImage: downloads.isDownloaded(track)
               ? "checkmark.circle"
               : "arrow.down.circle"
           )
         }
+        .disabled(downloads.isDownloaded(track) || downloads.downloadingIDs.contains(track.id))
+        if downloads.downloadingIDs.contains(track.id) {
+          Button("Отменить скачивание", role: .destructive) { downloads.cancel(track) }
+        }
+        if downloads.isDownloaded(track) {
+          Button(role: .destructive) {
+            do { try downloads.remove(track) } catch { downloadError = DownloadManager.message(for: error) }
+          } label: {
+            Label("Удалить загрузку", systemImage: "trash")
+          }
+        }
+        if player.playbackError != nil {
+          Button("Повторить воспроизведение") { player.retryPlayback() }
+        }
+        ShareLink(item: track.audioURL) { Label("Поделиться нашидом", systemImage: "square.and.arrow.up") }
       } label: {
         Image(systemName: "ellipsis")
+          .rotationEffect(.degrees(90))
           .font(.system(size: 19, weight: .semibold))
           .frame(width: 42, height: 42)
           .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
       }
       .buttonStyle(.plain)
+      .accessibilityLabel("Меню плеера")
+      .accessibilityIdentifier("player-menu")
     }
     .frame(width: width)
   }
@@ -908,7 +954,7 @@ struct MorphingPlayerView: View {
   private func transport(compact: Bool) -> some View {
     let mainSize: CGFloat = compact ? 58 : 68
     let sideSize: CGFloat = compact ? 46 : 54
-    let spacing: CGFloat = compact ? 14 : 22
+    let spacing: CGFloat = compact ? 10 : 22
 
     return HStack(spacing: spacing) {
       Button {
@@ -916,14 +962,21 @@ struct MorphingPlayerView: View {
       } label: {
         Image(systemName: "shuffle")
           .foregroundStyle(player.shuffleOn ? .white : .white.opacity(0.55))
-          .frame(width: 38, height: 38)
+          .frame(width: 44, height: 44)
+          .contentShape(Rectangle())
       }
+      .accessibilityLabel("Перемешать")
+      .accessibilityValue(player.shuffleOn ? "Включено" : "Выключено")
+      .accessibilityIdentifier("player-shuffle")
 
       Button(action: player.previous) {
         Image(systemName: "backward.fill")
           .font(.title2)
           .frame(width: sideSize, height: sideSize)
+          .contentShape(Rectangle())
       }
+      .accessibilityLabel("Предыдущий нашид")
+      .accessibilityIdentifier("player-previous")
 
       Button(action: player.toggle) {
         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
@@ -931,21 +984,32 @@ struct MorphingPlayerView: View {
           .foregroundStyle(.black)
           .frame(width: mainSize, height: mainSize)
           .background(.white, in: Circle())
+          .overlay { if player.isBuffering { PlaybackLoadingRing().padding(-5) } }
       }
+      .accessibilityLabel(player.isPlaying ? "Пауза" : "Воспроизвести")
+      .accessibilityIdentifier("player-toggle")
+      .accessibilityValue(player.isBuffering ? "Загрузка аудио" : player.isPlaying ? "Воспроизводится" : "На паузе")
 
       Button(action: player.next) {
         Image(systemName: "forward.fill")
           .font(.title2)
           .frame(width: sideSize, height: sideSize)
+          .contentShape(Rectangle())
       }
+      .accessibilityLabel("Следующий нашид")
+      .accessibilityIdentifier("player-next")
 
       Button {
-        player.repeatOn.toggle()
+        player.cycleRepeatMode()
       } label: {
-        Image(systemName: "repeat")
+        Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
           .foregroundStyle(player.repeatOn ? .white : .white.opacity(0.55))
-          .frame(width: 38, height: 38)
+          .frame(width: 44, height: 44)
+          .contentShape(Rectangle())
       }
+      .accessibilityLabel("Повтор")
+      .accessibilityValue(player.repeatMode == .one ? "Один нашид" : player.repeatOn ? "Вся очередь" : "Выключено")
+      .accessibilityIdentifier("player-repeat")
     }
     .buttonStyle(.plain)
     .frame(maxWidth: .infinity)
@@ -954,25 +1018,22 @@ struct MorphingPlayerView: View {
   private var smallActions: some View {
     HStack(spacing: 14) {
       Button {
-        withAnimation(.easeInOut(duration: 0.18)) {
-          subtitlesVisible.toggle()
-        }
+        toggleSubtitles()
       } label: {
-        Image(
-          systemName: subtitlesVisible
-            ? "captions.bubble.fill"
-            : "captions.bubble"
-        )
-        .frame(width: 44, height: 44)
-        .background(
-          .white.opacity(subtitlesVisible ? 0.14 : 0.055),
-          in: RoundedRectangle(cornerRadius: 16)
-        )
+        ZStack(alignment: .topTrailing) {
+          Image(systemName: subtitleSymbol)
+          .frame(width: 44, height: 44)
+          .background(
+            .white.opacity(subtitlesVisible ? 0.14 : 0.055),
+            in: RoundedRectangle(cornerRadius: 16)
+          )
+
+
+        }
       }
       .buttonStyle(.plain)
-      .accessibilityLabel(
-        subtitlesVisible ? "Скрыть субтитры" : "Показать субтитры"
-      )
+      .accessibilityLabel(subtitlesVisible ? "Скрыть субтитры" : "Показать субтитры")
+      .accessibilityIdentifier("player-subtitles")
 
       Button {
         queuePresented = true
@@ -985,8 +1046,10 @@ struct MorphingPlayerView: View {
           )
       }
       .buttonStyle(.plain)
+      .accessibilityLabel("Открыть очередь")
+      .accessibilityIdentifier("player-queue")
 
-      if premium.isPremium {
+      if FeatureAccess.allowsPremiumFeature(isPremium: premium.isPremium) {
         AirPlayButton()
           .frame(width: 44, height: 44)
           .background(
@@ -1086,10 +1149,16 @@ struct MorphingPlayerView: View {
     }
   }
 
-  private func handleDownload() {
-    guard !downloads.isDownloaded(track) else { return }
+  private var subtitleSymbol: String { subtitlesVisible ? "captions.bubble.fill" : "captions.bubble" }
 
-    guard premium.isPremium else {
+  private func toggleSubtitles() {
+    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { subtitlesVisible.toggle() }
+  }
+
+  private func handleDownload() {
+    guard !downloads.isDownloaded(track), !downloads.downloadingIDs.contains(track.id) else { return }
+
+    guard FeatureAccess.allowsPremiumFeature(isPremium: premium.isPremium) else {
       premiumPresented = true
       return
     }
@@ -1098,18 +1167,10 @@ struct MorphingPlayerView: View {
       do {
         try await downloads.download(track)
       } catch {
-        downloadError = error.localizedDescription
+        guard !(error is CancellationError), (error as NSError).code != NSURLErrorCancelled else { return }
+        downloadError = DownloadManager.message(for: error)
       }
     }
-  }
-
-  private func time(_ seconds: TimeInterval) -> String {
-    guard seconds.isFinite, seconds >= 0 else { return "0:00" }
-    return String(
-      format: "%d:%02d",
-      Int(seconds) / 60,
-      Int(seconds) % 60
-    )
   }
 
   private func clamp(_ value: CGFloat) -> CGFloat {
@@ -1129,6 +1190,7 @@ struct MorphingPlayerView: View {
 
 // Pure geometry shared with regression checks; coordinates are local to the full surface.
 struct PlayerGeometry {
+  let topBarY: CGFloat
   let artworkSize: CGFloat
   let artworkX: CGFloat
   let artworkY: CGFloat
@@ -1140,21 +1202,26 @@ struct PlayerGeometry {
   let actionsY: CGFloat
   let chromeTop: CGFloat
 
-  init(width: CGFloat, height: CGFloat, safeTop: CGFloat, chromeDrop: CGFloat,
+  init(width: CGFloat, height: CGFloat, safeTop: CGFloat, chromeBottomPadding: CGFloat,
        phone: Bool, contentWidth: CGFloat, artworkLimit: CGFloat) {
-    chromeTop = height + safeTop - 62 - (phone ? 9 : 0) + chromeDrop
+    chromeTop = height + safeTop - BottomChromeLayout.barHeight - chromeBottomPadding
     let landscape = width > height * 1.2 && height < 520
     let short = phone && height < 740
+    // A 355 pt landscape window needs four more points below its top controls.
+    // Keep their 42 pt targets inside the safe area; portrait stays unchanged.
+    topBarY = safeTop + (landscape && phone && height < 370 ? 24 : 28)
     if landscape {
       controlsWidth = min(420, contentWidth * 0.56)
       controlsX = (width + contentWidth) / 2 - controlsWidth / 2
       artworkSize = min(artworkLimit, contentWidth - controlsWidth - 24, chromeTop - safeTop - 76)
       artworkX = (width - contentWidth) / 2 + (contentWidth - controlsWidth - 16) / 2
       artworkY = safeTop + 56 + artworkSize / 2
-      actionsY = chromeTop - 34
-      transportY = actionsY - 58
-      progressY = transportY - 66
-      metadataY = progressY - 58
+      // Keep the title below the top controls on short landscape phones after
+      // restoring the bottom safe area. Gaps still include full touch targets.
+      actionsY = chromeTop - 32
+      transportY = actionsY - (phone ? 56 : 64)
+      progressY = transportY - (phone ? 62 : 68)
+      metadataY = progressY - 54
     } else {
       controlsWidth = contentWidth
       controlsX = width / 2
@@ -1171,6 +1238,60 @@ struct PlayerGeometry {
       progressY = metadataY + progressGap
       transportY = progressY + transportGap
       actionsY = transportY + actionGap
+    }
+  }
+}
+
+// One reviewed anchor for navigation and the mini/full-player morph. The root
+// is already inside SwiftUI's safe area: never add its bottom inset a second time.
+struct BottomChromeLayout {
+  static let barHeight: CGFloat = 62
+  static let playerGap: CGFloat = 8
+  // Owner-approved Build 50: iPhone 17 Pro, 874 pt viewport, 18 pt clearance.
+  // Scale the outer gap only; touch targets and typography do not scale.
+  static let referenceHeight: CGFloat = 874
+  static let referenceClearance: CGFloat = 18
+  static let minimumClearance: CGFloat = 12
+  static let maximumClearance: CGFloat = 28
+  static let maximumSafeAreaUnderlap: CGFloat = 16
+  let physicalBottomClearance: CGFloat
+  let bottomPadding: CGFloat
+  init(viewportHeight: CGFloat, safeBottom: CGFloat, rootBottomInset: CGFloat? = nil) {
+    let height = viewportHeight.isFinite && viewportHeight > 0 ? viewportHeight : Self.referenceHeight
+    let inset = safeBottom.isFinite ? max(0, safeBottom) : 0
+    let proportional = min(Self.maximumClearance, max(Self.minimumClearance,
+      height * Self.referenceClearance / Self.referenceHeight))
+    physicalBottomClearance = max(proportional, inset - Self.maximumSafeAreaUnderlap)
+    // Root coordinates end at the safe area; translate this one physical anchor
+    // once. Navigation, mini player and full-player morph must share the result.
+    let rootInset = rootBottomInset.flatMap { $0.isFinite ? max(0, $0) : nil } ?? inset
+    bottomPadding = physicalBottomClearance - rootInset
+  }
+}
+
+// Fit the transparent caption rail beside the reduced cover, inside the safe
+// artwork column. The right boundary excludes transport controls in landscape.
+struct PlayerSubtitleLayout {
+  let coverScale: CGFloat
+  let coverShift: CGFloat
+  let railWidth: CGFloat
+  let railOffset: CGFloat
+
+  init(size: CGFloat, leftSpace: CGFloat, rightSpace: CGFloat, active: Bool) {
+    let availableWidth = max(0, leftSpace + rightSpace)
+    railWidth = min(164, max(104, size * 0.43), availableWidth * 0.44)
+    let gap = min(10, availableWidth * 0.04)
+    let coverWidth = min(size * 0.82, max(0, availableWidth - gap - railWidth))
+    if active {
+      coverScale = coverWidth / max(size, 1)
+      let leftBound = -leftSpace + coverWidth / 2
+      let rightBound = rightSpace - railWidth - gap - coverWidth / 2
+      coverShift = min(max(-size * 0.18, leftBound), rightBound)
+      railOffset = coverShift + coverWidth / 2 + gap + railWidth / 2
+    } else {
+      coverScale = 1
+      coverShift = 0
+      railOffset = min(size * 0.30, max(0, rightSpace - railWidth / 2))
     }
   }
 }
@@ -1206,14 +1327,5 @@ private struct PlaybackScrubber: View {
   private func time(_ seconds: TimeInterval) -> String {
     guard seconds.isFinite, seconds >= 0 else { return "0:00" }
     return String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60)
-  }
-}
-
-private struct ClockedSubtitleOverlay: View {
-  @ObservedObject var timeline: PlaybackTimeline
-  let track: Track
-  let language: SubtitleLanguage
-  var body: some View {
-    PlayerSubtitleOverlay(track: track, currentTime: timeline.snapshot.time, language: language)
   }
 }

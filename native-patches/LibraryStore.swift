@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SwiftUI
 
@@ -23,6 +24,7 @@ final class LibraryStore: ObservableObject {
   @Published private(set) var queueIDs: [String]
   @Published private(set) var publications: [PublicationDraft]
 
+  private var catalogChanges: AnyCancellable?
   private let defaults: UserDefaults
 
   private enum Key {
@@ -61,6 +63,7 @@ final class LibraryStore: ObservableObject {
     } else {
       publications = []
     }
+    catalogChanges = CatalogStore.shared.$tracks.dropFirst().sink { [weak self] _ in self?.objectWillChange.send() }
     // Persist migration once so playlist identities survive a restart.
     if defaults.data(forKey: Key.playlists) == nil { persistPlaylists() }
   }
@@ -76,10 +79,6 @@ final class LibraryStore: ObservableObject {
   var drafts: [PublicationDraft] { publications.filter { $0.status == .draft } }
 
   func isLiked(_ track: Track) -> Bool { likedIDs.contains(track.id) }
-  func isInPlaylist(_ track: Track) -> Bool {
-    playlists.contains { $0.trackIDs.contains(track.id) }
-  }
-
   func playlist(id: UUID) -> UserPlaylist? {
     playlists.first(where: { $0.id == id })
   }
@@ -100,17 +99,6 @@ final class LibraryStore: ObservableObject {
       likedIDs.insert(track.id)
     }
     persistLiked()
-  }
-
-  // Compatibility helper for existing menus: use the first playlist, creating one if needed.
-  func togglePlaylist(_ track: Track) {
-    let targetID: UUID
-    if let first = playlists.first {
-      targetID = first.id
-    } else {
-      targetID = createPlaylist(name: "Мой плей-лист")
-    }
-    toggleTrack(track, in: targetID)
   }
 
   @discardableResult
@@ -167,6 +155,7 @@ final class LibraryStore: ObservableObject {
   }
 
   func addNext(_ track: Track, after current: Track?) {
+    guard track.id != current?.id else { ensureQueueContains(track); return }
     queueIDs.removeAll(where: { $0 == track.id })
     if let current, let index = queueIDs.firstIndex(of: current.id) {
       queueIDs.insert(track.id, at: min(index + 1, queueIDs.count))
@@ -181,8 +170,16 @@ final class LibraryStore: ObservableObject {
     persistQueue()
   }
 
+  // List offsets refer to visible tracks, not unavailable saved catalogue IDs.
+  // Preserve those IDs and their slots when the catalogue is temporarily smaller.
   func moveQueue(fromOffsets source: IndexSet, toOffset destination: Int) {
-    queueIDs.move(fromOffsets: source, toOffset: destination)
+    var visible = queueTracks.map(\.id)
+    guard !source.isEmpty, source.allSatisfy({ visible.indices.contains($0) }),
+          (0...visible.count).contains(destination) else { return }
+    visible.move(fromOffsets: source, toOffset: destination)
+    let visibleIDs = Set(visible)
+    var next = visible.makeIterator()
+    queueIDs = queueIDs.map { visibleIDs.contains($0) ? next.next()! : $0 }
     persistQueue()
   }
 
@@ -191,6 +188,12 @@ final class LibraryStore: ObservableObject {
       queueIDs.append(track.id)
       persistQueue()
     }
+  }
+
+  func replaceQueue(with tracks: [Track]) {
+    var seen = Set<String>()
+    queueIDs = tracks.map(\.id).filter { seen.insert($0).inserted }
+    persistQueue()
   }
 
   func addPublication(_ draft: PublicationDraft) {
@@ -236,4 +239,3 @@ final class LibraryStore: ObservableObject {
     }
   }
 }
-

@@ -178,3 +178,4 @@ extension View {
     modifier(AdaptiveFrame(maxWidth: maxWidth))
   }
 }
+

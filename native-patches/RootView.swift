@@ -12,25 +12,24 @@ struct RootView: View {
 
   var body: some View {
     ZStack {
-      if auth.registrationJustCompleted {
-        RegistrationSuccessView()
-          .transition(.opacity.combined(with: .scale(scale: 0.985)))
-      } else {
-        switch auth.state {
-        case .checking:
-          LaunchGateView()
-            .transition(.opacity)
+      Group {
+        if auth.registrationJustCompleted {
+          RegistrationSuccessView()
+            .transition(.opacity.combined(with: .scale(scale: 0.985)))
+        } else {
+          switch auth.state {
+          case .signedOut:
+            AuthFlowView()
+              .transition(.opacity)
 
-        case .signedOut:
-          AuthFlowView()
-            .transition(.opacity)
-
-        case .guest, .authenticated:
-          appShell
-            .transition(.opacity)
+          case .checking, .guest, .authenticated:
+            appShell
+              .transition(.opacity)
+          }
         }
       }
     }
+    .background(Color.black.ignoresSafeArea())
     .animation(.easeInOut(duration: 0.24), value: auth.state)
     .animation(.easeInOut(duration: 0.24), value: auth.registrationJustCompleted)
     .fullScreenCover(isPresented: $searchPresented) {
@@ -66,10 +65,12 @@ struct RootView: View {
         max(0, layout.viewportWidth - chromeSideInset * 2)
       )
 
-      let chromeDrop: CGFloat =
-        layout.isPhone
-        ? max(safeBottom - 5, 11)
-        : 0
+      let windowHeight = layout.viewportHeight + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom
+      // Keyboard avoidance can increase the proposed root inset. It must not
+      // change the physical navigation reference or the system gesture margin.
+      let systemBottom = activeWindow?.safeAreaInsets.bottom ?? proxy.safeAreaInsets.bottom
+      let chrome = BottomChromeLayout(viewportHeight: windowHeight, safeBottom: systemBottom,
+                                     rootBottomInset: safeBottom)
 
       ZStack(alignment: .bottom) {
         tabContent
@@ -77,9 +78,8 @@ struct RootView: View {
 
         if player.hasStartedPlaybackThisSession, player.currentTrack != nil {
           MorphingPlayerView(
-            selection: $selection,
             expansion: $playerExpansion,
-            chromeDrop: chromeDrop,
+            chromeBottomPadding: chrome.bottomPadding,
             safeTopInset: safeTop,
             safeBottomInset: safeBottom,
             safeLeadingInset: safeLeading,
@@ -94,7 +94,7 @@ struct RootView: View {
           .zIndex(20)
         }
 
-        VStack(spacing: 8) {
+        VStack(spacing: BottomChromeLayout.playerGap) {
           if player.hasStartedPlaybackThisSession, player.currentTrack != nil {
             MiniPlayerView(openPlayer: expandPlayer)
               .opacity(Double(1 - smoothStep(progress / 0.18)))
@@ -113,16 +113,20 @@ struct RootView: View {
             }
           )
           .padding(.horizontal, layout.isPhone ? 4 : 0)
-          .offset(y: layout.isPhone ? -3 : 0)
         }
         .frame(width: chromeWidth)
-        .padding(.bottom, layout.isPhone ? 6 : 0)
-        .offset(y: chromeDrop)
+        .padding(.bottom, chrome.bottomPadding)
         .zIndex(40)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .coordinateSpace(name: "playerContainer")
-      .background(AppBackground().ignoresSafeArea())
+      .background {
+        if selection == .profile {
+          AppBackground().ignoresSafeArea()
+        } else {
+          MuwaPalette.background.ignoresSafeArea()
+        }
+      }
     }
   }
 
@@ -170,12 +174,15 @@ struct RootView: View {
   }
 
   private var activeWindowSafeAreaInsets: UIEdgeInsets {
+    activeWindow?.safeAreaInsets ?? .zero
+  }
+
+  private var activeWindow: UIWindow? {
     UIApplication.shared.connectedScenes
       .compactMap { $0 as? UIWindowScene }
       .filter { $0.activationState == .foregroundActive }
       .flatMap { $0.windows }
-      .first(where: \ .isKeyWindow)?
-      .safeAreaInsets ?? .zero
+      .first(where: \ .isKeyWindow)
   }
 
   private func smoothStep(_ value: CGFloat) -> CGFloat {
@@ -184,43 +191,6 @@ struct RootView: View {
   }
 }
 
-private struct LaunchGateView: View {
-  @State private var reveal = false
-
-  var body: some View {
-    ZStack {
-      Color.black.ignoresSafeArea()
-
-      ZStack {
-        Circle()
-          .stroke(.white.opacity(0.10), lineWidth: 1)
-          .frame(width: 132, height: 132)
-          .scaleEffect(reveal ? 1.26 : 0.72)
-          .opacity(reveal ? 0 : 0.62)
-
-        Image("AppMark")
-          .resizable()
-          .scaledToFit()
-          .frame(width: 92, height: 92)
-          .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-          .scaleEffect(reveal ? 1 : 0.84)
-          .opacity(reveal ? 1 : 0.18)
-          .shadow(
-            color: .white.opacity(reveal ? 0.14 : 0),
-            radius: reveal ? 18 : 0
-          )
-      }
-    }
-    .onAppear {
-      withAnimation(.easeOut(duration: 0.58)) {
-        reveal = true
-      }
-    }
-  }
-}
-
 enum AppTab: Hashable {
   case home, library, profile
 }
-
-

@@ -1,5 +1,25 @@
 import Foundation
 
+enum PublishedSubtitleAvailability: String, Codable {
+  case available, processing, review, unavailable
+  var title: String {
+    switch self {
+    case .available: return "Текст нашида"
+    case .processing: return "Распознаём текст"
+    case .review: return "Текст на проверке"
+    case .unavailable: return "Текст пока недоступен"
+    }
+  }
+  var message: String {
+    switch self {
+    case .available: return ""
+    case .processing: return "Субтитры появятся после распознавания. Можно продолжать слушать нашид."
+    case .review: return "Арабский текст распознан, но в нём есть сомнительные фразы. Он появится после проверки владельцем."
+    case .unavailable: return "Для этого нашида ещё нет опубликованных субтитров. Можно продолжать слушать."
+    }
+  }
+}
+
 enum SubtitleLanguage: String, CaseIterable, Identifiable, Codable, Sendable {
   case arabic = "AR"
   case russian = "RU"
@@ -54,6 +74,20 @@ struct AISubtitleDocument: Codable, Equatable {
   let id: String
   let language: String
   let segments: [AISubtitleSegment]
+  static func published(trackID: String, revision: Int, captions: [SubtitleSegment]) throws -> Self {
+    // Arabic is the original, including colloquial spelling. Never replace it
+    // with a translation or normalize dialectal lyrics into invented MSA text.
+    let language: SubtitleLanguage = captions.contains(where: { !$0.ar.isEmpty }) ? .arabic
+      : captions.contains(where: { !$0.ru.isEmpty }) ? .russian : .english
+    let rows = captions.enumerated().compactMap { index, caption -> AISubtitleSegment? in
+      let original = caption.text(for: language).trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !original.isEmpty else { return nil }
+      let words = caption.words ?? []
+      return AISubtitleSegment(id: "s\(index)", start: caption.start, end: caption.end,
+        original: original, words: words, timing: words.isEmpty ? "phrase" : "estimated")
+    }
+    return try Self(version: 2, id: "catalog-\(trackID)-r\(revision)", language: language.rawValue.lowercased(), segments: rows).validated()
+  }
   var isRTL: Bool { ["ar", "fa", "he", "ur"].contains(language.components(separatedBy: "-")[0]) }
   func activeIndex(at time: Double) -> Int? {
     guard time.isFinite else { return nil }
