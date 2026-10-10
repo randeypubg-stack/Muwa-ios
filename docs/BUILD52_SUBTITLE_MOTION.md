@@ -16,8 +16,9 @@ Compose reader, without a new playback clock, recognition provider or UI library
   Entering context fades over 8 pt; leaving context only fades. At most three
   phrases are mounted, with no looping effect or separate timer.
 - The full reader softly changes text opacity and its existing focus surface.
-  Its content uses the actual presented viewport, so a fitted iPad sheet keeps
-  controls and wrapped Arabic inside the sheet rather than the player window.
+  On iOS 18 and later it requests the standard page presentation instead of an
+  intrinsic fitted sheet. Its Arabic rows have an explicit width derived from
+  the presented viewport; controls and text must remain inside that page.
   Playback following uses a 0.36 s zero-bounce settle. Manual dragging suspends
   following. Seeking can retarget motion rather than queue transitions.
 - Existing word highlighting uses the document's timestamps. No word timings,
