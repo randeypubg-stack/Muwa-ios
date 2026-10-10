@@ -240,8 +240,10 @@ s=s.replace(needle, needle+'''
 needle='        let width = bounds.width * progress'
 assert s.count(needle) == 1, 'Ink review must observe the existing native renderer'
 s=s.replace(needle, needle+'''
-        ReviewSubtitleMotion.recordInk(start: ink.start, end: ink.end, time: time, progress: progress,
-                                       bounds: bounds, rtl: rtl)
+        Task { @MainActor in
+          ReviewSubtitleMotion.recordInk(start: ink.start, end: ink.end, time: time,
+                                         progress: progress, bounds: bounds, rtl: rtl)
+        }
 ''',1)
 p.write_text(s)
 
