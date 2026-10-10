@@ -281,35 +281,30 @@ private struct AISubtitleReader: View {
 
   private var reader: some View {
     NavigationStack {
-      GeometryReader { viewport in
-      VStack(spacing: 16) {
+      Group {
         if manager.document != nil {
-          HStack {
-            Menu {
-              Picker("Перевод", selection: $language) {
-                ForEach(manager.availableLanguages) { value in Text(value.title).tag(value) }
-              }
-            } label: { Label(language.title, systemImage: "globe").font(.subheadline.weight(.medium)) }
-            Spacer()
-            Toggle("Следить", isOn: $followsPlayback).font(.caption).fixedSize()
-          }.padding(.horizontal, 20)
-            .fixedSize(horizontal: false, vertical: true)
-            .layoutPriority(1)
-          if let message = manager.error {
-            Text(message).font(.callout).foregroundStyle(.secondary).padding(.horizontal, 20)
-          }
-          if manager.translatingLanguage != nil {
-            ProgressView("Переводим. Оригинал уже доступен.").font(.caption)
-          }
           ScrollViewReader { proxy in
             ScrollView {
               LazyVStack(alignment: .leading, spacing: 22) {
                 if let doc = manager.document {
                   ForEach(doc.segments) { segment in
-                    segmentRow(segment, rtl: doc.isRTL, width: max(0, viewport.size.width - 16))
+                    segmentRow(segment, rtl: doc.isRTL)
                   }
                 }
-              }.padding(.horizontal, 8).padding(.vertical, 20)
+              }
+              .frame(maxWidth: .infinity)
+              .padding(.horizontal, 16).padding(.vertical, 20)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .safeAreaInset(edge: .top, spacing: 0) { readerControls }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+              Text(manager.isVerifiedByOwner ? "Текст проверен владельцем."
+                : "Арабский оригинал сохраняется без перевода. Автоматический текст может содержать ошибки.")
+                .font(.caption2).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity).padding(.horizontal, 20).padding(.vertical, 12)
+                .background(.ultraThinMaterial)
             }
             .simultaneousGesture(DragGesture(minimumDistance: 10).onChanged { _ in followsPlayback = false })
             .onChange(of: activeID) { _, id in
@@ -323,19 +318,11 @@ private struct AISubtitleReader: View {
             }
             .onAppear { if let id = activeID { proxy.scrollTo(id, anchor: .center) } }
           }
-          Text(manager.isVerifiedByOwner ? "Текст проверен владельцем."
-            : "Арабский оригинал сохраняется без перевода. Автоматический текст может содержать ошибки.")
-            .font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 20).padding(.bottom, 8)
         } else {
           emptyContent
         }
       }
-      // Size against the presented reader, not the underlying player window.
-      // A fitted iPad sheet otherwise permits its intrinsic content to overflow
-      // underneath the toolbar and clips the follow control and Arabic lines.
-      .frame(width: viewport.size.width, height: viewport.size.height)
       .background { AppBackground().ignoresSafeArea() }
-      }
       .navigationTitle(manager.document == nil ? "Текст нашида" : "Оригинал и перевод")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -355,6 +342,32 @@ private struct AISubtitleReader: View {
         if !available.contains(language) { language = .original }
       }
     }.preferredColorScheme(.dark)
+  }
+
+  // Insets reserve real space inside the presented page. Scrollable lyrics
+  // cannot enlarge a parent stack or push these controls behind the toolbar.
+  private var readerControls: some View {
+    VStack(spacing: 10) {
+      HStack {
+        Menu {
+          Picker("Перевод", selection: $language) {
+            ForEach(manager.availableLanguages) { value in Text(value.title).tag(value) }
+          }
+        } label: { Label(language.title, systemImage: "globe").font(.subheadline.weight(.medium)) }
+        Spacer(minLength: 12)
+        Toggle("Следить", isOn: $followsPlayback).font(.caption).fixedSize()
+      }
+      if let message = manager.error {
+        Text(message).font(.callout).foregroundStyle(.secondary)
+          .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+      }
+      if manager.translatingLanguage != nil {
+        ProgressView("Переводим. Оригинал уже доступен.").font(.caption)
+      }
+    }
+    .padding(.horizontal, 20).padding(.vertical, 12)
+    .frame(maxWidth: .infinity)
+    .background(.ultraThinMaterial)
   }
 
   private var emptyContent: some View {
@@ -388,7 +401,7 @@ private struct AISubtitleReader: View {
     }
   }
 
-  private func segmentRow(_ segment: AISubtitleSegment, rtl: Bool, width: CGFloat) -> some View {
+  private func segmentRow(_ segment: AISubtitleSegment, rtl: Bool) -> some View {
     let isActive = activeID == segment.id
     let translation = manager.translations[language.rawValue]?.segments[segment.id]
     return Button {
@@ -399,7 +412,6 @@ private struct AISubtitleReader: View {
         AISubtitleLine(segment: segment, time: timeline.snapshot.time, rtl: rtl)
           .font(.system(size: 23, weight: .semibold))
           .lineLimit(nil)
-          .frame(width: max(0, width - 32), alignment: rtl ? .trailing : .leading)
           .fixedSize(horizontal: false, vertical: true)
         if let translation {
           Text(translation).font(.body).foregroundStyle(.white.opacity(0.65))
@@ -407,7 +419,7 @@ private struct AISubtitleReader: View {
         }
       }
       .padding(16)
-      .frame(width: width, alignment: .leading)
+      .frame(maxWidth: .infinity, alignment: .leading)
       .background(Color.white.opacity(isActive ? 0.065 : 0), in: RoundedRectangle(cornerRadius: 18))
       .opacity(isActive ? 1 : 0.48)
       .animation(animationsAllowed ? MuwaMotion.subtitleFocus : nil, value: isActive)

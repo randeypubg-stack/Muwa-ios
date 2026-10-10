@@ -19,8 +19,9 @@ Compose reader, without a new playback clock, recognition provider or UI library
   The stable player shell presents that same reader and retains its manager and
   language binding; the shifted artwork rail no longer owns a modal presenter.
   On iOS 18 and later it requests the standard page presentation instead of an
-  intrinsic fitted sheet. Its Arabic rows have an explicit width derived from
-  the presented viewport; controls and text must remain inside that page.
+  intrinsic fitted sheet. Its scroll view uses the presented page proposal for Arabic wrapping.
+  Header controls and the verification footer reserve space with safe-area
+  insets, so lyric content cannot displace them or the navigation toolbar.
   Playback following uses a 0.36 s zero-bounce settle. Manual dragging suspends
   following. Seeking can retarget motion rather than queue transitions.
 - Existing word highlighting uses the document's timestamps. No word timings,
