@@ -101,10 +101,11 @@ def verify_runtime_proof(ready, rail, clock, finished, frame, pid, reduced_motio
             "finalTime": finished["time"], "reduceMotion": reduced_motion}
 
 
-def verify_ink_proof(ink, pid):
+def verify_ink_proof(ink, pid, frame):
     """Require the actual shaped Arabic runs and time-driven drawing sweep."""
     if not ink:
         raise AssertionError("The actual native word renderer never drew timed words")
+    verify_frame(frame, pid)
     for item in ink:
         if item.get("pid") != pid or item.get("rtl") is not True:
             raise AssertionError("Word ink belongs to a stale process or wrong writing direction")
@@ -113,6 +114,8 @@ def verify_ink_proof(ink, pid):
             raise AssertionError("Ink proof has invalid native glyph/timing values")
         if item["width"] <= 0 or not item["wordStart"] <= item["time"] < item["wordEnd"]:
             raise AssertionError("Native ink drew outside its real word time/bounds")
+        if item["x"] < -2 or item["x"] + item["width"] > frame["width"] + 2:
+            raise AssertionError("Shaped Arabic glyphs escaped the measured caption viewport")
         expected = (item["time"] - item["wordStart"]) / (item["wordEnd"] - item["wordStart"])
         if abs(expected - item["progress"]) > 0.0001:
             raise AssertionError("Native word highlight invented its progress")
@@ -121,6 +124,7 @@ def verify_ink_proof(ink, pid):
     if len({round(i["progress"], 1) for i in ink}) < 4:
         raise AssertionError("Word ink never advanced through its glyphs")
     return {"actualNativeSamples": len(ink), "captionCount": 5, "direction": "RTL",
+            "glyphRunsInsideMeasuredViewport": True,
             "timingSource": "Disposable timed manual-caption fixture; no ASR claim"}
 
 
@@ -144,11 +148,11 @@ def self_test():
     ink = [{"pid": pid, "rtl": True, "wordStart": i * 5, "wordEnd": i * 5 + 2,
             "time": i * 5 + p * 2, "progress": p, "x": 10, "width": 50}
            for i in range(5) for p in [0.1, 0.3, 0.6, 0.9]]
-    verify_ink_proof(ink, pid)
+    verify_ink_proof(ink, pid, frame)
     for key, bad in [("pid", 9), ("rtl", False), ("width", 0),
-                     ("time", 100), ("progress", 0.99), ("x", float("nan"))]:
+                     ("time", 100), ("progress", 0.99), ("x", float("nan")), ("x", -5), ("x", 100)]:
         changed = copy.deepcopy(ink); changed[0][key] = bad
-        try: verify_ink_proof(changed, pid)
+        try: verify_ink_proof(changed, pid, frame)
         except AssertionError: pass
         else: raise AssertionError(f"Invalid native ink proof accepted: {key}")
     cases = []
@@ -392,7 +396,7 @@ def main():
                                                     reduced_motion=args.reduce_motion)
         if not args.reduce_motion:
             ink = [json.loads(line) for line in (data / "Documents/subtitle-motion-ink.jsonl").read_text().splitlines()]
-            status["inkRuntimeProof"] = verify_ink_proof(ink, pid)
+            status["inkRuntimeProof"] = verify_ink_proof(ink, pid, frame)
         else:
             status["inkRuntimeProof"] = {"sweepDisabled": True, "reason": "Reduce Motion decision input"}
         dimensions = {(item["width"], item["height"]) for item in status["screenshots"]}
