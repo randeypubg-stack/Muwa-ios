@@ -67,50 +67,53 @@ struct AISubtitleExperience: View {
   }
 
   var body: some View {
-    Button { openReader() } label: {
-      Group {
-        if let document = manager.document,
-           let activeIndex = document.activeIndex(at: timeline.snapshot.time) {
-          SubtitleRail(count: document.segments.count, activeIndex: activeIndex, height: compactHeight) { index, active in
-            let segment = document.segments[index]
-            VStack(alignment: document.isRTL ? .trailing : .leading, spacing: 5) {
-                AISubtitleLine(segment: segment,
-                  time: active ? timeline.snapshot.time : segment.end, rtl: document.isRTL)
-                  .font(.system(size: 21, weight: .semibold))
-                  .lineLimit(nil)
-                  .fixedSize(horizontal: false, vertical: true)
-                if let translated = manager.translations[language.rawValue]?.segments[segment.id] {
-                  Text(translated)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.75))
-                    .lineLimit(nil)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .multilineTextAlignment(.leading)
-                    .environment(\.layoutDirection, .leftToRight)
-                    .opacity(active ? 1 : 0)
+    Group {
+      if hasContent && isVisible {
+        Button { openReader() } label: {
+          Group {
+            if let document = manager.document,
+               let activeIndex = document.activeIndex(at: timeline.snapshot.time) {
+              SubtitleRail(count: document.segments.count, activeIndex: activeIndex, height: compactHeight) { index, active in
+                let segment = document.segments[index]
+                VStack(alignment: document.isRTL ? .trailing : .leading, spacing: 5) {
+                    AISubtitleLine(segment: segment,
+                      time: active ? timeline.snapshot.time : segment.end, rtl: document.isRTL)
+                      .font(.system(size: 21, weight: .semibold))
+                      .lineLimit(nil)
+                      .fixedSize(horizontal: false, vertical: true)
+                    if let translated = manager.translations[language.rawValue]?.segments[segment.id] {
+                      Text(translated)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.leading)
+                        .environment(\.layoutDirection, .leftToRight)
+                        .opacity(active ? 1 : 0)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: document.isRTL ? .trailing : .leading)
+              }
+            } else if manager.document == nil {
+              if hasContent {
+                PlayerSubtitleOverlay(
+                  track: track, currentTime: timeline.snapshot.time,
+                  language: SubtitleLanguage(rawValue: language.rawValue.uppercased()) ?? .arabic,
+                  height: compactHeight
+                )
+              }
             }
-            .frame(maxWidth: .infinity, alignment: document.isRTL ? .trailing : .leading)
           }
-        } else if manager.document == nil {
-          if hasContent {
-            PlayerSubtitleOverlay(
-              track: track, currentTime: timeline.snapshot.time,
-              language: SubtitleLanguage(rawValue: language.rawValue.uppercased()) ?? .arabic,
-              height: compactHeight
-            )
-          }
+          .frame(width: compactWidth, height: compactHeight)
+          .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Субтитры. Открыть полный текст")
+        .accessibilityValue(manager.document != nil ? "Оригинальный текст доступен"
+          : hasContent ? "Обычные субтитры доступны"
+          : manager.isRecognizing ? "Загрузка текста" : "Текст пока недоступен")
       }
-      .frame(width: compactWidth, height: compactHeight)
-      .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
-    .accessibilityHidden(!hasContent)
-    .accessibilityLabel("Субтитры. Открыть полный текст")
-    .accessibilityValue(manager.document != nil ? "Оригинальный текст доступен"
-      : hasContent ? "Обычные субтитры доступны"
-      : manager.isRecognizing ? "Загрузка текста" : "Текст пока недоступен")
     .preference(key: PlayerSubtitleRailAvailabilityKey.self, value: hasContent ? [track.id] : [])
     .task(id: track.id) { legacySubtitles.load(for: track) }
     .task(id: "\(track.id)|\(track.audioURL)|\(track.captionsRevision ?? 0)") {
