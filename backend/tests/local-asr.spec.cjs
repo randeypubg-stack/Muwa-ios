@@ -152,7 +152,7 @@ describe("Local recognition queue and protected captions", () => {
     expect(c.job.language).toBe("ar");
     expect(await finish(c)).toBeTrue();
     expect(
-      (await query("select captions from catalog_tracks"))[0].captions[0].ar,
+      (await query("select document from catalog_asr_jobs"))[0].document.segments[0].original,
     ).toBe("مرحبا");
   });
   it("automatically queues a verified upload and deduplicates subsequent metadata saves", async () => {
@@ -222,18 +222,25 @@ describe("Local recognition queue and protected captions", () => {
     expect(replacement.job.id).toBe(c.job.id);
     expect(replacement.job.attempts).toBe(2);
   });
-  it("saves original text and acoustic words automatically without publishing the track", async () => {
+  it("keeps confident original text and acoustic words private until explicit owner review", async () => {
     await create();
     const c = await claim();
     expect(await finish(c)).toBeTrue();
     const t = (await query("SELECT * FROM catalog_tracks"))[0];
     expect(t.status).toBe("draft");
-    expect(t.captions_source).toBe("automatic");
-    expect(t.captions[0].ar).toBe("مرحبا");
-    expect(t.captions[0].ru).toBe("");
-    expect(t.captions[0].words.length).toBe(1);
-    expect(t.captions_revision).toBe(1);
+    expect(t.captions_source).toBe("manual");
+    expect(t.captions).toEqual([]);
+    expect(t.captions_revision).toBe(0);
+    const result = await (await request({action: "get-recognition", trackId: t.id})).json();
+    expect(result.recognition.document.segments[0].original).toBe("مرحبا");
+    expect(result.recognition.document.segments[0].words.length).toBe(1);
+    expect((await state()).recognition.counts.review).toBe(1);
     expect(await finish(c)).toBeFalse();
+    const saved = await request({action: "save-captions", trackId: t.id,
+      revision: t.revision, captions: [{start: 1, end: 3, ar: "مرحبا", ru: "", en: ""}]});
+    expect(saved.status).toBe(200);
+    expect((await state()).recognition.counts.ready).toBe(1);
+    expect((await query("SELECT captions_source FROM catalog_tracks"))[0].captions_source).toBe("manual");
   });
   it("counts current recognition, exposes title suggestions privately and never renames a track", async () => {
     await create();

@@ -50,8 +50,8 @@ export async function recognitionCounts(): Promise<
   const result = await sql<RecognitionCounts>`
     select count(*) filter (where j.status='queued')::integer as queued,
       count(*) filter (where j.status='processing')::integer as processing,
-      count(*) filter (where j.status='ready' and not coalesce((j.quality->>'needsReview')::boolean,true))::integer as ready,
-      count(*) filter (where j.status='ready' and coalesce((j.quality->>'needsReview')::boolean,true))::integer as review,
+      count(*) filter (where j.status='ready' and t.captions_source='manual' and t.captions<>'[]'::jsonb)::integer as ready,
+      count(*) filter (where j.status='ready' and not (t.captions_source='manual' and t.captions<>'[]'::jsonb))::integer as review,
       count(*) filter (where j.status='failed')::integer as failed,
       count(*) filter (where j.id is null)::integer as missing
     from catalog_tracks t

@@ -115,17 +115,14 @@ struct AISubtitleExperience: View {
     .task(id: "\(track.id)|\(track.audioURL)|\(track.captionsRevision ?? 0)") {
       await manager.load(track)
       manager.usePublishedFallback(track, captions: legacySubtitles.segments(for: track))
-      if isVisible && !hasContent { openReader() }
     }
     .onChange(of: legacySubtitles.segments(for: track)) { _, captions in
       manager.usePublishedFallback(track, captions: captions)
     }
-    .onChange(of: isVisible) { _, visible in
-      if visible && !hasContent && !manager.isRecognizing { openReader() }
-    }
   }
 
   private func openReader() {
+    guard !(manager.document?.segments.isEmpty ?? true) else { return }
     presentReader(SubtitleReaderPresentation(
       manager: manager, timeline: timeline, track: track, language: $language,
       didDismiss: { if !hasContent { isVisible = false } }
@@ -386,11 +383,11 @@ private struct AISubtitleReader: View {
             .onAppear { if let id = activeID { proxy.scrollTo(id, anchor: .center) } }
           }
         } else {
-          emptyContent
+          Color.clear.onAppear { dismiss() }
         }
       }
       .background { AppBackground().ignoresSafeArea() }
-      .navigationTitle(manager.document == nil ? "Текст нашида" : "Оригинал и перевод")
+      .navigationTitle("Оригинал и перевод")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         if manager.document != nil {
@@ -412,6 +409,9 @@ private struct AISubtitleReader: View {
       }
       .onChange(of: manager.availableLanguages) { _, available in
         if !available.contains(language) { language = .original }
+      }
+      .onChange(of: manager.document == nil) { _, missing in
+        if missing { dismiss() }
       }
     }.preferredColorScheme(.dark)
   }
@@ -440,37 +440,6 @@ private struct AISubtitleReader: View {
     .padding(.horizontal, 20).padding(.vertical, 12)
     .frame(maxWidth: .infinity)
     .background(.ultraThinMaterial)
-  }
-
-  private var emptyContent: some View {
-    ScrollView {
-      VStack(spacing: 18) {
-        ArtworkView(url: track.artworkURL, cornerRadius: 24,
-                    placeholderSystemImage: "music.note", contentMode: .fill)
-          .frame(width: 112, height: 112)
-          .accessibilityHidden(true)
-        Text(track.title).font(.title3.weight(.semibold))
-          .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-        if manager.isRecognizing {
-          ProgressView("Загружаем текст…").padding(.top, 12)
-        } else {
-          Label(manager.error == nil ? manager.availability.title : "Не удалось загрузить текст",
-                systemImage: "captions.bubble")
-            .font(.headline).padding(.top, 12)
-            .accessibilityIdentifier("subtitle-empty-state")
-          Text(manager.error ?? manager.availability.message)
-            .font(.callout).foregroundStyle(.secondary)
-            .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-          Button("Проверить снова") {
-            Task { await manager.load(track, retry: true) }
-          }
-          .buttonStyle(.bordered).controlSize(.large)
-          .accessibilityIdentifier("subtitle-retry")
-        }
-      }
-      .frame(maxWidth: 440).padding(24).padding(.top, 36)
-      .frame(maxWidth: .infinity)
-    }
   }
 
   private func segmentRow(_ segment: AISubtitleSegment, rtl: Bool) -> some View {

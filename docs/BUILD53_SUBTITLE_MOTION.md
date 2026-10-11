@@ -29,7 +29,9 @@ the same softer hierarchy and a 420 ms focus settle; its manual-caption reader
 continues to use phrase-level focus, without invented word timings.
 
 The Build 52 full-screen reader, controls/footer insets and track-change dismissal
-are preserved. RootView, FullPlayerView, BottomBar and AdaptiveLayout are unchanged.
+are preserved. RootView, BottomBar and AdaptiveLayout are unchanged. FullPlayerView
+loads caption availability before the toggle, disables unavailable text controls
+and clears its retained reader when playback changes; its geometry is unchanged.
 The approved physical-bottom navigation anchor remains 18/874, clamped 12–28.
 
 ## References
@@ -64,3 +66,20 @@ reader open/close, unavailable text, playback changes, main tabs and rotation.
 Android changes require compilation, existing unit/lint checks and device UI
 regressions. Delivery records actual runtime versions and unresolved failures;
 Simulator evidence is not physical-device or recognizer-quality evidence.
+
+## Empty text and recognition corrections
+
+The pending/review full-screen placeholder is removed. A reader opens only for
+an existing document, never automatically after an empty response. The existing
+manager remains mounted while the full player is open so availability does not
+depend on pressing a disabled button. The rail stays invisible and does not
+shift artwork when text is missing.
+
+Whisper large-v3 CPU/int8 already runs on the rented server. Acoustic confidence
+cannot establish correct words in sung Arabic or dialects. The protected worker
+finish function now saves every result privately, without publishing lyrics.
+Only captions explicitly saved by the owner are served publicly; old automatic
+rows are filtered too. The owner editor retains audio seeking, original Arabic,
+word/timestamp review, title suggestions and explicit save. Audio publication
+and automatic recognition of new uploads remain independent. This changes the
+publication policy, not a claim that recognition accuracy is solved.

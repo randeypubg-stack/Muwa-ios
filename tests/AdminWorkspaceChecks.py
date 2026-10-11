@@ -39,7 +39,7 @@ with sync_playwright() as p:
   page.goto(args.url.rstrip('/')+'/admin')
   expect(page.get_by_role('heading',name='Каталог нашидов')).to_be_visible()
   expect(page.get_by_role('region',name='Распознавание каталога')).to_be_visible()
-  expect(page.get_by_text('Текст готов · требуется проверка',exact=False)).to_be_visible()
+  expect(page.get_by_text('Черновик текста · сверить с записью',exact=False)).to_be_visible()
   if not page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'):
    print('overflow',width,page.evaluate('({width:window.innerWidth,scroll:document.documentElement.scrollWidth,offenders:[...document.querySelectorAll("*")].filter(e=>e.getBoundingClientRect().right>window.innerWidth+1).slice(0,12).map(e=>({tag:e.tagName,cls:e.className,right:e.getBoundingClientRect().right}))})'),flush=True)
    page.screenshot(path=str(out/f'overflow-{width}.png'),full_page=True)
@@ -60,12 +60,12 @@ with sync_playwright() as p:
   saved=next(a for a in actions if a['action']=='save-track')
   assert saved['title']==phrase and saved['revision']==1
   page.get_by_role('button',name='Субтитры: Nasheed',exact=True).click()
-  expect(page.get_by_text('Текст готов · требуется проверка',exact=True)).to_be_visible()
+  expect(page.get_by_text('Черновик текста · сверить с записью',exact=True)).to_be_visible()
   page.get_by_role('button',name='Взять распознанный текст').click()
   assert phrase in page.locator('textarea').evaluate_all('(items)=>items.map(item=>item.value)'), 'Arabic original missing in editor'
   assert not any(a['action']=='save-captions' for a in actions), 'Recognition overwrote captions without owner save'
   page.screenshot(path=str(out/f'caption-review-{width}.png'),full_page=True)
-  page.get_by_role('button',name='Сохранить субтитры',exact=True).click()
+  page.get_by_role('button',name='Сохранить проверенный текст',exact=True).click()
   expect(page.get_by_role('heading',name='Субтитры · Nasheed')).not_to_be_visible()
   saved=next(a for a in actions if a['action']=='save-captions')
   assert saved['captions']==[{'start':2,'end':8,'ar':phrase,'ru':'','en':''}]

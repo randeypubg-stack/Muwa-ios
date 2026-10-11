@@ -93,7 +93,7 @@ RETURNS boolean LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,public 
 $$;
 CREATE OR REPLACE FUNCTION muwa_finish_asr(p_id uuid,p_token uuid,p_doc jsonb,p_quality jsonb)
 RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
-DECLARE j public.catalog_asr_jobs; t public.catalog_tracks; h text; lines jsonb; lang text;
+DECLARE j public.catalog_asr_jobs; t public.catalog_tracks; h text; lang text;
 BEGIN
  SELECT * INTO j FROM public.catalog_asr_jobs WHERE id=p_id;
  IF NOT FOUND THEN RETURN false; END IF;
@@ -125,16 +125,8 @@ BEGIN
  ) THEN RAISE EXCEPTION 'INVALID_TRANSCRIPT'; END IF;
  UPDATE public.catalog_asr_jobs SET status='ready',document=p_doc,quality=p_quality,error_code=NULL,
  progress_seconds=duration,lease_token=NULL,lease_until=NULL,updated_at=now() WHERE id=p_id;
- IF lang IN ('ar','ru','en') AND p_quality->>'needsReview'='false' AND t.captions_revision=j.captions_revision
- AND ((t.captions='[]'::jsonb AND t.captions_revision=0) OR t.captions_source='automatic') THEN
-  SELECT jsonb_agg(jsonb_build_object('start',s->'start','end',s->'end',
-   'ar',CASE WHEN lang='ar' THEN s->>'original' ELSE '' END,
-   'ru',CASE WHEN lang='ru' THEN s->>'original' ELSE '' END,
-   'en',CASE WHEN lang='en' THEN s->>'original' ELSE '' END,'words',s->'words') ORDER BY ord) INTO lines
-  FROM jsonb_array_elements(p_doc->'segments') WITH ORDINALITY a(s,ord);
-  UPDATE public.catalog_tracks SET captions=lines,captions_source='automatic',captions_revision=captions_revision+1,
-   revision=revision+1,updated_at=now() WHERE id=t.id;
- END IF;
+ -- Confidence is diagnostic, not proof of correct lyrics. All recognition
+ -- remains a private draft until the owner saves checked captions explicitly.
  RETURN true;
 END $$;
 REVOKE ALL ON FUNCTION muwa_enqueue_asr(text,boolean),muwa_claim_asr(uuid),

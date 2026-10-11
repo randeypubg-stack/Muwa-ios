@@ -64,8 +64,8 @@ const recognitionLabels: Record<string, string> = {
   failed: "Ошибка распознавания",
 };
 const recognitionLabel = (job: TrackRecord["recognition"]) =>
-  job?.status === "ready" && job.quality?.needsReview
-    ? "Текст готов · требуется проверка"
+  job?.status === "ready"
+    ? "Черновик текста · сверить с записью"
     : job
       ? recognitionLabels[job.status]
       : "Ожидает распознавания";
@@ -1260,7 +1260,7 @@ const CaptionEditor = ({
                 : recognized?.status === "failed"
                   ? "Распознавание не завершено. Исходный файл и сохранённые субтитры не изменены; можно повторить."
                   : recognized?.status === "ready"
-                    ? "Проверьте слова и время по записи. Ручные исправления не заменяются автоматическим результатом."
+                    ? "Сверьте слова и время с записью. Даже уверенный результат модели может ошибаться в пении и диалектах. Черновик не виден слушателям до сохранения проверенного текста."
                     : "Сервер распознаёт оригинал локально, по одному файлу. Новые загрузки попадают в очередь автоматически."}
             </p>
             {recognized?.quality?.needsReview && (
@@ -1460,7 +1460,7 @@ const CaptionEditor = ({
             Отмена
           </Button>
           <Button disabled={busy || disabled} onClick={() => void save()}>
-            {busy ? "Сохраняем…" : "Сохранить субтитры"}
+            {busy ? "Сохраняем…" : "Сохранить проверенный текст"}
           </Button>
         </div>
       </DialogContent>

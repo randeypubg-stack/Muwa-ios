@@ -22,16 +22,16 @@ export async function handle(request: Request) {
       return Response.json({ error: "Нашид не найден." }, { status: 404 });
     // Only coarse availability is public. Draft recognition text, quality
     // details and job identifiers remain behind the existing owner endpoint.
-    const hasCaptions = Array.isArray(row.captions) && row.captions.length > 0;
+    const hasCaptions = row.source === "manual" && Array.isArray(row.captions) && row.captions.length > 0;
     const recognition = hasCaptions ? undefined
       : (await recognitionResults([parsed.data.trackId]))[0];
     const availability = hasCaptions ? "available"
-      : recognition?.status === "ready" && recognition.quality?.needsReview !== false ? "review"
+      : recognition?.status === "ready" || row.source === "automatic" ? "review"
       : ["queued", "processing"].includes(recognition?.status ?? "") ? "processing"
       : "unavailable";
     return Response.json(
       {
-        segments: row.captions,
+        segments: hasCaptions ? row.captions : [],
         source: row.source,
         revision: row.captionsRevision,
         availability,

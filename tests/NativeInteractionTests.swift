@@ -110,16 +110,21 @@ final class NativeInteractionTests: XCTestCase {
   func testUnpublishedCaptionsShowAnHonestStateAndKeepArtworkClear() throws {
     app.launchArguments = ["--audit-player", "--audit-ai-unavailable"]
     app.launch()
-    XCTAssertTrue(app.navigationBars["Текст нашида"].waitForExistence(timeout: 30))
-    XCTAssertTrue(app.staticTexts["Текст на проверке"].exists)
-    XCTAssertFalse(app.staticTexts["Текст проверен владельцем."].exists)
-    XCTAssertFalse(app.switches["Следить"].exists)
-    XCTAssertTrue(app.buttons["subtitle-retry"].isHittable)
-    shot("unpublished-subtitles-reader")
-    app.buttons["Готово"].tap()
-    XCTAssertTrue(app.otherElements["player-artwork-frame"].waitForExistence(timeout: 10))
+    let captions = app.buttons["player-subtitles"]
+    XCTAssertTrue(captions.waitForExistence(timeout: 30))
+    let unavailable = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "enabled == false"), object: captions)
+    XCTAssertEqual(XCTWaiter.wait(for: [unavailable], timeout: 10), .completed)
+    XCTAssertEqual(captions.value as? String, "Текст пока недоступен")
+    XCTAssertFalse(app.navigationBars["Текст нашида"].exists)
+    XCTAssertFalse(app.navigationBars["Оригинал и перевод"].exists)
+    XCTAssertFalse(app.staticTexts["Текст на проверке"].exists)
+    XCTAssertFalse(app.buttons["subtitle-retry"].exists)
+    XCTAssertTrue(app.otherElements["player-artwork-frame"].exists)
+    XCTAssertTrue(app.buttons["player-toggle"].isHittable)
     XCTAssertFalse(app.buttons["Субтитры. Открыть полный текст"].exists,
                    "An unavailable subtitle placeholder is painted over the cover")
+    shot("unpublished-subtitles-no-modal")
     _ = assertNavigationAnchor("unpublished-subtitles-player")
   }
 

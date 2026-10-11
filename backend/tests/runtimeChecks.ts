@@ -85,6 +85,12 @@ try {
  const reviewCaptions=await request('catalog/captions?trackId='+id,undefined,{cookie:''});const reviewPayload=await reviewCaptions.json();
  assert.equal(reviewPayload.availability,'review');assert.deepEqual(reviewPayload.segments,[]);
  assert.deepEqual(Object.keys(reviewPayload).sort(),['availability','revision','segments','source']);checks++;
+ // A confident model and legacy automatic publication never make lyrics public.
+ await sql`update catalog_asr_jobs set quality='{"needsReview":false}' where track_id=${id}`;
+ await sql`update catalog_tracks set captions_source='automatic',captions='[{"start":0,"end":1,"ar":"private automatic lyrics","ru":"","en":""}]' where id=${id}`;
+ const automatic=await (await request('catalog/captions?trackId='+id,undefined,{cookie:''})).json();
+ assert.equal(automatic.availability,'review');assert.deepEqual(automatic.segments,[]);checks++;
+ await sql`update catalog_tracks set captions_source='manual',captions='[]' where id=${id}`;
  await sql`update catalog_asr_jobs set audio_sha256=${'b'.repeat(64)} where track_id=${id}`;
  const staleCaptions=await request('catalog/captions?trackId='+id,undefined,{cookie:''});assert.equal((await staleCaptions.json()).availability,'unavailable');checks++;
  delete process.env.MUWA_LOCAL_ASR_ENABLED;

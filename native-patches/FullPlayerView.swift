@@ -215,6 +215,9 @@ struct MorphingPlayerView: View {
         dragStartExpansion = nil
       }
     }
+    .onChange(of: player.currentTrack?.id) { _, currentID in
+      if subtitleReader?.track.id != currentID { subtitleReader = nil }
+    }
     .sheet(isPresented: $premiumPresented) {
       PremiumView(compact: true)
         .presentationDetents([.fraction(0.60), .large])
@@ -566,18 +569,21 @@ struct MorphingPlayerView: View {
 
       // Keep the presenter mounted while paging so its task/cache survives.
       // Only the current cover owns captions; incoming covers never show stale text.
-      if showSubtitle, subtitlesVisible, progress > 0.74 {
+      if showSubtitle, progress > 0.74 {
         AISubtitleExperience(
           timeline: player.timeline, track: pageTrack, isVisible: $subtitlesVisible,
           compactWidth: subtitleLayout.railWidth, compactHeight: railHeight,
-          presentReader: { subtitleReader = $0 }
+          presentReader: { presentation in
+            guard player.currentTrack?.id == presentation.track.id else { return }
+            subtitleReader = presentation
+          }
         )
         .id("\(pageTrack.id)-r\(pageTrack.captionsRevision ?? 0)")
         .frame(width: subtitleLayout.railWidth, height: railHeight)
         .offset(x: subtitleLayout.railOffset)
-        .opacity(showRail ? 1 : 0)
-        .allowsHitTesting(showRail)
-        .accessibilityHidden(!showRail)
+        .opacity(showRail && subtitleLayoutActive ? 1 : 0)
+        .allowsHitTesting(showRail && subtitleLayoutActive)
+        .accessibilityHidden(!showRail || !subtitleLayoutActive)
       }
     }
     .frame(width: size, height: size)
@@ -801,6 +807,7 @@ struct MorphingPlayerView: View {
         } label: {
           Label(subtitlesVisible ? "Скрыть субтитры" : "Показать субтитры", systemImage: subtitleSymbol)
         }
+        .disabled(!subtitleContentTrackIDs.contains(track.id))
         Divider()
         Button {
           library.toggleLike(track)
@@ -1033,6 +1040,8 @@ struct MorphingPlayerView: View {
       }
       .buttonStyle(.plain)
       .accessibilityLabel(subtitlesVisible ? "Скрыть субтитры" : "Показать субтитры")
+      .accessibilityValue(subtitleContentTrackIDs.contains(track.id) ? "Текст доступен" : "Текст пока недоступен")
+      .disabled(!subtitleContentTrackIDs.contains(track.id))
       .accessibilityIdentifier("player-subtitles")
 
       Button {
@@ -1152,6 +1161,7 @@ struct MorphingPlayerView: View {
   private var subtitleSymbol: String { subtitlesVisible ? "captions.bubble.fill" : "captions.bubble" }
 
   private func toggleSubtitles() {
+    guard subtitleContentTrackIDs.contains(track.id) else { return }
     withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { subtitlesVisible.toggle() }
   }
 
