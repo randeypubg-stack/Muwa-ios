@@ -104,7 +104,7 @@ view.write_text(s)
 manager=root/'Sources/Services/SubtitleManager.swift'
 s=manager.read_text()
 needle='  func load(_ track: Track, retry: Bool = false) async {'
-fixture='\n    if ProcessInfo.processInfo.arguments.contains("--audit-ai") {\n      document = AISubtitleDocument(version: 2, id: "fixture", language: "ar", segments: [\n        AISubtitleSegment(id: "s0", start: 0, end: 8, original: "السلام عليكم ورحمة الله", words: [\n          SubtitleWord(text: "السلام", start: 0, end: 2), SubtitleWord(text: "عليكم", start: 2, end: 4),\n          SubtitleWord(text: "ورحمة", start: 4, end: 6), SubtitleWord(text: "الله", start: 6, end: 8)], timing: "estimated"),\n        AISubtitleSegment(id: "s1", start: 9, end: 15, original: "مرحبا بكم", words: [], timing: "phrase")])\n      translations["ru"] = AISubtitleTranslation(documentId: "fixture", language: "ru", segments: ["s0": "Мир вам и милость Аллаха", "s1": "Добро пожаловать"])\n      return\n    }\n'
+fixture='\n    if ProcessInfo.processInfo.arguments.contains("--audit-reader-withdraw") && (track.captionsRevision ?? 0) > 0 { hasPublishedResponse = true; document = nil; availability = .review; return }\n    if ProcessInfo.processInfo.arguments.contains("--audit-ai") {\n      document = AISubtitleDocument(version: 2, id: "fixture", language: "ar", segments: [\n        AISubtitleSegment(id: "s0", start: 0, end: 8, original: "السلام عليكم ورحمة الله", words: [\n          SubtitleWord(text: "السلام", start: 0, end: 2), SubtitleWord(text: "عليكم", start: 2, end: 4),\n          SubtitleWord(text: "ورحمة", start: 4, end: 6), SubtitleWord(text: "الله", start: 6, end: 8)], timing: "estimated"),\n        AISubtitleSegment(id: "s1", start: 9, end: 15, original: "مرحبا بكم", words: [], timing: "phrase")])\n      translations["ru"] = AISubtitleTranslation(documentId: "fixture", language: "ru", segments: ["s0": "Мир вам и милость Аллаха", "s1": "Добро пожаловать"])\n      return\n    }\n'
 assert needle in s
 fixture=fixture.replace('      return\n', '''      if ProcessInfo.processInfo.arguments.contains("--audit-long-caption") {
         document = AISubtitleDocument(version: 2, id: "fixture", language: "ar", segments: [
@@ -162,7 +162,7 @@ assert s.count(needle) == 1, 'Manual-caption review must modify the existing man
 s=s.replace(needle, needle+'''
     if ProcessInfo.processInfo.arguments.contains("--audit-ai-unavailable") {
       revisions[track.id] = track.captionsRevision ?? 0
-      segmentsByTrack[track.id] = [SubtitleSegment(start: 0, end: 30, ar: "نص قديم", ru: "", en: "")]
+      segmentsByTrack[track.id] = [SubtitleSegment(start: 0, end: 30, ar: "نص قديم", ru: "", en: "", words: [])]
       stateByTrack[track.id] = .ready
       return
     }
@@ -209,6 +209,15 @@ s=s.replace(needle, '''  @Environment(\\.accessibilityReduceMotion) private var 
 needle='        ToolbarItem(placement: .topBarTrailing) { Button("Готово") { dismiss() } }'
 assert s.count(needle) == 1, 'Review transport must target the existing reader toolbar'
 s=s.replace(needle, needle+'''
+        if ProcessInfo.processInfo.arguments.contains("--audit-reader-withdraw") {
+          ToolbarItem(placement: .topBarLeading) {
+            Button("Withdraw fixture") {
+              player.currentTrack = Track(id: track.id, title: track.title, artist: track.artist,
+                duration: track.duration, artworkURL: track.artworkURL, audioURL: track.audioURL,
+                captionsRevision: (track.captionsRevision ?? 0) + 1)
+            }.accessibilityIdentifier("review-reader-withdraw")
+          }
+        }
         if ProcessInfo.processInfo.arguments.contains("--audit-reader-next") {
           ToolbarItem(placement: .topBarLeading) {
             Button("Next fixture") { player.play(Track.reviewCatalog[1], autoplay: false) }

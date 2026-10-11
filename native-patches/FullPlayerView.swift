@@ -215,8 +215,12 @@ struct MorphingPlayerView: View {
         dragStartExpansion = nil
       }
     }
-    .onChange(of: player.currentTrack?.id) { _, currentID in
-      if subtitleReader?.track.id != currentID { subtitleReader = nil }
+    .onChange(of: player.currentTrack) { _, current in
+      if let reader = subtitleReader,
+         reader.track.id != current?.id || reader.track.audioURL != current?.audioURL
+           || reader.track.captionsRevision != current?.captionsRevision {
+        subtitleReader = nil
+      }
     }
     .sheet(isPresented: $premiumPresented) {
       PremiumView(compact: true)

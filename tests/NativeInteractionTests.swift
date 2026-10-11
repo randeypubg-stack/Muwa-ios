@@ -435,6 +435,29 @@ final class NativeInteractionTests: XCTestCase {
     XCTAssertTrue(app.staticTexts["Muwa Nasheed"].firstMatch.waitForExistence(timeout: 10))
     _ = assertNavigationAnchor("navigation-after-reader-track-change")
     shot("subtitle-reader-dismissed-on-track-change")
+
+    // Withdrawal/replacement can change caption revision without changing the
+    // track ID. The stable presenter must close that old document too.
+    app.terminate()
+    app.launchArguments = ["--audit-player", "--audit-ai", "--audit-reader-withdraw"]
+    app.launch()
+    XCTAssertTrue(rail.waitForExistence(timeout: 30))
+    let loaded = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "value == %@", "Оригинальный текст доступен"), object: rail)
+    XCTAssertEqual(XCTWaiter.wait(for: [loaded], timeout: 15), .completed)
+    rail.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+    XCTAssertTrue(reader.waitForExistence(timeout: 10))
+    let withdraw = app.buttons["review-reader-withdraw"]
+    XCTAssertTrue(withdraw.waitForExistence(timeout: 10) && withdraw.isHittable)
+    withdraw.tap()
+    let withdrawn = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+      !reader.exists && !app.buttons["player-subtitles"].isEnabled
+    }, object: nil)
+    XCTAssertEqual(XCTWaiter.wait(for: [withdrawn], timeout: 10), .completed,
+                   "The reader retained withdrawn words after a same-ID caption revision change")
+    XCTAssertTrue(app.buttons["player-toggle"].isHittable)
+    _ = assertNavigationAnchor("navigation-after-caption-withdrawal")
+    shot("subtitle-reader-dismissed-on-caption-withdrawal")
   }
 
   private func rotationShot(_ name: String, landscape: Bool,

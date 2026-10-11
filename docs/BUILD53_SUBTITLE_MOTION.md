@@ -92,3 +92,7 @@ Context phrases retain their whole text while word ink applies only to the activ
 phrase; future words use 0.48 base opacity for better legibility. The tablet motion
 capture creates a clean instance of the selected actual model/runtime, retaining
 hardware identity rather than reusing the runner's repeatedly stuck template.
+
+The stable reader also closes on same-ID audio or caption-revision changes, so
+withdrawal cannot leave old words following the retained audio clock. Its real
+interaction check exercises both a next-track event and a same-ID withdrawal.
