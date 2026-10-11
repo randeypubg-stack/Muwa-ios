@@ -250,7 +250,6 @@ private struct SubtitleInkRenderer: TextRenderer {
     get { time }
     set { time = newValue }
   }
-  var displayPadding: EdgeInsets { EdgeInsets(top: 5, leading: 5, bottom: 5, trailing: 5) }
 
   func draw(layout: Text.Layout, in context: inout GraphicsContext) {
     for line in layout {
@@ -312,11 +311,12 @@ private struct AISubtitleLine: View {
         text
       }
     }
-      // Leading follows the explicit writing direction below: right for
-      // Arabic, left for Latin. Trailing would misalign short Arabic lines.
-      .multilineTextAlignment(.leading)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .environment(\.layoutDirection, rtl ? .rightToLeft : .leftToRight)
+      // Use physical alignment in a stable layout coordinate system. Unicode
+      // still shapes Arabic RTL; mirroring the surrounding frame as well can
+      // offset a custom renderer's runs beyond the narrow caption viewport.
+      .multilineTextAlignment(rtl ? .trailing : .leading)
+      .frame(maxWidth: .infinity, alignment: rtl ? .trailing : .leading)
+      .environment(\.layoutDirection, .leftToRight)
       // Smooth ink between real clock samples. Seeking retargets the same
       // renderer; no animation queue or new playback observer is created.
       .animation(animationsAllowed ? MuwaMotion.subtitleInk : nil, value: time)
