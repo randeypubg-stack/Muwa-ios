@@ -67,7 +67,10 @@ struct AISubtitleExperience: View {
   }
 
   var body: some View {
-    Group {
+    ZStack {
+      // Keep the loader mounted before text exists. An empty conditional
+      // Group has no view lifecycle and can leave both caption loaders idle.
+      Color.clear.accessibilityHidden(true).allowsHitTesting(false)
       if hasContent && isVisible {
         Button { openReader() } label: {
           Group {

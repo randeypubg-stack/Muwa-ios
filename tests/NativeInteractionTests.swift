@@ -451,7 +451,7 @@ final class NativeInteractionTests: XCTestCase {
     XCTAssertTrue(withdraw.waitForExistence(timeout: 10) && withdraw.isHittable)
     withdraw.tap()
     let withdrawn = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-      !reader.exists && !app.buttons["player-subtitles"].isEnabled
+      !reader.exists && !self.app.buttons["player-subtitles"].isEnabled
     }, object: nil)
     XCTAssertEqual(XCTWaiter.wait(for: [withdrawn], timeout: 10), .completed,
                    "The reader retained withdrawn words after a same-ID caption revision change")
