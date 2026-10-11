@@ -83,3 +83,12 @@ rows are filtered too. The owner editor retains audio seeking, original Arabic,
 word/timestamp review, title suggestions and explicit save. Audio publication
 and automatic recognition of new uploads remain independent. This changes the
 publication policy, not a claim that recognition accuracy is solved.
+
+A successful empty server response takes precedence over legacy caption caches,
+including an old cache for the same track revision. Network failures still allow
+cached fallback. The unavailable-caption interaction fixture deliberately seeds
+old Arabic text to verify it cannot reopen or shift the player after withdrawal.
+Context phrases retain their whole text while word ink applies only to the active
+phrase; future words use 0.48 base opacity for better legibility. The tablet motion
+capture creates a clean instance of the selected actual model/runtime, retaining
+hardware identity rather than reusing the runner's repeatedly stuck template.

@@ -290,7 +290,8 @@ def main():
         else:
             selected, inventory = load_selection(args.kind, os.environ.get("MUWA_REQUESTED_DEVICE"),
                                                  os.environ.get("MUWA_REQUESTED_IOS"),
-                                                 os.environ.get("MUWA_REVIEW_RUNTIME_VERSION"))
+                                                 os.environ.get("MUWA_REVIEW_RUNTIME_VERSION"),
+                                                 fresh_device=args.kind == "tablet")
         if len(selected) != 1:
             raise AssertionError("Motion review requires exactly one actual selected Simulator")
         device = selected[0]

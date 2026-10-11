@@ -8,7 +8,7 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
-from select_apple_review_devices import boot_selected_device, ensure_reported_phone, main, normalize_inventory, open_simulator_gui, request_status, select_devices
+from select_apple_review_devices import boot_selected_device, ensure_reported_phone, load_selection, main, normalize_inventory, open_simulator_gui, request_status, select_devices
 
 
 def runtime(version, available=True, name=None):
@@ -48,6 +48,24 @@ class AppleReviewDeviceChecks(unittest.TestCase):
             self.assertEqual(selected[0]["runtimeVersion"], "27.0")
             self.assertEqual(selected[0]["runtimeBuild"], "fixture-build")
             self.assertTrue(selected[0]["deviceTypeIdentifier"].startswith("com.apple.CoreSimulator.SimDeviceType."))
+
+    def test_fresh_motion_device_retains_actual_model_and_stable_runtime(self):
+        udid = '8B242082-18A0-4B15-A331-9E4C93856AC2'
+        def reply(*args, **kwargs):
+            if args[:4] == ('xcrun', 'simctl', 'list', 'devices'): return json.dumps({'devices': self.devices})
+            if args[:4] == ('xcrun', 'simctl', 'list', 'runtimes'): return json.dumps({'runtimes': self.runtimes})
+            if args[:4] == ('xcrun', 'simctl', 'list', 'devicetypes'): return json.dumps({'devicetypes': self.types})
+            if args[:3] == ('xcrun', 'simctl', 'create'): return udid
+            if '--show-sdk-version' in args: return '27.0'
+            return 'fixture toolchain'
+        with patch('select_apple_review_devices.command', side_effect=reply) as commands:
+            selected, report = load_selection('tablet', runtime_version='27.0', fresh_device=True)
+        self.assertEqual(selected[0]['udid'], udid)
+        self.assertEqual(selected[0]['name'], 'iPad Pro 13-inch (M5)')
+        self.assertEqual(selected[0]['runtimeVersion'], '27.0')
+        self.assertTrue(report['freshReviewDevice'])
+        creation = next(call for call in commands.call_args_list if call.args[:3] == ('xcrun','simctl','create'))
+        self.assertEqual(creation.args[-2:], (selected[0]['deviceTypeIdentifier'], selected[0]['runtimeIdentifier']))
 
     def test_reported_phone_requires_the_actual_model_without_relabelling(self):
         with self.assertRaisesRegex(ValueError, "Review device unavailable"):

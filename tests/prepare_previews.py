@@ -144,7 +144,7 @@ player=root/'Sources/Views/Player/FullPlayerView.swift'
 s=player.read_text().replace('if ProcessInfo.processInfo.arguments.contains("--audit-ai") { subtitlesVisible = true }','if ProcessInfo.processInfo.arguments.contains("--audit-ai") || ProcessInfo.processInfo.arguments.contains("--audit-ai-unavailable") { subtitlesVisible = true }')
 player.write_text(s)
 manager=root/'Sources/Services/SubtitleManager.swift'
-s=manager.read_text().replace('  func load(_ track: Track, retry: Bool = false) async {','  func load(_ track: Track, retry: Bool = false) async {\n    if ProcessInfo.processInfo.arguments.contains("--audit-ai-unavailable") { document = nil; publishedSource = "manual"; availability = .review; error = nil; return }',1)
+s=manager.read_text().replace('  func load(_ track: Track, retry: Bool = false) async {','  func load(_ track: Track, retry: Bool = false) async {\n    if ProcessInfo.processInfo.arguments.contains("--audit-ai-unavailable") { document = nil; publishedSource = "manual"; hasPublishedResponse = true; availability = .review; error = nil; return }',1)
 manager.write_text(s)
 
 # Exercise the real player actions in Simulator without entitlement bypass fixtures.
@@ -160,6 +160,12 @@ s=p.read_text()
 needle='  func load(for track: Track) {'
 assert s.count(needle) == 1, 'Manual-caption review must modify the existing manager'
 s=s.replace(needle, needle+'''
+    if ProcessInfo.processInfo.arguments.contains("--audit-ai-unavailable") {
+      revisions[track.id] = track.captionsRevision ?? 0
+      segmentsByTrack[track.id] = [SubtitleSegment(start: 0, end: 30, ar: "نص قديم", ru: "", en: "")]
+      stateByTrack[track.id] = .ready
+      return
+    }
     if ProcessInfo.processInfo.arguments.contains("--audit-subtitle-motion") {
       revisions[track.id] = track.captionsRevision ?? 0
       segmentsByTrack[track.id] = [

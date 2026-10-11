@@ -203,6 +203,7 @@ final class AISubtitleManager: ObservableObject {
   @Published private(set) var error: String?
   @Published private(set) var publishedSource: String?
   @Published private(set) var availability: PublishedSubtitleAvailability = .unavailable
+  @Published private(set) var hasPublishedResponse = false
   var isVerifiedByOwner: Bool { document != nil && publishedSource == "manual" }
   var availableLanguages: [AITranslationLanguage] {
     publishedSource == nil ? AITranslationLanguage.allCases
@@ -221,6 +222,7 @@ final class AISubtitleManager: ObservableObject {
     let id = UUID(); requestID = id; translationID = UUID()
     if source != key || !retry {
       document = nil; translations = [:]; publishedSource = nil; availability = .unavailable
+      hasPublishedResponse = false
     }
     source = key; error = nil; translatingLanguage = nil
     isRecognizing = true
@@ -235,6 +237,7 @@ final class AISubtitleManager: ObservableObject {
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
         let payload = try JSONDecoder().decode(PublishedCaptions.self, from: data)
         guard requestID == id, !Task.isCancelled else { return }
+        hasPublishedResponse = true
         guard !payload.segments.isEmpty else {
           document = nil; translations = [:]; publishedSource = nil
           availability = payload.availability ?? .unavailable
@@ -294,7 +297,9 @@ final class AISubtitleManager: ObservableObject {
     let availability: PublishedSubtitleAvailability?
   }
   func usePublishedFallback(_ track: Track, captions: [SubtitleSegment]) {
-    guard document == nil, !captions.isEmpty else { return }
+    // A successful empty server response is an intentional withdrawal, not a
+    // network failure. Never revive a withdrawn transcript from a legacy cache.
+    guard !hasPublishedResponse, document == nil, !captions.isEmpty else { return }
     publishedSource = "published"
     installPublished(track: track, captions: captions, revision: track.captionsRevision ?? 0)
     error = nil

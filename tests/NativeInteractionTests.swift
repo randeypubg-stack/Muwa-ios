@@ -120,6 +120,8 @@ final class NativeInteractionTests: XCTestCase {
     XCTAssertFalse(app.navigationBars["Оригинал и перевод"].exists)
     XCTAssertFalse(app.staticTexts["Текст на проверке"].exists)
     XCTAssertFalse(app.buttons["subtitle-retry"].exists)
+    XCTAssertFalse(app.staticTexts["نص قديم"].exists,
+                   "A withdrawn transcript was restored from the legacy caption cache")
     XCTAssertTrue(app.otherElements["player-artwork-frame"].exists)
     XCTAssertTrue(app.buttons["player-toggle"].isHittable)
     XCTAssertFalse(app.buttons["Субтитры. Открыть полный текст"].exists,

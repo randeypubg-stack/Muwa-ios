@@ -235,7 +235,7 @@ def ensure_reported_phone(devices, runtimes, device_types, sdk_version, runtime_
     return normalize_inventory(devices, runtimes, device_types, sdk_version)
 
 
-def load_selection(kind=None, requested_device=None, requested_ios=None, runtime_version=None):
+def load_selection(kind=None, requested_device=None, requested_ios=None, runtime_version=None, fresh_device=False):
     devices = json.loads(command("xcrun", "simctl", "list", "devices", "available", "--json"))["devices"]
     runtimes = json.loads(command("xcrun", "simctl", "list", "runtimes", "--json"))["runtimes"]
     device_types = json.loads(command("xcrun", "simctl", "list", "devicetypes", "--json"))["devicetypes"]
@@ -244,10 +244,24 @@ def load_selection(kind=None, requested_device=None, requested_ios=None, runtime
     if kind == 'reported-phone':
         records = ensure_reported_phone(devices, runtimes, device_types, sdk_version, runtime_version)
     selected = select_devices(records, kind, runtime_version)
+    if fresh_device:
+        if len(selected) != 1:
+            raise ValueError('A fresh review device requires one actual selected model')
+        original = selected[0]
+        udid = command('xcrun', 'simctl', 'create', 'Muwa caption ' + original['name'],
+                       original['deviceTypeIdentifier'], original['runtimeIdentifier'])
+        UUID(udid)
+        devices.setdefault(original['runtimeIdentifier'], []).append({
+            'name': 'Muwa caption ' + original['name'], 'udid': udid, 'isAvailable': True,
+            'deviceTypeIdentifier': original['deviceTypeIdentifier'], 'state': 'Shutdown',
+        })
+        records = normalize_inventory(devices, runtimes, device_types, sdk_version)
+        selected = [{**next(record for record in records if record['udid'] == udid), 'kind': kind}]
     report = {
         "schemaVersion": 1,
         "selectionPolicy": "Newest available stable iOS runtime within selected SDK; latest real model per size class",
         "requiredRuntimeVersion": runtime_version,
+        "freshReviewDevice": fresh_device,
         "toolchain": {
             "xcode": command("xcodebuild", "-version"),
             "developerDirectory": os.environ.get("DEVELOPER_DIR") or command("xcode-select", "-p"),

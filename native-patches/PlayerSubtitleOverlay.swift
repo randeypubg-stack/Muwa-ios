@@ -62,7 +62,8 @@ struct AISubtitleExperience: View {
   @State private var language: AITranslationLanguage = .original
 
   private var hasContent: Bool {
-    !(manager.document?.segments.isEmpty ?? true) || !legacySubtitles.segments(for: track).isEmpty
+    !(manager.document?.segments.isEmpty ?? true)
+      || (!manager.hasPublishedResponse && !legacySubtitles.segments(for: track).isEmpty)
   }
 
   var body: some View {
@@ -74,7 +75,7 @@ struct AISubtitleExperience: View {
             let segment = document.segments[index]
             VStack(alignment: document.isRTL ? .trailing : .leading, spacing: 5) {
                 AISubtitleLine(segment: segment,
-                  time: active ? timeline.snapshot.time : segment.start - 1, rtl: document.isRTL)
+                  time: active ? timeline.snapshot.time : segment.end, rtl: document.isRTL)
                   .font(.system(size: 21, weight: .semibold))
                   .lineLimit(nil)
                   .fixedSize(horizontal: false, vertical: true)
@@ -144,7 +145,7 @@ private struct LegacySubtitleRail: View {
         AISubtitleLine(segment: AISubtitleSegment(id: segment.id,
           start: segment.start, end: segment.end, original: segment.ar,
           words: segment.words ?? [], timing: segment.words?.isEmpty == false ? "word" : "phrase"),
-          time: active ? currentTime : segment.start - 1, rtl: true)
+          time: active ? currentTime : segment.end, rtl: true)
           .font(.system(size: 21, weight: .semibold))
           .lineLimit(nil)
           .fixedSize(horizontal: false, vertical: true)
@@ -257,7 +258,7 @@ private struct SubtitleInkRenderer: TextRenderer {
         guard let ink = run[SubtitleWordInk.self] else { context.draw(run); continue }
         let active = time >= ink.start && time < ink.end
         var base = context
-        base.opacity *= time >= ink.end ? 0.96 : active && !sweeps ? 1 : 0.32
+        base.opacity *= time >= ink.end ? 0.96 : active && !sweeps ? 1 : 0.48
         base.draw(run)
         guard active && sweeps, ink.end > ink.start else { continue }
         let progress = min(1, max(0, (time - ink.start) / (ink.end - ink.start)))
@@ -296,7 +297,7 @@ private struct AISubtitleLine: View {
       let word = item.element
       // Leave separators outside the ink attribute so the word's reveal starts
       // at its glyphs. No per-character layout, synthetic timing or extra clock.
-      return result + Text(item.offset == 0 ? "" : " ").foregroundColor(.white.opacity(0.32))
+      return result + Text(item.offset == 0 ? "" : " ").foregroundColor(.white.opacity(0.48))
         + Text(word.text).foregroundColor(.white)
           .customAttribute(SubtitleWordInk(start: word.start, end: word.end))
     }
@@ -450,7 +451,7 @@ private struct AISubtitleReader: View {
       player.seek(to: segment.start / max(player.duration, 1))
     } label: {
       VStack(alignment: .leading, spacing: 8) {
-        AISubtitleLine(segment: segment, time: timeline.snapshot.time, rtl: rtl)
+        AISubtitleLine(segment: segment, time: isActive ? timeline.snapshot.time : segment.end, rtl: rtl)
           .font(.system(size: 23, weight: .semibold))
           .lineLimit(nil)
           .fixedSize(horizontal: false, vertical: true)
