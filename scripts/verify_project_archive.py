@@ -137,7 +137,7 @@ def verify(args: argparse.Namespace) -> dict[str, object]:
         generated = Path(temporary) / "regenerated-ios"
         assemble(root / "Repository", generated, commit)
         ios_metadata = manifest.get("iOS")
-        if ios_metadata != {"path": "iOS/MuwaNasheedsNative", "build": 53, "kind": "assembled source"}:
+        if ios_metadata != {"path": "iOS/MuwaNasheedsNative", "build": 54, "kind": "assembled source"}:
             raise ValueError("Unexpected iOS source metadata")
         ios_files = compare_files(generated, root / "iOS/MuwaNasheedsNative", "Regenerated iOS sources")
         registration = root / "Repository/tests/check_native_registration.py"

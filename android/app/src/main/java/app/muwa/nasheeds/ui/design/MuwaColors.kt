@@ -12,3 +12,8 @@ object MuwaColors {
     val Teal = Color(0xFF59ADAD)
     val Violet = Color(0xFF8775BA)
 }
+
+/** Background intensity never dims foreground text, artwork or navigation. */
+object MuwaBackgroundStyle {
+    const val AmbientStrength = 0.55f
+}

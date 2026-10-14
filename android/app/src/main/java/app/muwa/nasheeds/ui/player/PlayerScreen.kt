@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import app.muwa.nasheeds.*
 import app.muwa.nasheeds.ui.components.Cover
+import app.muwa.nasheeds.ui.design.MuwaColors
 import app.muwa.nasheeds.ui.design.rememberAmbientMotionAllowed
 import kotlin.math.abs
 import kotlinx.coroutines.launch
@@ -45,7 +46,7 @@ fun PlayerSheet(
         BoxWithConstraints(
             Modifier.fillMaxSize()
                 .testTag("player.screen")
-                .background(Color(0xFF080D16))
+                .background(MuwaColors.Background)
                 .clipToBounds()
                 .pointerInput(Unit) { detectTapGestures {} }
                 .windowInsetsPadding(WindowInsets.safeDrawing)

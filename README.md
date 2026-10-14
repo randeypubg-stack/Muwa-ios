@@ -2,7 +2,7 @@
 
 Нативное приложение нашидов: iOS/iPadOS — SwiftUI и AVPlayer, Android — Kotlin,
 Jetpack Compose и Media3. Backend и панель владельца работают на Beget.
-Имя **Muwa**, идентификатор **app.muwa.nasheeds**, версия **1.4.0**, build **53**.
+Имя **Muwa**, идентификатор **app.muwa.nasheeds**, версия **1.4.0**, build **54**.
 
 Актуальное состояние и ограничения: [docs/CURRENT_STATE.md](docs/CURRENT_STATE.md).
 Карта проекта: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

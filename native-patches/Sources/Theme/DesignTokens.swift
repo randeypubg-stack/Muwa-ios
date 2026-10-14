@@ -25,3 +25,12 @@ enum MuwaRadius {
   static let artwork: CGFloat = 20
   static let card: CGFloat = 26
 }
+
+// Background light is independent of foreground text, covers and navigation.
+enum MuwaBackgroundStyle {
+  static let ambientStrength: Double = 0.55
+  static let artworkSaturation: Double = 0.85
+  static let artworkOpacity: Double = 0.34
+  static let artworkTopShade: Double = 0.16
+  static let artworkMiddleShade: Double = 0.56
+}

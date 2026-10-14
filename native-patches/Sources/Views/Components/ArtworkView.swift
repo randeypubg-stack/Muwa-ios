@@ -96,15 +96,16 @@ struct ArtworkBackdrop: View {
             image
               .resizable()
               .scaledToFill()
-              .saturation(1.18)
-              .opacity(0.54)
+              .saturation(MuwaBackgroundStyle.artworkSaturation)
+              .opacity(MuwaBackgroundStyle.artworkOpacity)
               .scaleEffect(1.22)
           }
         }
       }
 
       LinearGradient(
-        colors: [.black.opacity(0.08), .black.opacity(0.50), .black.opacity(0.90)],
+        colors: [.black.opacity(MuwaBackgroundStyle.artworkTopShade),
+                 .black.opacity(MuwaBackgroundStyle.artworkMiddleShade), .black.opacity(0.90)],
         startPoint: .top,
         endPoint: .bottom
       )

@@ -17,7 +17,7 @@ struct AppBackground: View {
   var body: some View {
     GeometryReader { proxy in
       let span = min(max(proxy.size.width, proxy.size.height), 1200)
-      let strength = reduceTransparency ? 0.35 : 1.0
+      let strength = MuwaBackgroundStyle.ambientStrength * (reduceTransparency ? 0.35 : 1.0)
 
       ZStack {
         MuwaPalette.background

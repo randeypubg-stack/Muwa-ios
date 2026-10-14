@@ -20,7 +20,7 @@ import tempfile
 from zipfile import ZipFile
 
 BASE_SHA256 = 'f07bce80d5b9b39583a8bce19f3e3b71caed205332649f13ccb45a8b28997f84'
-DEFAULT_BUILD = 53
+DEFAULT_BUILD = 54
 
 
 def assemble(repository: Path, output: Path, build: int) -> None:

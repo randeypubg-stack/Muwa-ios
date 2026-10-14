@@ -168,7 +168,7 @@ def start_here(commit: str, branch: str) -> str:
 - `Repository/` — точные файлы указанного Git-коммита: Android, iOS patches,
   backend, панель владельца, серверные инструменты, тесты и документация.
 - `iOS/MuwaNasheedsNative/` — полный собранный из этих исходников Xcode-проект
-  Build 53. Это исходники, а не новая подписанная версия приложения.
+  Build 54. Это исходники, а не новая подписанная версия приложения.
 - `History/muwa.bundle` — автономная история текущей ветки, без Git config,
   паролей и настроек подключений. Восстановление Git-репозитория:
   `git clone --branch {branch} History/muwa.bundle Muwa-Restored`.
@@ -227,7 +227,7 @@ def export(args: argparse.Namespace) -> dict[str, object]:
                     omitted[directory] = copy_optional(source, stage / directory)
             (stage / "START-HERE.md").write_text(start_here(commit, branch), encoding="utf-8", newline="\n")
             payload = inventory(stage)
-            manifest = {"version": 1, "rootDirectory": root_name, "createdAt": now.isoformat(), "source": {"commit": commit, "tree": tree, "branch": branch}, "bundleHead": {"commit": commit, "ref": "refs/heads/" + branch}, "iOS": {"path": "iOS/MuwaNasheedsNative", "build": 53, "kind": "assembled source"}, "exclusions": {"optionalPaths": omitted, "liveDatabaseAndMedia": True, "credentialsAndSessionFiles": True}, "files": payload}
+            manifest = {"version": 1, "rootDirectory": root_name, "createdAt": now.isoformat(), "source": {"commit": commit, "tree": tree, "branch": branch}, "bundleHead": {"commit": commit, "ref": "refs/heads/" + branch}, "iOS": {"path": "iOS/MuwaNasheedsNative", "build": 54, "kind": "assembled source"}, "exclusions": {"optionalPaths": omitted, "liveDatabaseAndMedia": True, "credentialsAndSessionFiles": True}, "files": payload}
             (stage / "MANIFEST.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
             if git(repo, "rev-parse", "HEAD") != commit or git(repo, "status", "--porcelain=v1", "--untracked-files=all"):
                 raise ValueError("Source changed while exporting; repeat after changes are committed")

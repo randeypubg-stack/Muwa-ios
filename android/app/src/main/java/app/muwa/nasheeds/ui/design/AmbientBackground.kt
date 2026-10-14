@@ -32,6 +32,7 @@ fun MuwaAmbientBackground(modifier: Modifier = Modifier) {
     }
     Canvas(modifier.clearAndSetSemantics {}) {
         val phase = drift.value
+        val intensity = MuwaBackgroundStyle.AmbientStrength
         val span = maxOf(size.width, size.height).coerceAtMost(1200.dp.toPx())
         fun light(color: Color, radius: Float, x: Float, y: Float, strength: Float) {
             val center = Offset(size.width * x, size.height * y)
@@ -49,9 +50,21 @@ fun MuwaAmbientBackground(modifier: Modifier = Modifier) {
             )
         }
         drawRect(MuwaColors.Background)
-        light(MuwaColors.Blue, span * .47f, .92f - .20f * phase, .12f + .13f * phase, 1f)
-        light(MuwaColors.Teal, span * .36f, -.12f + .34f * phase, .60f - .15f * phase, .68f)
-        light(MuwaColors.Violet, span * .40f, .70f + .22f * phase, .82f + .14f * phase, .72f)
+        light(MuwaColors.Blue, span * .47f, .92f - .20f * phase, .12f + .13f * phase, intensity)
+        light(
+            MuwaColors.Teal,
+            span * .36f,
+            -.12f + .34f * phase,
+            .60f - .15f * phase,
+            .68f * intensity,
+        )
+        light(
+            MuwaColors.Violet,
+            span * .40f,
+            .70f + .22f * phase,
+            .82f + .14f * phase,
+            .72f * intensity,
+        )
         drawRect(
             Brush.verticalGradient(
                 listOf(
