@@ -1,4 +1,4 @@
-package app.muwa.nasheeds
+package app.muwa.nasheeds.ui.player
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
@@ -21,6 +21,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
+import app.muwa.nasheeds.*
 import app.muwa.nasheeds.ui.components.Cover
 import app.muwa.nasheeds.ui.design.rememberAmbientMotionAllowed
 import kotlin.math.abs

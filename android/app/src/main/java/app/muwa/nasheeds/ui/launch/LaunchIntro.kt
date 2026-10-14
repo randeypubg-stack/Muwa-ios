@@ -1,4 +1,4 @@
-package app.muwa.nasheeds
+package app.muwa.nasheeds.ui.launch
 
 import android.animation.ValueAnimator
 import android.os.Build
@@ -35,8 +35,8 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
@@ -44,17 +44,24 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.suspendCancellableCoroutine
+import app.muwa.nasheeds.R
 import kotlin.coroutines.resume
 import kotlin.math.PI
 import kotlin.math.sin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 /** UI-only cold-launch reveal. Home and its model mount immediately beneath it. */
 @Composable
-fun MuwaLaunchHost(showIntro: Boolean, systemLaunchReady: Boolean = true, content: @Composable () -> Unit) {
+fun MuwaLaunchHost(
+    showIntro: Boolean,
+    systemLaunchReady: Boolean = true,
+    content: @Composable () -> Unit,
+) {
     // This is deliberately not saveable: rotation/recreation must not replay the launch.
-    var introVisible by remember { mutableStateOf(showIntro && ValueAnimator.areAnimatorsEnabled()) }
+    var introVisible by remember {
+        mutableStateOf(showIntro && ValueAnimator.areAnimatorsEnabled())
+    }
     LaunchedEffect(introVisible) {
         if (introVisible) {
             // System splash/focus/frame-commit callbacks can be lost when a
@@ -65,7 +72,7 @@ fun MuwaLaunchHost(showIntro: Boolean, systemLaunchReady: Boolean = true, conten
         }
     }
     Box(Modifier.fillMaxSize()) {
-        Box(if (introVisible) Modifier.clearAndSetSemantics { } else Modifier) { content() }
+        Box(if (introVisible) Modifier.clearAndSetSemantics {} else Modifier) { content() }
         if (introVisible) MuwaLaunchIntro(systemLaunchReady) { introVisible = false }
     }
 }
@@ -77,7 +84,7 @@ private fun MuwaLaunchIntro(systemLaunchReady: Boolean, onFinished: () -> Unit) 
     val finish by rememberUpdatedState(onFinished)
     val progress = remember { Animatable(0f) }
     // Screen readers receive the app name once; taps/back never activate hidden home.
-    BackHandler { }
+    BackHandler {}
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) finish()
@@ -94,7 +101,13 @@ private fun MuwaLaunchIntro(systemLaunchReady: Boolean, onFinished: () -> Unit) 
                 // reached the GPU, rather than consuming it during cold setup.
                 awaitWindowFocus(view)
                 awaitFrameCommit(view)
-                progress.animateTo(1f, tween(durationMillis = ((1f - progress.value) * 1050).toInt(), easing = LinearEasing))
+                progress.animateTo(
+                    1f,
+                    tween(
+                        durationMillis = ((1f - progress.value) * 1050).toInt(),
+                        easing = LinearEasing,
+                    ),
+                )
             } finally {
                 // Pausing/cancellation reveals usable home and never resumes a
                 // partly hidden launch when the user comes back.
@@ -113,15 +126,36 @@ private fun MuwaLaunchIntro(systemLaunchReady: Boolean, onFinished: () -> Unit) 
     // A luminance-derived alpha mask keeps the glint on the silver mark. The black
     // canvas of a supplied PNG stays black; there is no rectangular light stripe.
     val sheenFilter = remember {
-        ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
-            0f, 0f, 0f, 0f, 205f,
-            0f, 0f, 0f, 0f, 237f,
-            0f, 0f, 0f, 0f, 255f,
-            0.2126f, 0.7152f, 0.0722f, 0f, 0f
-        )))
+        ColorFilter.colorMatrix(
+            ColorMatrix(
+                floatArrayOf(
+                    0f,
+                    0f,
+                    0f,
+                    0f,
+                    205f,
+                    0f,
+                    0f,
+                    0f,
+                    0f,
+                    237f,
+                    0f,
+                    0f,
+                    0f,
+                    0f,
+                    255f,
+                    0.2126f,
+                    0.7152f,
+                    0.0722f,
+                    0f,
+                    0f,
+                )
+            )
+        )
     }
     BoxWithConstraints(
-        Modifier.fillMaxSize().testTag("launch.intro")
+        Modifier.fillMaxSize()
+            .testTag("launch.intro")
             .graphicsLayer { alpha = fade }
             .background(Color.Black)
             .pointerInput(Unit) {
@@ -129,33 +163,44 @@ private fun MuwaLaunchIntro(systemLaunchReady: Boolean, onFinished: () -> Unit) 
                     while (true) awaitPointerEvent().changes.forEach { it.consume() }
                 }
             },
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         val imageSize = minOf(minOf(maxWidth, maxHeight) * 0.90f, 440.dp)
-        Box(Modifier.size(imageSize).graphicsLayer {
-            alpha = appear
-            scaleX = 0.91f + 0.09f * settle
-            scaleY = scaleX
-            translationY = (1f - settle) * 12.dp.toPx()
-        }) {
+        Box(
+            Modifier.size(imageSize).graphicsLayer {
+                alpha = appear
+                scaleX = 0.91f + 0.09f * settle
+                scaleY = scaleX
+                translationY = (1f - settle) * 12.dp.toPx()
+            }
+        ) {
             Image(markPainter, contentDescription = "Muwa", modifier = Modifier.fillMaxSize())
-            Image(markPainter, contentDescription = null, colorFilter = sheenFilter,
-                modifier = Modifier.fillMaxSize()
-                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen; alpha = 0.005f + sheenOpacity }
-                    .drawWithContent {
-                        drawContent()
-                        val center = (-0.40f + 1.80f * sheen) * size.width
-                        drawRect(
-                            brush = Brush.linearGradient(
-                                0f to Color.Transparent,
-                                0.5f to Color.White,
-                                1f to Color.Transparent,
-                                start = Offset(center - size.width * 0.14f, 0f),
-                                end = Offset(center + size.width * 0.14f, size.height * 0.24f)
-                            ),
-                            blendMode = BlendMode.DstIn
-                        )
-                    }
+            Image(
+                markPainter,
+                contentDescription = null,
+                colorFilter = sheenFilter,
+                modifier =
+                    Modifier.fillMaxSize()
+                        .graphicsLayer {
+                            compositingStrategy = CompositingStrategy.Offscreen
+                            alpha = 0.005f + sheenOpacity
+                        }
+                        .drawWithContent {
+                            drawContent()
+                            val center = (-0.40f + 1.80f * sheen) * size.width
+                            drawRect(
+                                brush =
+                                    Brush.linearGradient(
+                                        0f to Color.Transparent,
+                                        0.5f to Color.White,
+                                        1f to Color.Transparent,
+                                        start = Offset(center - size.width * 0.14f, 0f),
+                                        end =
+                                            Offset(center + size.width * 0.14f, size.height * 0.24f),
+                                    ),
+                                blendMode = BlendMode.DstIn,
+                            )
+                        },
             )
         }
     }
@@ -166,14 +211,17 @@ private fun smoothStep(value: Float): Float = value * value * (3f - 2f * value)
 private suspend fun awaitWindowFocus(view: View) {
     if (view.hasWindowFocus()) return
     suspendCancellableCoroutine<Unit> { continuation ->
-        val listener = object : ViewTreeObserver.OnWindowFocusChangeListener {
-            override fun onWindowFocusChanged(hasFocus: Boolean) {
-                if (hasFocus && continuation.isActive) {
-                    view.viewTreeObserver.takeIf { it.isAlive }?.removeOnWindowFocusChangeListener(this)
-                    continuation.resume(Unit)
+        val listener =
+            object : ViewTreeObserver.OnWindowFocusChangeListener {
+                override fun onWindowFocusChanged(hasFocus: Boolean) {
+                    if (hasFocus && continuation.isActive) {
+                        view.viewTreeObserver
+                            .takeIf { it.isAlive }
+                            ?.removeOnWindowFocusChangeListener(this)
+                        continuation.resume(Unit)
+                    }
                 }
             }
-        }
         view.viewTreeObserver.addOnWindowFocusChangeListener(listener)
         continuation.invokeOnCancellation {
             view.viewTreeObserver.takeIf { it.isAlive }?.removeOnWindowFocusChangeListener(listener)
@@ -189,13 +237,15 @@ private suspend fun awaitFrameCommit(view: View) {
             val committed = Runnable { if (continuation.isActive) continuation.resume(Unit) }
             view.viewTreeObserver.registerFrameCommitCallback(committed)
             continuation.invokeOnCancellation {
-                view.viewTreeObserver.takeIf { it.isAlive }?.unregisterFrameCommitCallback(committed)
+                view.viewTreeObserver
+                    .takeIf { it.isAlive }
+                    ?.unregisterFrameCommitCallback(committed)
             }
             view.postInvalidateOnAnimation()
         }
     } else {
         // Older/software renderers expose the frame clock, but no commit API.
-        withFrameNanos { }
-        withFrameNanos { }
+        withFrameNanos {}
+        withFrameNanos {}
     }
 }

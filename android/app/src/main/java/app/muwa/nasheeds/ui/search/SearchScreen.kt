@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.muwa.nasheeds.*
 import app.muwa.nasheeds.ui.components.TrackRow
+import app.muwa.nasheeds.ui.state.rememberSaveableState
 
 @Composable
 fun SearchScreen(model: MuwaModel, play: (Track) -> Unit, playlist: (Track) -> Unit) {

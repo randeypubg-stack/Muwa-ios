@@ -1,5 +1,9 @@
 # Muwa control panel — updated 3 October 2026
 
+Historical implementation/audit report. The fresh Beget deployment and current
+private-ASR/guest-catalog policy are in [CURRENT_STATE.md](CURRENT_STATE.md).
+Old Floot staging references below are retained as dated evidence.
+
 Live: https://muwa-app.floot.app/admin
 Owner: the existing Muwa account explicitly selected by the owner (server role admin).
 Same Floot project, PostgreSQL database, account/session contracts and app IDs.

@@ -1,4 +1,56 @@
-# Muwa native Android review
+# Muwa native Android
+
+## Source structure
+
+The application uses Kotlin and Jetpack Compose with feature packages. Existing
+behavior, navigation geometry, preferences, backend contracts and application ID
+are preserved by this organization.
+
+- `MainActivity.kt` — Android entry point, system splash and notification permission.
+- `MuwaApp.kt` — composition root; it owns routes, expanded-player and playlist
+  dialog state, refreshes the catalog on lifecycle start and measures navigation
+  insets once. Screens receive the existing model and action callbacks.
+- `ui/design/` — `MuwaColors`, `MuwaTypography`, `MuwaTheme`, `MuwaMotion`,
+  `MotionPolicy`, `AmbientBackground` and the single `BottomNavigationLayout`.
+  Motion timings are separate from lifecycle, battery and reduced-motion policy.
+  Typography uses system fonts with native Arabic glyph fallback and font scaling;
+  no substitute font binaries or typography changes are introduced.
+- `ui/components/` — reusable covers, track rows, display text and icon buttons.
+- `ui/navigation/` — the shared top bar and bottom bar/mini-player presentation.
+- `ui/home/`, `ui/catalog/`, `ui/search/`, `ui/library/`, `ui/playlists/` — browsing,
+  saved-track and playlist screens; playlist dialog state stays in `MuwaApp`.
+- `ui/player/`, `ui/queue/`, `ui/subtitles/` — the existing playback screens.
+- `ui/account/`, `ui/profile/`, `ui/settings/`, `ui/publication/` — account and
+  owner-facing features.
+- `ui/launch/` — the existing UI launch reveal; the underlying app mounts immediately.
+- `ui/state/` — the existing reusable saveable-state helper.
+- `MuwaModel.kt`, `Data.kt`, `Backend.kt`, `Downloads.kt`, `Diagnostics.kt`,
+  `PlaybackService.kt` — state and Android services, network, persistence and
+  playback. Framework component names stay stable in the root package so manifest
+  registrations and saved application identity are unchanged.
+- `app/src/main/res/` — Android platform resources, icons and launch styling.
+- `app/src/test/`, `app/src/androidTest/` — unit checks and real Compose interactions.
+
+## Build from the archive
+
+Use JDK 17 and Android SDK platform/build tools 35. Android Studio can install
+these and configure the SDK automatically; a workstation-specific `local.properties`
+file is not part of the project backup. The standard Gradle Wrapper is included
+for Linux/macOS and Windows and pins Gradle 8.10.2 with the official distribution
+SHA-256 checksum. On first use it downloads that version; no local toolchain folder
+from the previous Codex workspace is required.
+
+```sh
+cd android
+./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+```
+
+On Windows, use `gradlew.bat`. Build the unsigned release with
+`./gradlew :app:assembleRelease`; release signing credentials stay outside the
+source archive. If ZIP extraction loses executable permissions on macOS/Linux,
+run `chmod +x gradlew` once.
+
+## Device review
 
 The app uses Kotlin, Jetpack Compose and Media3. Its application ID remains
 `app.muwa.nasheeds`; compile/target SDK remain 35. Running on a newer OS and

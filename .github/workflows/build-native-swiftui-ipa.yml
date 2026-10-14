@@ -117,62 +117,13 @@ jobs:
           rm -rf build-src build
           mkdir -p build-src build
 
-          SOURCE_ZIP="$PWD/source-base/MuwaNativeBase.zip"
-          EXPECTED_SOURCE_SHA="f07bce80d5b9b39583a8bce19f3e3b71caed205332649f13ccb45a8b28997f84"
+          # Local restoration and CI use the same verified assembler.
+          python3 scripts/assemble_ios.py --output build-src/MuwaNasheedsNative --build "$MUWA_BUILD_NUMBER"
+          ROOT="$PWD/build-src/MuwaNasheedsNative"
           EXPECTED_ICON_SHA="7d6e3af660633d8b76112b33813762570531a212f62a6af4650a1cf11ea295ba"
           EXPECTED_MARK_SHA="50913b3364be9430bc8efc535f6c1bc03bdf056576092e929a6b48cc28e86aec"
-
-          # Use the verified source committed to this repository for reproducible builds.
-          test -f "$SOURCE_ZIP"
-          echo "$EXPECTED_SOURCE_SHA  $SOURCE_ZIP" | shasum -a 256 -c -
-          unzip -q "$SOURCE_ZIP" -d build-src
-
-          ROOT="$PWD/build-src/MuwaNasheedsNative"
           test -f "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
           test -f "$ROOT/MuwaNasheeds.xcodeproj/xcshareddata/xcschemes/MuwaNasheeds.xcscheme"
-
-          # Apply device layout fixes after verifying the immutable source archive.
-          test -f "$PWD/native-patches/MiniPlayerView.swift"
-          test -f "$PWD/native-patches/FullPlayerView.swift"
-          test -f "$PWD/native-patches/PremiumView.swift"
-          test -f "$PWD/native-patches/BottomBar.swift"
-          test -f "$PWD/native-patches/AdaptiveLayout.swift"
-          test -f "$PWD/native-patches/RootView.swift"
-          test -f "$PWD/native-patches/HomeView.swift"
-          test -f "$PWD/native-patches/TrackRow.swift"
-          test -f "$PWD/native-patches/QueueView.swift"
-          test -f "$PWD/native-patches/Theme.swift"
-          test -f "$PWD/native-patches/LibraryView.swift"
-          test -f "$PWD/native-patches/LibraryDetailView.swift"
-          test -f "$PWD/native-patches/LibraryStore.swift"
-          test -f "$PWD/native-patches/PlayerManager.swift"
-          test -f "$PWD/native-patches/ArtworkView.swift"
-          test -f "$PWD/native-patches/LaunchBackgroundContents.json"
-          cp "$PWD/native-patches/MiniPlayerView.swift" "$ROOT/Sources/Views/Components/MiniPlayerView.swift"
-          cp "$PWD/native-patches/FullPlayerView.swift" "$ROOT/Sources/Views/Player/FullPlayerView.swift"
-          cp "$PWD/native-patches/PremiumView.swift" "$ROOT/Sources/Views/Premium/PremiumView.swift"
-          cp "$PWD/native-patches/BottomBar.swift" "$ROOT/Sources/Views/Components/BottomBar.swift"
-          cp "$PWD/native-patches/AdaptiveLayout.swift" "$ROOT/Sources/Theme/AdaptiveLayout.swift"
-          cp "$PWD/native-patches/RootView.swift" "$ROOT/Sources/App/RootView.swift"
-          cp "$PWD/native-patches/HomeView.swift" "$ROOT/Sources/Views/Home/HomeView.swift"
-          cp "$PWD/native-patches/ProfileView.swift" "$ROOT/Sources/Views/Profile/ProfileView.swift"
-          cp "$PWD/native-patches/PremiumManager.swift" "$ROOT/Sources/Services/PremiumManager.swift"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Muwa" "$ROOT/Info.plist"
-          cp "$PWD/native-patches/TrackRow.swift" "$ROOT/Sources/Views/Components/TrackRow.swift"
-          cp "$PWD/native-patches/QueueView.swift" "$ROOT/Sources/Views/Player/QueueView.swift"
-          cp "$PWD/native-patches/Theme.swift" "$ROOT/Sources/Theme/Theme.swift"
-          cp "$PWD/native-patches/LibraryView.swift" "$ROOT/Sources/Views/Library/LibraryView.swift"
-          cp "$PWD/native-patches/LibraryDetailView.swift" "$ROOT/Sources/Views/Library/LibraryDetailView.swift"
-          cp "$PWD/native-patches/LibraryStore.swift" "$ROOT/Sources/Services/LibraryStore.swift"
-          cp "$PWD/native-patches/PlayerManager.swift" "$ROOT/Sources/Services/PlayerManager.swift"
-          cp "$PWD/native-patches/ArtworkView.swift" "$ROOT/Sources/Views/Components/ArtworkView.swift"
-          cp "$PWD/native-patches/SubtitleModels.swift" "$ROOT/Sources/Models/SubtitleModels.swift"
-          cp "$PWD/native-patches/SubtitleManager.swift" "$ROOT/Sources/Services/SubtitleManager.swift"
-          cp "$PWD/native-patches/PlayerSubtitleOverlay.swift" "$ROOT/Sources/Views/Player/PlayerSubtitleOverlay.swift"
-
-          mkdir -p "$ROOT/Resources/Assets.xcassets/LaunchBackground.colorset"
-          cp "$PWD/native-patches/LaunchBackgroundContents.json" "$ROOT/Resources/Assets.xcassets/LaunchBackground.colorset/Contents.json"
-          cp "$PWD/native-patches/MuwaNasheedsApp.swift" "$ROOT/Sources/App/MuwaNasheedsApp.swift"
           grep -Fq 'MPNowPlayingInfoCenter.default().nowPlayingInfo = nil' "$ROOT/Sources/Services/PlayerManager.swift"
           grep -Fq 'resumeSavedPlayback' "$ROOT/Sources/Services/PlayerManager.swift"
           grep -Fq 'muwa.native.resume.track' "$ROOT/Sources/Services/PlayerManager.swift"
@@ -207,21 +158,7 @@ jobs:
           grep -Fq 'await asset.load(.isPlayable)' "$ROOT/Sources/Services/PlayerManager.swift"
           grep -Fq 'Таймер сна' "$ROOT/Sources/Views/Player/FullPlayerView.swift"
 
-          python3 scripts/prepare_native_extras.py "$ROOT"
           python3 tests/check_native_registration.py "$ROOT"
-
-          # iOS owns the brief system launch phase. The app then mounts Home
-          # immediately, without an extra toolbar logo or startup gate.
-          /usr/libexec/PlistBuddy -c "Delete :UILaunchScreen" "$ROOT/Info.plist" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :UILaunchScreen dict" "$ROOT/Info.plist"
-          /usr/libexec/PlistBuddy -c "Add :UILaunchScreen:UIColorName string LaunchBackground" "$ROOT/Info.plist"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIColorName' "$ROOT/Info.plist")" = "LaunchBackground"
-
-          # Allow ProMotion-capable iPhones to render above 60 Hz. iOS still
-          # controls the actual adaptive refresh rate based on hardware/system state.
-          /usr/libexec/PlistBuddy -c "Delete :CADisableMinimumFrameDurationOnPhone" "$ROOT/Info.plist" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :CADisableMinimumFrameDurationOnPhone bool true" "$ROOT/Info.plist"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$ROOT/Info.plist")" = "true"
 
           ICON_PATH="$ROOT/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"
           MARK_PATH="$ROOT/Resources/Assets.xcassets/AppMark.imageset/AppMark.png"
@@ -233,7 +170,6 @@ jobs:
           test "$WIDTH" = "1024"
           test "$HEIGHT" = "1024"
 
-          sed -i '' "s/CURRENT_PROJECT_VERSION = 8;/CURRENT_PROJECT_VERSION = ${MUWA_BUILD_NUMBER};/g" "$ROOT/MuwaNasheeds.xcodeproj/project.pbxproj"
           echo "SOURCE_ROOT=$ROOT" >> "$GITHUB_ENV"
 
       - name: Package full source archive

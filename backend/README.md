@@ -58,13 +58,19 @@ Audio/publication never waits for ASR. Existing manual/cached captions remain
 available; changed audio, revoked leases and manual revisions reject stale
 results. Intentionally cleared manual captions are also preserved.
 
-Confident original AR/RU/EN output becomes ordinary subtitles with acoustic word
-timings. Uncertain results remain in the owner's editor for review; translations
-are not fabricated. New local inference was checked on complete nasheeds: one
+Since Build 53, every recognized document remains a private draft, including
+results that the model rates as confident. Acoustic word timings are retained
+in that draft. The owner must check the text against the recording and explicitly
+save it before listeners can receive it; confidence is not proof of accuracy in
+singing or dialects. Translations are not fabricated. Earlier local inference
+was checked on complete nasheeds: one
 71.7-second recording produced 14 lines for review, and another 145.8-second
 recording produced 24 automatic lines/109 acoustic words delivered by the native
 caption endpoint. The latter took 355.97 seconds on the 2-core/4-GiB VPS. These
 measurements verify operation, not word accuracy against human-reviewed lyrics.
+Five previously automatic caption publications were withdrawn in the Build 53
+deployment; their recognition documents and all audio remained available, and
+manually saved captions were preserved.
 
 The previous paid OpenAI Whisper/GPT adapter remains paused in subtitleV2Service;
 its cached documents remain readable. It is separate from the enabled local
@@ -83,3 +89,21 @@ alone are not presented as production evidence.
 Set MUWA_AUDIT_STORAGE_BASE to a writable disk with more than 5 GiB free, matching
 the real upload disk reserve. The earlier transaction suite also uses muwa_audit.
 Neither test command may be pointed at production.
+
+## Code map
+
+- `endpoints/`: existing HTTP handlers grouped by feature, with adjacent
+  `*.schema.ts` request/response contracts shared with the panel.
+- `helpers/`: domain services, validation, session/role checks, storage and
+  recognition policies. Their names and import paths remain stable.
+- `runtime/`: the standalone Hono app and Node server entry point.
+- `*-migration.sql` and `base-schema.sql`: ordered database deployment scripts.
+  Moving or reapplying them is not part of a source-code reorganization.
+- `tests/`: domain/transaction checks and runtime HTTP checks on a disposable
+  local database; `scripts/`: build, test launcher and owner bootstrap tools.
+- `../tools/local-asr/`, `../tools/telegram-import/` and `../tools/server/`:
+  local recognition, owner-only Telegram import and server operations.
+
+Credentials, database contents, session files and media live outside this source
+tree. A portable source archive can reproduce the services but is not a backup
+of the private production database or recordings.

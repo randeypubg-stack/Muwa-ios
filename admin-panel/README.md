@@ -29,9 +29,36 @@ Server-side user role is checked on every admin request, including uploads.
 - Publications preserve the audio/cover/submission.json readiness protocol.
 - Committed catalog/moderation mutations write the existing audit journal.
   Passwords, session tokens and signed file tickets are not journaled.
-- Native iOS build 43 / Android build 41 use the Beget catalog with authenticated
-  audio and covers. Demonstration tracks are isolated to review/test fixtures.
+- Published catalog entries, audio, covers and checked captions are available
+  to guests as well as signed-in listeners. Drafts, recognition documents and
+  management actions require the existing authenticated owner/admin access.
+  Demonstration tracks are isolated to review/test fixtures.
 
 The old `backend/admin-seed.sql` is historical and was not applied to this fresh
 beta. No old accounts, Premium grants or media were imported. Backend checks cover
 real PostgreSQL transactions and the full HTTP login/upload/publication chain.
+
+## Code map
+
+- `pages/` and `components/AdminWorkspace.tsx`: routing and the existing access
+  gate. Authentication, iframe protection and admin-role checks stay here.
+- `features/workspace/AdminConsole.tsx`: the workspace shell and section views.
+  `useAdminWorkspace.ts` owns filters, server queries, refresh and mutation
+  feedback; each editor keeps only its own unsaved form state.
+- `features/catalog/TrackEditor.tsx`: track metadata, private upload tickets and
+  explicit acceptance of a suggested title.
+- `features/captions/CaptionEditor.tsx`: audio preview, timed Arabic/Russian/
+  English text, local recognition drafts, JSON import/export and explicit save.
+- `features/submissions/SubmissionReview.tsx`: preview and owner approval or
+  rejection of a submitted recording.
+- `components/`: shared controls and their CSS Modules. The unchanged
+  `AdminWorkspace.module.css` owns the coordinated shell/editor styling so the
+  split does not change selectors, responsive breakpoints or appearance.
+- `styles/tokens.css`: colors, spacing, surfaces, radii, shadows and layers.
+  `styles/typography.css`: font stacks with system fallbacks.
+  `styles/motion.css`: shared animation durations. `base.css` imports these and
+  retains the global viewport rules; fonts are not downloaded from a CDN.
+- `helpers/adminPresentation.ts` and `helpers/mediaUpload.ts`: presentation
+  labels/formatting and browser upload/audio metadata utilities.
+- API clients, schemas and authorization remain canonical in `../backend/`;
+  the panel imports their existing contracts instead of copying them.

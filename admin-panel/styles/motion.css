@@ -1,0 +1,6 @@
+/* Shared durations consumed by the existing CSS Modules. */
+:root {
+  --animation-duration-fast: 120ms;
+  --animation-duration-normal: 220ms;
+  --animation-duration-slow: 420ms;
+}

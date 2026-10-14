@@ -153,8 +153,11 @@ units and certificate/backup scripts are the deployment sources for this beta.
 The database initializer refuses an unrecognized existing database; it does not
 reset a live deployment. Passwords and signing secrets are generated on the VPS
 and stored privately. Do not commit generated env files or owner setup links.
-Automatic ASR stays disabled. Telegram history import needs channel confirmation
-and local credentials before actual ingestion; no channel has been copied yet.
+Local ASR is enabled for uploads on Beget; all output remains a private draft
+until explicit owner save. Owner-only Telegram forwarding is configured for the
+Muwa catalog. Runtime credentials, sessions and imported media stay on the VPS.
+See [current state](../../docs/CURRENT_STATE.md); older preparation reports
+above describe their own stages, not the final application state.
 
 The owner's 3 October 2026 output confirms Docker Engine 29.8.2 and Compose
 5.6.0 installed successfully. The first installer stopped before swap creation:

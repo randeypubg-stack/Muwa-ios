@@ -14,10 +14,10 @@ or translation provider is enabled.
    PCM. No uploaded playlist, remote URL, model code or text prompt is executed.
 4. The worker preserves original text, phrase timings and valid estimated word
    timings. It does not create translations or rewrite religious wording.
-5. Results and quality warnings are saved in the queue. Confident AR/RU/EN
-   results also populate ordinary subtitles if the caption revision is still
-   unchanged and no manual captions exist. They do not publish the track.
-6. Uncertain output remains available in the owner's caption editor for review.
+5. All results and quality warnings are saved as private drafts in the queue.
+   Model confidence never publishes lyrics; only explicit owner review/save
+   updates ordinary subtitles. Recognition does not publish the audio track.
+6. Output remains available in the owner's caption editor for review.
    Manual changes made while inference runs are never overwritten. Replaced
    audio and previous lease tokens cannot accept stale results.
 

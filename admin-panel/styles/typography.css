@@ -1,0 +1,7 @@
+/* Named font stacks with local/system fallbacks; no font CDN required. */
+:root {
+  --font-family-base: "Inter Tight", system-ui, sans-serif;
+  --font-family-display: "Instrument Serif", Georgia, serif;
+  --font-family-monospace: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-family-cursive: "Instrument Serif", Georgia, serif;
+}

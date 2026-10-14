@@ -1,0 +1,2 @@
+# Store the Windows wrapper consistently; check it out with native line endings.
+android/gradlew.bat text eol=crlf

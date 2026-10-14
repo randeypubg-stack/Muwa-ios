@@ -1,60 +1,74 @@
 # Muwa
 
-Native iOS/iPadOS (SwiftUI, AVPlayer) and Android (Kotlin, Jetpack Compose, Media3)
-clients for Muwa. Both use the same Muwa backend and account contracts, now hosted on Beget.
+Нативное приложение нашидов: iOS/iPadOS — SwiftUI и AVPlayer, Android — Kotlin,
+Jetpack Compose и Media3. Backend и панель владельца работают на Beget.
+Имя **Muwa**, идентификатор **app.muwa.nasheeds**, версия **1.4.0**, build **53**.
 
-- App name: **Muwa**
-- Bundle/application ID: `app.muwa.nasheeds`
-- Version: `1.4.0`; iOS build `43`, Android build `41`
-- Brand assets: the supplied silver-blue logo in `branding/`, verified by SHA-256
-- Cold launch: short native reveal, light sweep and fade; respects reduced animation
+Актуальное состояние и ограничения: [docs/CURRENT_STATE.md](docs/CURRENT_STATE.md).
+Карта проекта: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Перенос в новый чат Codex: [docs/PORTABLE_PROJECT.md](docs/PORTABLE_PROJECT.md).
 
-The iOS workflow verifies the immutable native source archive, applies
-`native-patches/` and `branding/`, then builds an arm64 unsigned IPA and complete
-Xcode source archive. The Android workflow builds debug/release APKs and runs unit,
-Lint and emulator checks. Separate jobs capture iPhone, iPad and available CarPlay
-displays; native launch-motion recordings are included in review artifacts.
+## Где работать
 
-The device IPA is unsigned. Android debug APKs are signed with a development key;
-release APK signing and store billing require the appropriate release configuration.
-CarPlay configuration and its Apple-approved provisioning requirement are described
-in [docs/CarPlay.md](docs/CarPlay.md).
+| Папка | Содержание |
+| --- | --- |
+| `native-patches/Sources` | Актуальные Swift-экраны, модели, сервисы и система оформления |
+| `native-patches/Resources`, `Configuration` | Ресурсы iOS и настройки CarPlay |
+| `source-base` | Проверенная неизменяемая основа Xcode-проекта |
+| `android` | Полный Gradle-проект Android |
+| `backend` | API, существующие сервисы, схемы и миграции PostgreSQL |
+| `admin-panel` | Панель: каталог, субтитры, модерация, общие элементы и стили |
+| `branding` | Исходные логотипы и их контрольные суммы |
+| `tools` | Развёртывание, Telegram-импорт и локальное распознавание |
+| `scripts`, `tests`, `.github/workflows` | Сборка, переносимый архив, проверки и CI |
+| `docs` | Архитектура, актуальные решения и датированные отчёты |
 
-The immutable iOS base stays at:
-`f07bce80d5b9b39583a8bce19f3e3b71caed205332649f13ccb45a8b28997f84`.
-It is tracked in `source-base/MuwaNativeBase.zip`; CI does not need a CDN source download.
-App name/asset updates preserve Bundle ID, backend contracts and user-data keys.
+## Собрать проект
 
-Palette, typography, motion and backgrounds are separated from screens and data
-services. See [Architecture](docs/ARCHITECTURE.md) and
-[Build40 design review](docs/DESIGN-BUILD40.md). Both native clients use three soft
-ambient lights, compact catalog collections and a shared persistent queue with
-animated controls. Reduced motion and power-saving modes stop background movement.
+Python 3.10+ собирает полный Xcode-проект из отслеживаемой основы и актуальных
+исходников; загрузка кода из Floot или другого CDN не требуется:
 
-Premium restrictions remain disabled for feature testing. Local Whisper large-v3
-recognition now runs after uploads on Beget; see [the worker](tools/local-asr/README.md).
-Paid AI providers remain disabled. Production StoreKit/Play Billing,
-CarPlay provisioning and physical-device validation still require completion.
+```sh
+python3 scripts/assemble_ios.py --output build-src/MuwaNasheedsNative
+python3 tests/check_native_registration.py build-src/MuwaNasheedsNative
+```
 
-The owner permits a public repository. CI scans source history and archives for
-secrets. On 4 October 2026, the owner chose a fresh database and catalog without
-importing old Floot records. The existing backend and admin handlers run on Beget
-with private media storage and trusted HTTPS: https://93.188.187.96/admin.
-Floot is no longer required to build or run this beta; its old project is untouched.
-See [the deployment and first-login instructions](docs/BEGET-BETA-DEPLOYMENT.md).
-Client build numbers above identify the updated source; CI results establish
-whether their installable artifacts are ready.
+Откройте `build-src/MuwaNasheedsNative/MuwaNasheeds.xcodeproj` на macOS в Xcode,
+схема `MuwaNasheeds`. Канонические изменения вносите в `native-patches`, затем
+генерируйте проект в новую/пустую папку. Собранная папка не является второй
+реализацией приложения. iOS deployment target — 17.0; актуальные CI-проверки
+используют стабильный Xcode 27.0. Установка на iPhone требует подписи Apple;
+CI IPA не подписан. [CarPlay](docs/CarPlay.md) требует соответствующего provisioning.
 
-7 October 2026 — build 47 player fixes
-------------------------------------
-Home retains native large-title collapse, without the removed toolbar mark;
-iOS 26+ scroll-edge blur is hidden. Home and collection playback supply the
-actual collection as the queue, so next/shuffle have more than one item on a
-fresh catalogue. Both subtitle buttons share one state and reader: published
-Arabic originals, word timings when available, and already saved translations.
-Local captions never initiate paid provider calls. MP3/M4A/WAV downloads inspect
-the actual container, validate a correctly named staged file and persist its
-format for offline playback across restarts. Existing offline keys remain valid.
-The retired toolbar launch view/state and its Xcode registration are removed.
-Regional Arabic ASR routing and original preservation are tested independently
-of accuracy; representative dialectal nasheed lyrics still need human evaluation.
+Android: откройте `android` в Android Studio (JDK 17, SDK 35); Gradle wrapper
+фиксирует 8.10.2. Локальные пути SDK укажите отдельно, не в исходном архиве.
+
+```sh
+cd android
+./gradlew assembleDebug testDebugUnitTest lintDebug
+```
+
+Для backend и панели отдельно выполните `npm ci`, затем `npm run build`.
+Настройка backend, переменные окружения и миграции описаны в
+[backend/README.md](backend/README.md). Панель — [admin-panel/README.md](admin-panel/README.md).
+
+## Важные решения
+
+Опубликованные нашиды видны гостям до входа. Вход нужен для личных данных и
+действий владельца. Каталог и медиа хранятся на сервере; их содержимое не
+вшито в исходники. Floot больше не нужен этой бете, старый проект не изменяется.
+
+Premium-ограничения отключены для функционального тестирования. Локальный
+Whisper large-v3 распознаёт загрузки на сервере; **каждый результат остаётся
+приватным черновиком до явного сохранения владельцем**. Загрузка, публикация
+аудио и воспроизведение не ждут распознавания. Платные AI-провайдеры выключены;
+точность арабских диалектов нужно проверять по записям и эталонному тексту.
+
+Шрифты, цвета, анимации и фон отделены от экранов. Утверждённое расположение
+нижнего бара закреплено правилами `AGENTS.md` и проверками геометрии. Перестройка
+папок от 14 октября не меняет дизайн. Новые предложенные фоновые концепции
+ещё не выбраны владельцем.
+
+Владелец разрешил публичный GitHub. Секреты, Telegram-сессии, ключи подписи,
+кэши и рабочая база в исходный архив не входят. Датированные отчёты в `docs`
+описывают свои версии; при расхождении сверяйтесь с `CURRENT_STATE.md`.

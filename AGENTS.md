@@ -49,3 +49,17 @@
   Arabic phrases, scrolling, artwork paging and reader open/close. Record actual
   tested runtimes and preserve the regression checks; see
   `docs/BUILD49_LAYOUT_AND_RECOGNITION.md`.
+
+- Canonical iOS files mirror the Xcode tree under `native-patches/Sources`,
+  `Resources` and `Configuration`. Generate the complete project only through
+  `scripts/assemble_ios.py`; do not edit a packaged/generated copy as a new source.
+- Typography, animation policy and shared design tokens live in each platform's
+  design/theme folders. Feature modules own presentation; existing models/hooks
+  remain single state owners. Respect the folder map in `docs/ARCHITECTURE.md`.
+- All local recognition output remains a private ASR draft until explicit owner
+  review/save. Model confidence cannot publish lyrics. Proposed design reference
+  mockups are unselected and must not be applied without an owner design choice.
+- Portable exports must use a clean committed Git tree and current-branch bundle,
+  include restore instructions, and verify ZIP integrity and offline restoration.
+  Never include runtime credentials, signing keys, Telegram sessions or build
+  caches. A source archive is not a backup of live PostgreSQL/media.
