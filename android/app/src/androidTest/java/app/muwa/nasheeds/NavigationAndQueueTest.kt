@@ -30,54 +30,94 @@ class NavigationAndQueueTest {
     fun navigationKeepsApprovedWindowAnchorAcrossTabsAndRotation() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         ActivityScenario.launch<MainActivity>(
-            Intent(context, MainActivity::class.java).putExtra("review.route", "home")
-        ).use { scenario ->
-            for (orientation in listOf(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
-                ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE, ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)) {
-                scenario.onActivity { it.requestedOrientation = orientation }
-                compose.waitUntil(timeoutMillis = 20_000) {
-                    var settled = false
-                    scenario.onActivity {
-                        val view = it.window.decorView
-                        settled = view.width > 0 && view.height > 0 &&
-                            (view.width > view.height) == (orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
+                Intent(context, MainActivity::class.java).putExtra("review.route", "home")
+            )
+            .use { scenario ->
+                for (orientation in
+                    listOf(
+                        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                        ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+                        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                    )) {
+                    scenario.onActivity { it.requestedOrientation = orientation }
+                    compose.waitUntil(timeoutMillis = 20_000) {
+                        var settled = false
+                        scenario.onActivity {
+                            val view = it.window.decorView
+                            settled =
+                                view.width > 0 &&
+                                    view.height > 0 &&
+                                    (view.width > view.height) ==
+                                        (orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
+                        }
+                        settled
                     }
-                    settled
-                }
-                for (tab in listOf("home", "library", "profile")) {
-                    compose.onNodeWithTag("tab.$tab").assertIsDisplayed().performClick()
+                    for (tab in listOf("home", "library", "profile")) {
+                        compose.onNodeWithTag("tab.$tab").assertIsDisplayed().performClick()
+                        assertBottomAnchor(scenario)
+                    }
+                    scenario.onActivity {
+                        ViewModelProvider(it)[MuwaModel::class.java].play(
+                            AppGraph.library.catalog.first(),
+                            autoplay = false,
+                        )
+                    }
+                    compose.waitUntil(timeoutMillis = 20_000) {
+                        compose.onAllNodesWithTag("mini-player").fetchSemanticsNodes().isNotEmpty()
+                    }
                     assertBottomAnchor(scenario)
+                    compose.onNodeWithTag("mini-player").assertIsDisplayed()
+                    compose.onNodeWithTag("tab.player").performClick()
+                    compose.onNodeWithTag("player.screen").assertIsDisplayed()
+                    assertBottomAnchor(scenario)
+                    compose.onNodeWithTag("tab.home").performClick()
+                    compose.onNodeWithTag("home.screen").assertExists()
                 }
-                scenario.onActivity { ViewModelProvider(it)[MuwaModel::class.java]
-                    .play(AppGraph.library.catalog.first(), autoplay = false) }
-                compose.waitUntil(timeoutMillis = 20_000) {
-                    compose.onAllNodesWithTag("mini-player").fetchSemanticsNodes().isNotEmpty()
-                }
-                assertBottomAnchor(scenario)
-                compose.onNodeWithTag("mini-player").assertIsDisplayed()
             }
-        }
     }
 
     private fun assertBottomAnchor(scenario: ActivityScenario<MainActivity>) {
         compose.waitForIdle()
-        val bar = compose.onNodeWithTag("bottom-navigation").assertIsDisplayed()
-            .getUnclippedBoundsInRoot()
+        val bar =
+            compose
+                .onNodeWithTag("bottom-navigation")
+                .assertIsDisplayed()
+                .getUnclippedBoundsInRoot()
+        assertEquals(
+            "Navigation must match the approved iOS height",
+            62f,
+            (bar.bottom - bar.top).value,
+            .5f,
+        )
+        compose.onNodeWithTag("tab.player").assertIsDisplayed()
         scenario.onActivity { activity ->
             val view = activity.window.decorView
             val density = activity.resources.displayMetrics.density
             val height = view.height / density
-            val insets = ViewCompat.getRootWindowInsets(view)!!.getInsets(
-                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            val insets =
+                ViewCompat.getRootWindowInsets(view)!!.getInsets(
+                    WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+                )
             // Independent visual reference; changing production constants must fail this check.
             val expected = maxOf((height * 18f / 874f).coerceIn(12f, 28f), insets.bottom / density)
-            assertEquals("Navigation changed its approved physical-window anchor",
-                expected, height - bar.bottom.value, 1f)
-            assertTrue("Navigation controls overlap Android system navigation",
-                bar.bottom.value <= (view.height - insets.bottom) / density + 1f)
-            assertTrue("Navigation exceeds the left safe edge", bar.left.value >= insets.left / density)
-            assertTrue("Navigation exceeds the right safe edge",
-                bar.right.value <= (view.width - insets.right) / density)
+            assertEquals(
+                "Navigation changed its approved physical-window anchor",
+                expected,
+                height - bar.bottom.value,
+                1f,
+            )
+            assertTrue(
+                "Navigation controls overlap Android system navigation",
+                bar.bottom.value <= (view.height - insets.bottom) / density + 1f,
+            )
+            assertTrue(
+                "Navigation exceeds the left safe edge",
+                bar.left.value >= insets.left / density,
+            )
+            assertTrue(
+                "Navigation exceeds the right safe edge",
+                bar.right.value <= (view.width - insets.right) / density,
+            )
         }
     }
 
@@ -88,73 +128,123 @@ class NavigationAndQueueTest {
         context.stopService(Intent(context, PlaybackService::class.java))
         instrumentation.waitForIdleSync()
         val device = UiDevice.getInstance(instrumentation)
-        val originalScale = device.executeShellCommand("settings get global animator_duration_scale").trim()
+        val originalScale =
+            device.executeShellCommand("settings get global animator_duration_scale").trim()
         val track = AppGraph.library.catalog.first()
-        val file = File(context.cacheDir, if (track.captionsRevision > 0)
-            "subtitles-${track.id}-r${track.captionsRevision}.json" else "subtitles-${track.id}.json")
+        val file =
+            File(
+                context.cacheDir,
+                if (track.captionsRevision > 0)
+                    "subtitles-${track.id}-r${track.captionsRevision}.json"
+                else "subtitles-${track.id}.json",
+            )
         val previous = file.takeIf { it.exists() }?.readBytes()
         val phrase = "نور في القلب وسلام في الروح ورحمة الله والأمل في كل يوم وليلة"
-        file.writeText("""{"segments":[{"start":0,"end":5,"ar":"السلام عليكم"},
-            {"start":5,"end":10,"ar":"$phrase"},{"start":10,"end":15,"ar":"رحمة وسكينة"}]}""")
+        file.writeText(
+            """{"segments":[{"start":0,"end":5,"ar":"السلام عليكم"},
+            {"start":5,"end":10,"ar":"$phrase"},{"start":10,"end":15,"ar":"رحمة وسكينة"}]}"""
+        )
         try {
             device.executeShellCommand("settings put global animator_duration_scale 0")
-            ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)
-                .putExtra("review.route", "player")).use { scenario ->
-                compose.waitUntil(timeoutMillis = 20_000) {
-                    var ready = false
-                    scenario.onActivity { ready = ViewModelProvider(it)[MuwaModel::class.java]
-                        .controller?.playbackState == Player.STATE_READY }
-                    ready
+            ActivityScenario.launch<MainActivity>(
+                    Intent(context, MainActivity::class.java).putExtra("review.route", "player")
+                )
+                .use { scenario ->
+                    compose.waitUntil(timeoutMillis = 20_000) {
+                        var ready = false
+                        scenario.onActivity {
+                            ready =
+                                ViewModelProvider(it)[MuwaModel::class.java]
+                                    .controller
+                                    ?.playbackState == Player.STATE_READY
+                        }
+                        ready
+                    }
+                    compose.waitUntil(timeoutMillis = 10_000) {
+                        compose
+                            .onAllNodes(hasTestTag("player.subtitles") and isEnabled())
+                            .fetchSemanticsNodes()
+                            .isNotEmpty()
+                    }
+                    compose.onNodeWithTag("player.subtitles").performClick()
+                    compose.onNodeWithTag("player.lyrics").performClick()
+                    compose.waitUntil(timeoutMillis = 15_000) {
+                        compose
+                            .onAllNodes(hasTestTag("subtitle.line.0") and isSelected())
+                            .fetchSemanticsNodes()
+                            .size == 1
+                    }
+                    scenario.onActivity {
+                        val model = ViewModelProvider(it)[MuwaModel::class.java]
+                        model.seek(6_000)
+                        model.seek(11_000)
+                    }
+                    compose.waitUntil(timeoutMillis = 10_000) {
+                        compose
+                            .onAllNodes(hasTestTag("subtitle.line.2") and isSelected())
+                            .fetchSemanticsNodes()
+                            .size == 1
+                    }
+                    compose.onNodeWithTag("subtitles.list").performScrollToIndex(1)
+                    compose.onNodeWithText(phrase, useUnmergedTree = true).assertExists()
+                    compose.onNodeWithTag("subtitle.line.1").performClick()
+                    compose.onNodeWithTag("subtitles.follow").assertIsOff()
+                    compose.waitUntil(timeoutMillis = 10_000) {
+                        compose
+                            .onAllNodes(hasTestTag("subtitle.line.1") and isSelected())
+                            .fetchSemanticsNodes()
+                            .size == 1
+                    }
+                    compose.onNodeWithTag("bottom-navigation").assertDoesNotExist()
+                    // Connected-test cleanup uninstalls the APK, removing app-scoped
+                    // external storage. Keep disposable fixture evidence in shell-owned
+                    // shared storage until the workflow pulls it.
+                    val shots = File("/sdcard/Download/muwa-subtitle-review")
+                    device.executeShellCommand("mkdir -p ${shots.path}")
+                    assertTrue(
+                        device.takeScreenshot(
+                            File(shots, "subtitle-reader-reduced-motion-portrait.png")
+                        )
+                    )
+                    scenario.onActivity {
+                        it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                    }
+                    compose.waitUntil(timeoutMillis = 20_000) {
+                        var rotated = false
+                        scenario.onActivity {
+                            rotated = it.window.decorView.width > it.window.decorView.height
+                        }
+                        rotated
+                    }
+                    val list = compose.onNodeWithTag("subtitles.list").assertIsDisplayed()
+                    val bounds = list.getUnclippedBoundsInRoot()
+                    assertTrue(
+                        device.takeScreenshot(
+                            File(shots, "subtitle-reader-reduced-motion-landscape.png")
+                        )
+                    )
+                    assertTrue(
+                        "Landscape subtitle viewport: ${bounds.bottom - bounds.top}; expected at least 40dp",
+                        (bounds.bottom - bounds.top).value >= 40f,
+                    )
+                    list.performScrollToIndex(1)
+                    compose.onNodeWithText(phrase, useUnmergedTree = true).assertIsDisplayed()
+                    compose.onNodeWithTag("subtitles.follow").assertIsOff()
+                    compose.onNodeWithTag("bottom-navigation").assertDoesNotExist()
+                    assertTrue(
+                        device.takeScreenshot(
+                            File(shots, "subtitle-reader-reduced-motion-landscape.png")
+                        )
+                    )
                 }
-                compose.onNodeWithTag("player.subtitles").performClick()
-                compose.waitUntil(timeoutMillis = 15_000) {
-                    compose.onAllNodes(hasTestTag("subtitle.line.0") and isSelected())
-                        .fetchSemanticsNodes().size == 1
-                }
-                scenario.onActivity {
-                    val model = ViewModelProvider(it)[MuwaModel::class.java]
-                    model.seek(6_000); model.seek(11_000)
-                }
-                compose.waitUntil(timeoutMillis = 10_000) {
-                    compose.onAllNodes(hasTestTag("subtitle.line.2") and isSelected())
-                        .fetchSemanticsNodes().size == 1
-                }
-                compose.onNodeWithTag("subtitles.list").performScrollToIndex(1)
-                compose.onNodeWithText(phrase, useUnmergedTree = true).assertExists()
-                compose.onNodeWithTag("subtitle.line.1").performClick()
-                compose.onNodeWithTag("subtitles.follow").assertIsOff()
-                compose.waitUntil(timeoutMillis = 10_000) {
-                    compose.onAllNodes(hasTestTag("subtitle.line.1") and isSelected())
-                        .fetchSemanticsNodes().size == 1
-                }
-                assertBottomAnchor(scenario)
-                // Connected-test cleanup uninstalls the APK, removing app-scoped
-                // external storage. Keep disposable fixture evidence in shell-owned
-                // shared storage until the workflow pulls it.
-                val shots = File("/sdcard/Download/muwa-subtitle-review")
-                device.executeShellCommand("mkdir -p ${shots.path}")
-                assertTrue(device.takeScreenshot(File(shots, "subtitle-reader-reduced-motion-portrait.png")))
-                scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
-                compose.waitUntil(timeoutMillis = 20_000) {
-                    var rotated = false
-                    scenario.onActivity { rotated = it.window.decorView.width > it.window.decorView.height }
-                    rotated
-                }
-                val list = compose.onNodeWithTag("subtitles.list").assertIsDisplayed()
-                val bounds = list.getUnclippedBoundsInRoot()
-                assertTrue(device.takeScreenshot(File(shots, "subtitle-reader-reduced-motion-landscape.png")))
-                assertTrue("Landscape subtitle viewport: ${bounds.bottom - bounds.top}; expected at least 40dp",
-                    (bounds.bottom - bounds.top).value >= 40f)
-                list.performScrollToIndex(1)
-                compose.onNodeWithText(phrase, useUnmergedTree = true).assertIsDisplayed()
-                compose.onNodeWithTag("subtitles.follow").assertIsOff()
-                assertBottomAnchor(scenario)
-                assertTrue(device.takeScreenshot(File(shots, "subtitle-reader-reduced-motion-landscape.png")))
-            }
         } finally {
             if (previous == null) file.delete() else file.writeBytes(previous)
-            if (originalScale == "null") device.executeShellCommand("settings delete global animator_duration_scale")
-            else device.executeShellCommand("settings put global animator_duration_scale $originalScale")
+            if (originalScale == "null")
+                device.executeShellCommand("settings delete global animator_duration_scale")
+            else
+                device.executeShellCommand(
+                    "settings put global animator_duration_scale $originalScale"
+                )
         }
     }
 
@@ -166,10 +256,14 @@ class NavigationAndQueueTest {
             )
             .use {
                 val pages = compose.onNodeWithTag("popular.pages")
-                compose.onNodeWithTag("home.screen").performScrollToNode(hasTestTag("popular.pages"))
+                compose
+                    .onNodeWithTag("home.screen")
+                    .performScrollToNode(hasTestTag("popular.pages"))
                 compose.onNodeWithTag("popular.page.muwa-01").assertIsDisplayed()
                 pages.performTouchInput { swipeLeft() }
-                compose.onNodeWithTag("popular.page.muwa-06").assertIsDisplayed()
+                val bar = compose.onNodeWithTag("bottom-navigation").getUnclippedBoundsInRoot()
+                val nextPage = if ((bar.right - bar.left).value >= 700f) "muwa-07" else "muwa-06"
+                compose.onNodeWithTag("popular.page.$nextPage").assertIsDisplayed()
                 pages.performTouchInput { swipeRight() }
                 compose.onNodeWithTag("popular.page.muwa-01").assertIsDisplayed()
             }
@@ -347,11 +441,19 @@ class NavigationAndQueueTest {
                             )
                         }
                         compose.onNodeWithTag("home.screen").assertDoesNotExist()
+                        assertBottomAnchor(scenario)
                         compose.onNodeWithTag("player.queue").performClick()
                         compose.onNodeWithTag("queue.screen").assertIsDisplayed()
-                        compose.onNodeWithTag("player.screen").assertDoesNotExist()
-                        compose.onNodeWithTag("mini-player").performClick()
+                        compose.onNodeWithTag("queue.close").performClick()
+                        compose.onNodeWithTag("player.screen").assertIsDisplayed()
+                        compose.waitUntil(timeoutMillis = 10_000) {
+                            compose
+                                .onAllNodes(hasTestTag("player.subtitles") and isEnabled())
+                                .fetchSemanticsNodes()
+                                .isNotEmpty()
+                        }
                         compose.onNodeWithTag("player.subtitles").performClick()
+                        compose.onNodeWithTag("player.lyrics").assertIsDisplayed().performClick()
                         compose.onNodeWithTag("subtitles.screen").assertIsDisplayed()
                         compose.waitUntil(timeoutMillis = 10_000) {
                             compose
@@ -359,16 +461,58 @@ class NavigationAndQueueTest {
                                 .fetchSemanticsNodes()
                                 .isNotEmpty()
                         }
-                        compose.onNodeWithTag("player.screen").assertDoesNotExist()
-                        compose.onNodeWithTag("mini-player").performClick()
-                        compose.onNodeWithTag("player.close").performClick()
-                        compose.onNodeWithTag("subtitles.screen").assertIsDisplayed()
-                        compose.onNodeWithTag("mini-player").performClick()
+                        compose.onNodeWithTag("bottom-navigation").assertDoesNotExist()
+                        compose.onNodeWithText("Готово").performClick()
+                        compose.onNodeWithTag("player.screen").assertIsDisplayed()
+                        assertBottomAnchor(scenario)
                     }
                 }
         } finally {
             if (savedCaptions == null) captionFile.delete()
             else captionFile.writeBytes(savedCaptions)
+        }
+    }
+
+    @Test
+    fun longPressMovesTheWholeQueueCardAndPersistsItsOrder() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val library = AppGraph.library
+        val saved = library.queue
+        val tracks = library.catalog.take(3)
+        instrumentation.runOnMainSync { library.replaceQueue(tracks.map { it.id }) }
+        try {
+            ActivityScenario.launch<MainActivity>(
+                    Intent(context, MainActivity::class.java).putExtra("review.route", "queue")
+                )
+                .use {
+                    val first = compose.onNodeWithTag("queue.row.${tracks[0].id}")
+                    val second = compose.onNodeWithTag("queue.row.${tracks[1].id}")
+                    val firstBounds = first.getUnclippedBoundsInRoot()
+                    val secondBounds = second.getUnclippedBoundsInRoot()
+                    val distance =
+                        (secondBounds.top + secondBounds.bottom -
+                            firstBounds.top -
+                            firstBounds.bottom) / 2
+                    val density = context.resources.displayMetrics.density
+                    first.performTouchInput {
+                        val start = androidx.compose.ui.geometry.Offset(width * .3f, height * .5f)
+                        down(start)
+                        advanceEventTime(650)
+                        moveTo(
+                            start +
+                                androidx.compose.ui.geometry.Offset(0f, distance.value * density),
+                            delayMillis = 200,
+                        )
+                        up()
+                    }
+                    compose.waitUntil(timeoutMillis = 10_000) {
+                        library.queue.take(2) == listOf(tracks[1].id, tracks[0].id)
+                    }
+                    assertEquals(library.queue, Library(context).queue)
+                }
+        } finally {
+            instrumentation.runOnMainSync { library.replaceQueue(saved) }
         }
     }
 

@@ -110,8 +110,56 @@ fun QueueScreen(model: MuwaModel, play: (Track) -> Unit) {
                 items(tracks, key = { it.id }) { track ->
                     val current = model.track?.id == track.id
                     val shape = RoundedCornerShape(22.dp)
+                    val reorder =
+                        Modifier.pointerInput(track.id) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        listState.layoutInfo.visibleItemsInfo
+                                            .firstOrNull { it.key == track.id }
+                                            ?.let {
+                                                draggedId = track.id
+                                                dragCenter = it.offset + it.size / 2f
+                                                haptics.performHapticFeedback(
+                                                    HapticFeedbackType.LongPress
+                                                )
+                                            }
+                                    },
+                                    onDragEnd = { draggedId = null },
+                                    onDragCancel = { draggedId = null },
+                                ) { change, amount ->
+                                    change.consume()
+                                    dragCenter += amount.y
+                                    val target =
+                                        listState.layoutInfo.visibleItemsInfo.firstOrNull {
+                                            it.key != track.id &&
+                                                dragCenter >= it.offset &&
+                                                dragCenter <= it.offset + it.size
+                                        }
+                                    if (target != null) {
+                                        val from = model.library.queue.indexOf(track.id)
+                                        if (from >= 0)
+                                            model.moveQueue(track.id, target.index - from)
+                                    }
+                                }
+                            }
+                            .semantics {
+                                customActions =
+                                    listOf(
+                                        CustomAccessibilityAction("Переместить выше") {
+                                            model.moveQueue(track.id, -1)
+                                            true
+                                        },
+                                        CustomAccessibilityAction("Переместить ниже") {
+                                            model.moveQueue(track.id, 1)
+                                            true
+                                        },
+                                    )
+                            }
+
                     Row(
                         Modifier.fillMaxWidth()
+                            .testTag("queue.row.${track.id}")
+                            .then(reorder)
                             .then(if (draggedId == track.id) Modifier else Modifier.animateItem())
                             .zIndex(if (draggedId == track.id) 1f else 0f)
                             .graphicsLayer {
@@ -184,56 +232,11 @@ fun QueueScreen(model: MuwaModel, play: (Track) -> Unit) {
                         )
                         var menu by remember { mutableStateOf(false) }
                         Box {
-                            val reorder =
-                                Modifier.pointerInput(track.id) {
-                                        detectDragGesturesAfterLongPress(
-                                            onDragStart = {
-                                                listState.layoutInfo.visibleItemsInfo
-                                                    .firstOrNull { it.key == track.id }
-                                                    ?.let {
-                                                        draggedId = track.id
-                                                        dragCenter = it.offset + it.size / 2f
-                                                        haptics.performHapticFeedback(
-                                                            HapticFeedbackType.LongPress
-                                                        )
-                                                    }
-                                            },
-                                            onDragEnd = { draggedId = null },
-                                            onDragCancel = { draggedId = null },
-                                        ) { change, amount ->
-                                            change.consume()
-                                            dragCenter += amount.y
-                                            val target =
-                                                listState.layoutInfo.visibleItemsInfo.firstOrNull {
-                                                    it.key != track.id &&
-                                                        dragCenter >= it.offset &&
-                                                        dragCenter <= it.offset + it.size
-                                                }
-                                            if (target != null) {
-                                                val from = model.library.queue.indexOf(track.id)
-                                                if (from >= 0)
-                                                    model.moveQueue(track.id, target.index - from)
-                                            }
-                                        }
-                                    }
-                                    .semantics {
-                                        customActions =
-                                            listOf(
-                                                CustomAccessibilityAction("Переместить выше") {
-                                                    model.moveQueue(track.id, -1)
-                                                    true
-                                                },
-                                                CustomAccessibilityAction("Переместить ниже") {
-                                                    model.moveQueue(track.id, 1)
-                                                    true
-                                                },
-                                            )
-                                    }
                             MuwaIconButton(
                                 Icons.Default.Menu,
                                 "Порядок ${track.title}",
                                 { menu = true },
-                                reorder,
+                                Modifier,
                             )
                             DropdownMenu(menu, { menu = false }) {
                                 DropdownMenuItem(

@@ -4,9 +4,12 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -18,6 +21,7 @@ import app.muwa.nasheeds.ui.catalog.CollectionScreen
 import app.muwa.nasheeds.ui.catalog.SavedTracksScreen
 import app.muwa.nasheeds.ui.design.*
 import app.muwa.nasheeds.ui.home.HomeScreen
+import app.muwa.nasheeds.ui.library.LibraryCollectionsScreen
 import app.muwa.nasheeds.ui.library.LibraryScreen
 import app.muwa.nasheeds.ui.navigation.AppBottomBar
 import app.muwa.nasheeds.ui.navigation.AppTopBar
@@ -31,6 +35,7 @@ import app.muwa.nasheeds.ui.settings.SettingsScreen
 import app.muwa.nasheeds.ui.state.rememberSaveableState
 import app.muwa.nasheeds.ui.subtitles.SubtitleScreen
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MuwaApp(
     model: MuwaModel = viewModel(),
@@ -47,6 +52,9 @@ fun MuwaApp(
     }
     var route by rememberSaveableState(if (initialRoute == "player") "home" else initialRoute)
     var expanded by rememberSaveableState(initialRoute == "player")
+    var readerFromPlayer by rememberSaveableState(false)
+    var playerQueue by rememberSaveableState(false)
+    val topScroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var newPlaylist by remember { mutableStateOf(false) }
     var playlistName by remember { mutableStateOf("") }
     var addingTrack by remember { mutableStateOf<Track?>(null) }
@@ -61,7 +69,11 @@ fun MuwaApp(
         }
     }
     BackHandler(route !in listOf("home", "library", "profile") || expanded) {
-        if (expanded) expanded = false
+        if (route == "subtitles" && readerFromPlayer) {
+            route = "home"
+            expanded = true
+            readerFromPlayer = false
+        } else if (expanded) expanded = false
         else
             route =
                 if (route.startsWith("collection:")) "home"
@@ -87,31 +99,40 @@ fun MuwaApp(
         Scaffold(
             modifier = if (expanded) Modifier.clearAndSetSemantics {} else Modifier,
             containerColor = Color.Transparent,
-            bottomBar = {
-                AppBottomBar(
-                    model = model,
-                    selected = selected,
-                    expanded = expanded,
-                    systemInsets = systemInsets,
-                    extraBottomPadding = extraBottomPadding,
-                    onNavigate = {
-                        route = it
-                        expanded = false
-                    },
-                    onExpandPlayer = { expanded = true },
-                )
-            },
             topBar = {
-                // The reader already has language/follow controls. A second
-                // 64dp toolbar leaves only 20dp of captions on a short window.
-                if (
-                    !expanded &&
-                        !(route == "subtitles" && maxWidth >= 440.dp && maxHeight <= 420.dp)
-                )
-                    AppTopBar(route, model) { route = "search" }
+                if (!expanded)
+                    AppTopBar(
+                        route,
+                        model,
+                        topScroll,
+                        { route = "search" },
+                        {
+                            route =
+                                if (route.startsWith("collection:")) "home"
+                                else if (selected == "profile") "profile" else "library"
+                        },
+                        {
+                            route = "home"
+                            expanded = readerFromPlayer
+                            readerFromPlayer = false
+                        },
+                    )
             },
         ) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding)) {
+            val chromeHeight =
+                bottomClearanceDp.dp +
+                    BottomNavigationLayout.barHeightDp.dp +
+                    if (model.track != null && !expanded)
+                        (BottomNavigationLayout.miniPlayerHeightDp +
+                                BottomNavigationLayout.playerGapDp)
+                            .dp
+                    else 0.dp
+            Box(
+                Modifier.fillMaxSize()
+                    .padding(padding)
+                    .padding(bottom = if (route == "subtitles") 0.dp else chromeHeight)
+                    .nestedScroll(topScroll.nestedScrollConnection)
+            ) {
                 when (route) {
                     "home" ->
                         HomeScreen(
@@ -126,9 +147,23 @@ fun MuwaApp(
                                 model.resume()
                                 requestNotifications()
                             },
+                            openPlayer = {
+                                model.play(it, model.library.catalog)
+                                expanded = true
+                                requestNotifications()
+                            },
                         )
                     "queue" -> QueueScreen(model, play)
                     "library" -> LibraryScreen(model, { route = it }, { newPlaylist = true })
+                    "playlists",
+                    "publications",
+                    "drafts" ->
+                        LibraryCollectionsScreen(
+                            model,
+                            route,
+                            { route = it },
+                            { newPlaylist = true },
+                        )
                     "profile" -> ProfileScreen(model) { route = it }
                     "search" -> SearchScreen(model, play, { addingTrack = it })
                     "favorites",
@@ -166,18 +201,66 @@ fun MuwaApp(
             PlayerSheet(
                 model,
                 onClose = { expanded = false },
-                onQueue = {
-                    expanded = false
-                    route = "queue"
-                },
+                onQueue = { playerQueue = true },
                 onSubtitles = {
+                    readerFromPlayer = true
                     model.loadSubtitles()
                     expanded = false
                     route = "subtitles"
                 },
                 onPlaylist = { addingTrack = model.track },
+                bottomClearance = bottomClearanceDp.dp,
+            )
+        if (route != "subtitles")
+            AppBottomBar(
+                model = model,
+                selected = selected,
+                expanded = expanded,
+                systemInsets = systemInsets,
+                extraBottomPadding = extraBottomPadding,
+                onNavigate = {
+                    route = it
+                    expanded = false
+                },
+                onExpandPlayer = { if (model.track != null) expanded = true },
+                modifier =
+                    Modifier.align(Alignment.BottomCenter)
+                        .widthIn(
+                            max =
+                                if (minOf(maxWidth, maxHeight) >= 600.dp && maxWidth >= 700.dp)
+                                    if (maxWidth > maxHeight)
+                                        minOf(maxWidth, maxOf(720.dp, maxWidth * .82f))
+                                    else 720.dp
+                                else maxWidth
+                        ),
             )
     }
+    if (playerQueue)
+        ModalBottomSheet(
+            onDismissRequest = { playerQueue = false },
+            containerColor = MuwaColors.Background,
+            contentColor = MuwaColors.Text,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = .25f)) },
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 22.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Очередь", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                TextButton(
+                    onClick = { playerQueue = false },
+                    modifier = Modifier.testTag("queue.close"),
+                ) {
+                    Text("Готово")
+                }
+            }
+            Box(Modifier.fillMaxHeight(.9f)) {
+                QueueScreen(model) {
+                    play(it)
+                    playerQueue = false
+                }
+            }
+        }
     if (model.error != null)
         AlertDialog(
             onDismissRequest = { model.error = null },

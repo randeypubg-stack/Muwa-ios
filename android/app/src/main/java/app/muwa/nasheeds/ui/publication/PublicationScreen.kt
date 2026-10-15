@@ -206,6 +206,7 @@ fun PublicationScreen(model: MuwaModel) {
                                     "application/json",
                                     meta.optJSONObject("headers"),
                                 )
+                            model.library.submitted(document)
                             status = "Отправлено на модерацию"
                             save()
                         } finally {

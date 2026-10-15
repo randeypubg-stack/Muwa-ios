@@ -14,23 +14,47 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.muwa.nasheeds.*
-import app.muwa.nasheeds.R
+import app.muwa.nasheeds.ui.design.*
 import coil.compose.AsyncImage
 
 @Composable
-fun Cover(track: Track, modifier: Modifier) {
-    AsyncImage(
-        track.artwork,
-        contentDescription = "Обложка ${track.title}",
-        modifier = modifier.clip(RoundedCornerShape(20.dp)),
-        placeholder = painterResource(R.drawable.app_mark),
-        error = painterResource(R.drawable.app_mark),
-        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-    )
+fun Cover(
+    track: Track,
+    modifier: Modifier,
+    radius: Dp = 20.dp,
+    contentScale: androidx.compose.ui.layout.ContentScale =
+        androidx.compose.ui.layout.ContentScale.Fit,
+) {
+    var placeholder by remember(track.artwork) { mutableStateOf(true) }
+    val shape = RoundedCornerShape(radius)
+    Box(
+        modifier
+            .clip(shape)
+            .background(Color.White.copy(alpha = .045f))
+            .border(1.dp, Color.White.copy(alpha = .065f), shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        AsyncImage(
+            track.artwork,
+            contentDescription = "Обложка ${track.title}",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = contentScale,
+            onState = { placeholder = it !is coil.compose.AsyncImagePainter.State.Success },
+        )
+        if (placeholder)
+            Icon(
+                Icons.Default.MusicNote,
+                null,
+                Modifier.fillMaxSize(.25f).sizeIn(maxWidth = 30.dp, maxHeight = 30.dp),
+                tint = Color.White.copy(alpha = .72f),
+            )
+    }
 }
 
 @Composable
@@ -39,7 +63,11 @@ fun ActionCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     action: () -> Unit,
 ) {
-    Card(onClick = action, modifier = Modifier.fillMaxWidth()) {
+    Card(
+        onClick = action,
+        modifier = Modifier.fillMaxWidth().glassPanel(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+    ) {
         Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null)
             Text(title, Modifier.weight(1f).padding(start = 16.dp))
@@ -53,24 +81,37 @@ fun TrackRow(model: MuwaModel, track: Track, play: (Track) -> Unit, playlist: (T
     var menu by remember { mutableStateOf(false) }
     val context = LocalContext.current
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        Modifier.fillMaxWidth().padding(vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             Modifier.weight(1f).clickable { play(track) }.padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Cover(track, Modifier.size(52.dp))
-            Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                Text(track.title, maxLines = 1)
-                Text(track.artist, fontSize = 12.sp, color = Color.Gray, maxLines = 1)
+            Cover(track, Modifier.size(44.dp), 13.dp)
+            Column(Modifier.weight(1f).padding(horizontal = 11.dp)) {
+                Text(
+                    track.title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    "${track.artist}  •  ${formatTime(track.duration * 1000)}",
+                    fontSize = 10.sp,
+                    color = MuwaColors.Secondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Text(
-                if (model.track?.id == track.id && model.playing) "▥"
-                else formatTime(track.duration * 1000),
-                fontSize = 11.sp,
-                color = Color.Gray,
-            )
+            if (model.track?.id == track.id && model.playing)
+                Icon(
+                    Icons.Default.GraphicEq,
+                    "Сейчас играет",
+                    Modifier.size(20.dp),
+                    tint = Color(0xFFE4CA63),
+                )
         }
         Box {
             IconButton(onClick = { menu = true }) {

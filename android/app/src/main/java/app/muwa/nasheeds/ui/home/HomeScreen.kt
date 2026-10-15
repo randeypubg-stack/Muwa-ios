@@ -2,6 +2,7 @@ package app.muwa.nasheeds.ui.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -9,9 +10,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.NorthEast
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -22,8 +23,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.muwa.nasheeds.MuwaModel
 import app.muwa.nasheeds.Track
 import app.muwa.nasheeds.ui.components.Cover
@@ -38,12 +41,13 @@ fun HomeScreen(
     playlist: (Track) -> Unit,
     onCollection: (String) -> Unit,
     resume: () -> Unit,
+    openPlayer: (Track) -> Unit,
 ) {
     val catalog = model.library.catalog
     LazyColumn(
         Modifier.fillMaxSize().testTag("home.screen"),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp),
+        verticalArrangement = Arrangement.spacedBy(28.dp),
     ) {
         if (model.resumeCandidate != null && model.track == null)
             item {
@@ -72,7 +76,7 @@ fun HomeScreen(
             )
         }
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "В вашем ритме",
@@ -81,7 +85,7 @@ fun HomeScreen(
                     )
                     TextButton(onClick = { onCollection("all") }) {
                         Text("Все")
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.size(15.dp))
+                        Icon(Icons.Default.NorthEast, null, Modifier.size(15.dp))
                     }
                 }
                 BoxWithConstraints {
@@ -147,34 +151,43 @@ fun HomeScreen(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("Откройте для себя", style = MaterialTheme.typography.titleLarge)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        items(catalog.take(12), key = { it.id }) { track ->
-                            Card(
-                                onClick = { play(track) },
-                                modifier = Modifier.width(160.dp),
-                                shape = RoundedCornerShape(22.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                            ) {
-                                Cover(track, Modifier.fillMaxWidth().aspectRatio(1f))
-                                Text(
-                                    track.title,
-                                    Modifier.padding(top = 10.dp),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    track.artist,
-                                    color = MuwaColors.Secondary,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1,
-                                )
+                    BoxWithConstraints {
+                        if (maxWidth >= 660.dp) {
+                            val count = if (maxWidth >= 960.dp) 4 else 3
+                            Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                                catalog.take(12).chunked(count).forEach { row ->
+                                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                        row.forEach { track ->
+                                            RecommendationCard(track, Modifier.weight(1f)) {
+                                                openPlayer(track)
+                                            }
+                                        }
+                                        repeat(count - row.size) { Spacer(Modifier.weight(1f)) }
+                                    }
+                                }
                             }
-                        }
+                        } else
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                items(catalog.take(12), key = { it.id }) { track ->
+                                    RecommendationCard(track, Modifier.width(160.dp)) {
+                                        openPlayer(track)
+                                    }
+                                }
+                            }
                     }
                 }
             }
-        item { Text("Популярное", style = MaterialTheme.typography.titleLarge) }
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Популярное", style = MaterialTheme.typography.titleLarge)
+                if (catalog.size > 5)
+                    Text(
+                        "Листайте, чтобы открыть больше нашидов",
+                        color = MuwaColors.Secondary,
+                        fontSize = 12.sp,
+                    )
+            }
+        }
         item {
             BoxWithConstraints {
                 val pageWidth = maxWidth
@@ -182,11 +195,17 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.testTag("popular.pages"),
                 ) {
-                    items(catalog.chunked(5), key = { it.first().id }) { page ->
+                    items(
+                        catalog.chunked(if (pageWidth >= 660.dp) 6 else 5),
+                        key = { it.first().id },
+                    ) { page ->
                         Column(
                             Modifier.width(pageWidth).testTag("popular.page.${page.first().id}")
                         ) {
-                            page.forEach { TrackRow(model, it, play, playlist) }
+                            page.forEach {
+                                TrackRow(model, it, play, playlist)
+                                HorizontalDivider(color = Color.White.copy(alpha = .05f))
+                            }
                         }
                     }
                 }
@@ -208,7 +227,14 @@ private fun CollectionCard(
     val shape = RoundedCornerShape(26.dp)
     Card(
         onClick = onClick,
-        modifier = modifier.border(.75.dp, Color.White.copy(alpha = .12f), shape),
+        modifier =
+            modifier.border(
+                .75.dp,
+                Brush.linearGradient(
+                    listOf(Color.White.copy(alpha = .19f), Color.White.copy(alpha = .025f))
+                ),
+                shape,
+            ),
         shape = shape,
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
     ) {
@@ -250,24 +276,47 @@ private fun CollectionCard(
             Text(
                 title,
                 style = MaterialTheme.typography.titleMedium,
-                minLines = 2,
+                modifier = Modifier.heightIn(min = 60.dp),
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(detail, color = MuwaColors.Secondary, style = MaterialTheme.typography.bodySmall)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(
-                    trackCount(tracks.size),
-                    color = MuwaColors.Secondary,
-                    style = MaterialTheme.typography.labelSmall,
-                )
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowForward,
-                    null,
-                    Modifier.size(15.dp),
-                    tint = MuwaColors.Ice,
-                )
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(detail, color = MuwaColors.Secondary, fontSize = 12.sp)
+                    Text(
+                        trackCount(tracks.size),
+                        color = MuwaColors.Secondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Icon(Icons.Default.NorthEast, null, Modifier.size(15.dp), tint = MuwaColors.Ice)
             }
         }
+    }
+}
+
+@Composable
+private fun RecommendationCard(track: Track, modifier: Modifier, play: () -> Unit) {
+    Column(modifier.clickable(onClick = play), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Cover(track, Modifier.fillMaxWidth().aspectRatio(1f), 28.dp)
+        Text(
+            track.title,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            track.artist,
+            color = MuwaColors.Secondary,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }

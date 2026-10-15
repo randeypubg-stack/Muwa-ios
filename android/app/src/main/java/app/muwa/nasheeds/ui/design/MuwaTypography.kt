@@ -13,16 +13,15 @@ val MuwaTypography =
             TextStyle(
                 fontFamily = FontFamily.SansSerif,
                 fontWeight = FontWeight.Bold,
-                fontSize = 32.sp,
-                lineHeight = 38.sp,
+                fontSize = 34.sp,
+                lineHeight = 41.sp,
             ),
         headlineSmall =
             TextStyle(fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 30.sp),
-        titleLarge =
-            TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 21.sp, lineHeight = 27.sp),
+        titleLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 22.sp, lineHeight = 28.sp),
         titleMedium =
-            TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 22.sp),
-        bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
+            TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 17.sp, lineHeight = 22.sp),
+        bodyLarge = TextStyle(fontSize = 17.sp, lineHeight = 24.sp),
         bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
         labelSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 16.sp),
     )

@@ -14,8 +14,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -31,8 +31,10 @@ import app.muwa.nasheeds.MuwaModel
 import app.muwa.nasheeds.ui.design.MuwaMotion
 import app.muwa.nasheeds.ui.design.rememberAmbientMotionAllowed
 
-/** The existing manual-caption reader, with stable Arabic typography and
- * interruptible focus. No synthetic word timing or recognition request. */
+/**
+ * The existing manual-caption reader, with stable Arabic typography and interruptible focus. No
+ * synthetic word timing or recognition request.
+ */
 @Composable
 fun SubtitleScreen(model: MuwaModel) {
     val trackID = model.track?.id
@@ -41,10 +43,11 @@ fun SubtitleScreen(model: MuwaModel) {
     val listState = rememberLazyListState()
     val motionAllowed = rememberAmbientMotionAllowed()
     var positioned by remember(trackID) { mutableStateOf(false) }
-    val active = model.subtitles.indexOfFirst {
-        model.position / 1000.0 >= it.optDouble("start") &&
-            model.position / 1000.0 < it.optDouble("end")
-    }
+    val active =
+        model.subtitles.indexOfFirst {
+            model.position / 1000.0 >= it.optDouble("start") &&
+                model.position / 1000.0 < it.optDouble("end")
+        }
     LaunchedEffect(active, follow, motionAllowed, trackID) {
         if (follow && active >= 0) {
             if (positioned && motionAllowed) listState.animateScrollToItem(active)
@@ -53,89 +56,141 @@ fun SubtitleScreen(model: MuwaModel) {
         }
     }
     BoxWithConstraints(Modifier.fillMaxSize().testTag("subtitles.screen")) {
-      val compact = maxHeight < 260.dp && maxWidth >= 440.dp
-      Column(Modifier.padding(horizontal = 16.dp, vertical = if (compact) 0.dp else 16.dp)) {
-        Row {
-            listOf("ar", "ru", "en").forEach { lang ->
-                TextButton(onClick = { language = lang }, modifier = if (compact) Modifier else Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 4.dp)) { Text(lang.uppercase()) }
-            }
-            if (compact) {
-                Spacer(Modifier.weight(1f))
-                Text("Следить", Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodyMedium)
-                Switch(follow, { follow = it }, Modifier.testTag("subtitles.follow"))
-                TextButton(onClick = model::loadSubtitles, enabled = !model.subtitleLoading) { Text("Обновить") }
-            }
-        }
-        if (!compact) Row {
-            Text("Следить за воспроизведением", Modifier.weight(1f).padding(top = 12.dp),
-                style = MaterialTheme.typography.bodyMedium)
-            Switch(follow, { follow = it }, Modifier.testTag("subtitles.follow"))
-        }
-        if (!compact || model.subtitles.isEmpty()) Text(model.subtitleStatus, color = Color.Gray)
-        if (!compact) TextButton(onClick = model::loadSubtitles, enabled = !model.subtitleLoading) {
-            Text(if (model.subtitleLoading) "Загрузка…" else "Обновить текст")
-        }
-        if (model.subtitleLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        LazyColumn(
-            state = listState,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.weight(1f).testTag("subtitles.list").pointerInput(trackID) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        if (event.changes.any { it.pressed && it.position != it.previousPosition }) follow = false
+        val compact = maxHeight < 260.dp && maxWidth >= 440.dp
+        Column(Modifier.padding(horizontal = 16.dp, vertical = if (compact) 0.dp else 8.dp)) {
+            var languages by remember { mutableStateOf(false) }
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) {
+                    TextButton(onClick = { languages = true }) {
+                        Text(
+                            when (language) {
+                                "ru" -> "Русский"
+                                "en" -> "English"
+                                else -> "Оригинал"
+                            }
+                        )
+                    }
+                    DropdownMenu(languages, { languages = false }) {
+                        listOf("ar" to "Оригинал", "ru" to "Русский", "en" to "English")
+                            .filter { (key, _) ->
+                                key == "ar" ||
+                                    model.subtitles.any { it.optString(key).isNotBlank() }
+                            }
+                            .forEach { (key, name) ->
+                                DropdownMenuItem(
+                                    text = { Text(name) },
+                                    onClick = {
+                                        language = key
+                                        languages = false
+                                    },
+                                )
+                            }
                     }
                 }
-            },
-        ) {
-            items(model.subtitles.size, key = { index ->
-                val item = model.subtitles[index]
-                "$trackID|${item.optDouble("start")}|$index"
-            }) { index ->
-                val item = model.subtitles[index]
-                val focused = index == active
-                val textColor by animateColorAsState(
-                    if (focused) Color.White else Color.White.copy(alpha = 0.42f),
-                    if (motionAllowed) MuwaMotion.subtitleFocus() else snap(), label = "subtitle.text",
+                Text("Следить", style = MaterialTheme.typography.bodyMedium)
+                Switch(
+                    follow,
+                    { follow = it },
+                    Modifier.testTag("subtitles.follow"),
+                    colors =
+                        SwitchDefaults.colors(
+                            checkedTrackColor = Color(0xFF30D158),
+                            checkedThumbColor = Color.White,
+                        ),
                 )
-                val surface by animateColorAsState(
-                    Color.White.copy(alpha = if (focused) 0.055f else 0f),
-                    if (motionAllowed) MuwaMotion.subtitleFocus() else snap(), label = "subtitle.focus",
-                )
-                val focusScale by animateFloatAsState(
-                    if (focused || !motionAllowed) 1f else 0.97f,
-                    if (motionAllowed) MuwaMotion.subtitleFocus() else snap(), label = "subtitle.depth",
-                )
-                Column(
-                    Modifier.fillMaxWidth().testTag("subtitle.line.$index")
-                        .semantics { selected = focused }
-                        .graphicsLayer {
-                            scaleX = focusScale; scaleY = focusScale
-                            transformOrigin = TransformOrigin(1f, 0.5f)
+            }
+            if (model.subtitleLoading) LinearProgressIndicator(Modifier.fillMaxWidth())
+            LazyColumn(
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier =
+                    Modifier.weight(1f).testTag("subtitles.list").pointerInput(trackID) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                if (
+                                    event.changes.any {
+                                        it.pressed && it.position != it.previousPosition
+                                    }
+                                )
+                                    follow = false
+                            }
                         }
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(Brush.horizontalGradient(listOf(Color.Transparent, surface)))
-                        .clickable {
-                            follow = false
-                            model.seek((item.optDouble("start") * 1000).toLong())
-                        }.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        item.optString("ar"), Modifier.fillMaxWidth(),
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontSize = 23.sp, fontWeight = FontWeight.SemiBold,
-                            textDirection = TextDirection.ContentOrRtl),
-                        textAlign = TextAlign.Right, color = textColor,
-                    )
-                    if (language != "ar") Text(
-                        item.optString(language), Modifier.fillMaxWidth(),
-                        style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.ContentOrLtr),
-                        color = textColor.copy(alpha = textColor.alpha * 0.75f),
-                    )
+                    },
+            ) {
+                items(
+                    model.subtitles.size,
+                    key = { index ->
+                        val item = model.subtitles[index]
+                        "$trackID|${item.optDouble("start")}|$index"
+                    },
+                ) { index ->
+                    val item = model.subtitles[index]
+                    val focused = index == active
+                    val textColor by
+                        animateColorAsState(
+                            if (focused) Color.White else Color.White.copy(alpha = 0.42f),
+                            if (motionAllowed) MuwaMotion.subtitleFocus() else snap(),
+                            label = "subtitle.text",
+                        )
+                    val surface by
+                        animateColorAsState(
+                            Color.White.copy(alpha = if (focused) 0.055f else 0f),
+                            if (motionAllowed) MuwaMotion.subtitleFocus() else snap(),
+                            label = "subtitle.focus",
+                        )
+                    val focusScale by
+                        animateFloatAsState(
+                            if (focused || !motionAllowed) 1f else 0.97f,
+                            if (motionAllowed) MuwaMotion.subtitleFocus() else snap(),
+                            label = "subtitle.depth",
+                        )
+                    Column(
+                        Modifier.fillMaxWidth()
+                            .testTag("subtitle.line.$index")
+                            .semantics { selected = focused }
+                            .graphicsLayer {
+                                scaleX = focusScale
+                                scaleY = focusScale
+                                transformOrigin = TransformOrigin(1f, 0.5f)
+                            }
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(
+                                Brush.horizontalGradient(listOf(Color.Transparent, surface))
+                            )
+                            .clickable {
+                                follow = false
+                                model.seek((item.optDouble("start") * 1000).toLong())
+                            }
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            item.optString("ar"),
+                            Modifier.fillMaxWidth(),
+                            style =
+                                MaterialTheme.typography.titleLarge.copy(
+                                    fontSize = 23.sp,
+                                    lineHeight = 38.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    textDirection = TextDirection.ContentOrRtl,
+                                ),
+                            textAlign = TextAlign.Right,
+                            color = textColor,
+                        )
+                        if (language != "ar")
+                            Text(
+                                item.optString(language),
+                                Modifier.fillMaxWidth(),
+                                style =
+                                    MaterialTheme.typography.bodyLarge.copy(
+                                        textDirection = TextDirection.ContentOrLtr
+                                    ),
+                                color = textColor.copy(alpha = textColor.alpha * 0.75f),
+                            )
+                    }
                 }
             }
         }
-      }
     }
 }
