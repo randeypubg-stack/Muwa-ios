@@ -45,17 +45,20 @@ fun ProfileScreen(model: MuwaModel, onRoute: (String) -> Unit) {
                     Text(
                         model.user?.optString("displayName") ?: "Гость",
                         fontSize = 20.sp,
+                        lineHeight = 24.sp,
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
                         model.user?.optString("email") ?: "Войдите, чтобы управлять аккаунтом",
                         fontSize = 12.sp,
+                        lineHeight = 16.sp,
                         color = MuwaColors.Secondary,
                     )
                     Text(
                         if (model.premium?.optBoolean("isPremium") == true) "Premium активен"
                         else "Бесплатный доступ",
                         fontSize = 11.sp,
+                        lineHeight = 14.sp,
                         color = MuwaColors.Secondary,
                     )
                 }
@@ -75,13 +78,14 @@ fun ProfileScreen(model: MuwaModel, onRoute: (String) -> Unit) {
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Default.WorkspacePremium, null, tint = Color(0xFFF0C785))
+                Icon(MuwaSymbols.Crown, null, tint = Color(0xFFF0C785))
                 Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                     Text("Premium", fontWeight = FontWeight.Bold)
                     Text(
                         if (model.premium?.optBoolean("isPremium") == true) "Управление подпиской"
                         else "Поддержка и управление доступом",
                         fontSize = 12.sp,
+                        lineHeight = 16.sp,
                         color = MuwaColors.Secondary,
                     )
                 }
@@ -132,11 +136,14 @@ fun ProfileScreen(model: MuwaModel, onRoute: (String) -> Unit) {
                 identity(Modifier)
                 settings(Modifier)
             }
-            model.message?.let { Text(it, fontSize = 12.sp, color = MuwaColors.Secondary) }
+            model.message?.let {
+                Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = MuwaColors.Secondary)
+            }
             Text(
                 "Muwa · Нашиды без музыки",
                 Modifier.fillMaxWidth(),
                 fontSize = 11.sp,
+                lineHeight = 14.sp,
                 color = MuwaColors.Secondary.copy(alpha = .6f),
                 textAlign = TextAlign.Center,
             )
@@ -173,7 +180,13 @@ private fun ProfileRow(
     ) {
         val color = if (destructive) Color(0xFFFF6868) else MuwaColors.Text
         Icon(icon, null, Modifier.size(24.dp), tint = color)
-        Text(title, Modifier.weight(1f).padding(start = 12.dp), fontSize = 15.sp, color = color)
+        Text(
+            title,
+            Modifier.weight(1f).padding(start = 12.dp),
+            fontSize = 15.sp,
+            lineHeight = 20.sp,
+            color = color,
+        )
         if (!destructive)
             Icon(
                 Icons.Default.ChevronRight,

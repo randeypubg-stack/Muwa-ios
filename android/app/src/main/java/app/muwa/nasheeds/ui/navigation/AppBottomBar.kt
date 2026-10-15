@@ -51,7 +51,7 @@ internal fun AppBottomBar(
         listOf(
             Icons.Default.Home,
             Icons.Default.PlayArrow,
-            Icons.AutoMirrored.Filled.LibraryBooks,
+            MuwaSymbols.Library,
             Icons.Default.Person,
         )
     val active = if (expanded) 1 else slots.indexOf(selected).coerceAtLeast(0)
@@ -90,6 +90,7 @@ internal fun AppBottomBar(
                         Text(
                             track.title,
                             fontSize = 13.sp,
+                            lineHeight = 18.sp,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -97,6 +98,7 @@ internal fun AppBottomBar(
                         Text(
                             track.artist,
                             fontSize = 10.sp,
+                            lineHeight = 14.sp,
                             color = MuwaColors.Secondary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,

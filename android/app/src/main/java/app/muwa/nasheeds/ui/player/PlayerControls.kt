@@ -66,8 +66,8 @@ internal fun PlayerMetadata(model: MuwaModel, compact: Boolean) {
         Column(Modifier.weight(1f)) {
             Text(
                 track.title,
-                fontSize = if (compact) 21.sp else 28.sp,
-                lineHeight = if (compact) 27.sp else 34.sp,
+                fontSize = if (compact) 18.sp else 28.sp,
+                lineHeight = if (compact) 22.sp else 34.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -135,9 +135,19 @@ internal fun PlayerScrubber(model: MuwaModel, compact: Boolean = false) {
     }
     if (compact)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(formatTime(model.position), fontSize = 10.sp, color = MuwaColors.Secondary)
+            Text(
+                formatTime(model.position),
+                fontSize = 10.sp,
+                lineHeight = 14.sp,
+                color = MuwaColors.Secondary,
+            )
             slider(Modifier.weight(1f).padding(horizontal = 6.dp))
-            Text(formatTime(model.duration), fontSize = 10.sp, color = MuwaColors.Secondary)
+            Text(
+                formatTime(model.duration),
+                fontSize = 10.sp,
+                lineHeight = 14.sp,
+                color = MuwaColors.Secondary,
+            )
         }
     else
         Column {
@@ -146,16 +156,22 @@ internal fun PlayerScrubber(model: MuwaModel, compact: Boolean = false) {
                 Text(
                     formatTime(draft?.let { (it * model.duration).toLong() } ?: model.position),
                     fontSize = 12.sp,
+                    lineHeight = 16.sp,
                     color = MuwaColors.Secondary,
                 )
-                Text(formatTime(model.duration), fontSize = 12.sp, color = MuwaColors.Secondary)
+                Text(
+                    formatTime(model.duration),
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    color = MuwaColors.Secondary,
+                )
             }
         }
 }
 
 @Composable
-internal fun PlayerTransport(model: MuwaModel, compact: Boolean) {
-    val playSize = if (compact) 58.dp else 68.dp
+internal fun PlayerTransport(model: MuwaModel, compact: Boolean, shortWindow: Boolean = false) {
+    val playSize = if (shortWindow) 48.dp else if (compact) 58.dp else 68.dp
     val motion = rememberAmbientMotionAllowed()
     Row(
         Modifier.fillMaxWidth(),
@@ -230,7 +246,7 @@ internal fun PlayerTransport(model: MuwaModel, compact: Boolean) {
 internal fun AudioOutputButton() {
     val context = LocalContext.current
     PlayerAction(
-        Icons.Default.SpeakerGroup,
+        MuwaSymbols.AudioOutput,
         "Аудиовыход",
         {
             runCatching {
@@ -311,7 +327,7 @@ internal fun PlayerMenu(
             } else {
                 DropdownMenuItem(
                     text = { Text(if (lyricsVisible) "Скрыть субтитры" else "Показать субтитры") },
-                    leadingIcon = { Icon(Icons.Default.Subtitles, null) },
+                    leadingIcon = { Icon(MuwaSymbols.Captions, null) },
                     enabled = hasLyrics,
                     onClick = {
                         toggleLyrics()

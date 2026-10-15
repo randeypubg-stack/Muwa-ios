@@ -22,7 +22,11 @@ fun Modifier.glassPanel(radius: Dp = 26.dp, navigation: Boolean = false): Modifi
                 )
             )
         )
-        .background(MuwaColors.Surface.copy(alpha = if (navigation) .68f else .32f))
+        .background(
+            (if (navigation) Color(0xFF303034) else MuwaColors.Surface).copy(
+                alpha = if (navigation) .5f else .32f
+            )
+        )
         .border(
             .75.dp,
             Brush.linearGradient(

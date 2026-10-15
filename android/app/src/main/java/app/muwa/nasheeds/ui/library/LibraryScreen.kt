@@ -39,13 +39,19 @@ fun LibraryScreen(model: MuwaModel, onRoute: (String) -> Unit) {
                         Modifier.size(54.dp).glassPanel(19.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.LibraryBooks, null, Modifier.size(26.dp))
+                        Icon(MuwaSymbols.Library, null, Modifier.size(26.dp))
                     }
                     Column(Modifier.weight(1f).padding(start = 14.dp)) {
-                        Text("Ваша библиотека", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Ваша библиотека",
+                            fontSize = 20.sp,
+                            lineHeight = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
                         Text(
                             "Всё сохранённое в одном месте",
                             fontSize = 12.sp,
+                            lineHeight = 16.sp,
                             color = MuwaColors.Secondary,
                         )
                     }
@@ -162,12 +168,13 @@ private fun LibraryTileCard(tile: LibraryTile, modifier: Modifier, click: () -> 
                 "${tile.count}",
                 Modifier.glassPanel(20.dp).padding(horizontal = 7.dp, vertical = 3.dp),
                 fontSize = 10.sp,
+                lineHeight = 14.sp,
                 color = MuwaColors.Secondary,
             )
         }
-        Spacer(Modifier.height(8.dp))
-        Text(tile.title, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-        Text("Открыть раздел", fontSize = 11.sp, color = MuwaColors.Secondary)
+        Spacer(Modifier.height(24.dp))
+        Text(tile.title, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold)
+        Text("Открыть раздел", fontSize = 11.sp, lineHeight = 14.sp, color = MuwaColors.Secondary)
     }
 }
 
@@ -183,8 +190,8 @@ private fun QuickAccess(title: String, subtitle: String, icon: ImageVector, clic
     ) {
         Icon(icon, null, Modifier.size(23.dp))
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            Text(subtitle, fontSize = 11.sp, color = MuwaColors.Secondary)
+            Text(title, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold)
+            Text(subtitle, fontSize = 11.sp, lineHeight = 14.sp, color = MuwaColors.Secondary)
         }
         Icon(Icons.Default.ChevronRight, null, tint = MuwaColors.Secondary)
     }

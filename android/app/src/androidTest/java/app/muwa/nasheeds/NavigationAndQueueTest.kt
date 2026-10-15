@@ -322,7 +322,9 @@ class NavigationAndQueueTest {
                         scenario.onActivity { it.requestedOrientation = orientation }
                         compose.waitUntil(timeoutMillis = 20_000) {
                             val nodes =
-                                compose.onAllNodesWithTag("player.screen").fetchSemanticsNodes()
+                                compose
+                                    .onAllNodesWithTag("player.screen")
+                                    .fetchSemanticsNodes(atLeastOneRootRequired = false)
                             nodes.singleOrNull()?.boundsInRoot?.let {
                                 (it.width > it.height) ==
                                     (orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
@@ -449,7 +451,7 @@ class NavigationAndQueueTest {
                             )
                             assertTrue("$tag is clipped at the top", bounds.top >= safeContent.top)
                             assertTrue(
-                                "$tag is clipped at the bottom",
+                                "$tag is clipped at the bottom: action=$bounds, safe=$safeContent, orientation=$orientation",
                                 bounds.bottom <= safeContent.bottom,
                             )
                         }

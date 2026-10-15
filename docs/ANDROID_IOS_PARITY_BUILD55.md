@@ -11,9 +11,14 @@ at Build 54. No new reference mockup was selected or applied.
   visible in the expanded player; 62 dp bar, 58 dp mini-player, 8 dp gap. The
   existing physical-bottom anchor remains 18/874 clamped to 12–28 dp and clears
   Android system controls. Selection and drag use the same four slots.
-- Shared glass panels, typography roles, artwork placeholders, track rows,
+- Shared glass panels, app-owned vectors (books, crown, captions, audio output),
+  explicit text line heights, artwork placeholders, track rows,
   compact metadata, recommendation grid on tablets and collection frames match
   the iOS hierarchy. App branding is no longer used as a missing-track cover.
+- The portrait artwork uses the measured controls height; short landscape
+  windows compact the header and transport while keeping every action reachable.
+  Player expansion respects reduced motion; the saved-position card has a cover
+  and separate resume/open actions.
 - White player transport, thin white scrubber, separate caption / queue / audio
   output controls, low-resolution subdued cover backdrop, full-frame crop, and
   matching favorite / playlist / timer / download / share actions.
@@ -43,5 +48,6 @@ Actual run IDs, runtime metadata, native captures and check results are recorded
 in the delivery evidence. Do not treat compilation or a screenshot mockup as a
 physical-device test. Keep the independent 62 dp / 18-of-874 UI assertions, plus
 rotation, four-tab navigation, player actions, real caption seek/follow/RTL and
-whole-row queue persistence checks. Never change these assertions simply to
+whole-row queue persistence checks. Rotation waits allow the temporary absence
+of a Compose root during Activity recreation, but keep every layout assertion. Never change these assertions simply to
 accept a shifted bottom bar.

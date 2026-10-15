@@ -67,6 +67,7 @@ fun HomeScreen(
                             "ПРОДОЛЖИТЬ СЛУШАТЬ",
                             Modifier.weight(1f),
                             fontSize = 10.sp,
+                            lineHeight = 14.sp,
                             letterSpacing = 2.sp,
                             fontWeight = FontWeight.Bold,
                             color = MuwaColors.Secondary,
@@ -95,6 +96,7 @@ fun HomeScreen(
                             Text(
                                 resumeTrack.title,
                                 fontSize = 16.sp,
+                                lineHeight = 21.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -102,12 +104,14 @@ fun HomeScreen(
                             Text(
                                 resumeTrack.artist,
                                 fontSize = 12.sp,
+                                lineHeight = 16.sp,
                                 color = MuwaColors.Secondary,
                                 maxLines = 1,
                             )
                             Text(
                                 app.muwa.nasheeds.formatTime(saved.second),
                                 fontSize = 11.sp,
+                                lineHeight = 14.sp,
                                 color = MuwaColors.Secondary,
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -252,6 +256,7 @@ fun HomeScreen(
                         "Листайте, чтобы открыть больше нашидов",
                         color = MuwaColors.Secondary,
                         fontSize = 12.sp,
+                        lineHeight = 16.sp,
                     )
             }
         }
@@ -358,6 +363,7 @@ private fun CollectionCard(
                         trackCount(tracks.size),
                         color = MuwaColors.Secondary,
                         fontSize = 11.sp,
+                        lineHeight = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
@@ -382,6 +388,7 @@ private fun RecommendationCard(track: Track, modifier: Modifier, play: () -> Uni
             track.artist,
             color = MuwaColors.Secondary,
             fontSize = 12.sp,
+            lineHeight = 16.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

@@ -66,7 +66,7 @@ fun TrackRow(model: MuwaModel, track: Track, play: (Track) -> Unit, playlist: (T
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
-            Modifier.weight(1f).clickable { play(track) }.padding(vertical = 6.dp),
+            Modifier.weight(1f).clickable { play(track) },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Cover(track, Modifier.size(44.dp), 13.dp)
@@ -74,6 +74,7 @@ fun TrackRow(model: MuwaModel, track: Track, play: (Track) -> Unit, playlist: (T
                 Text(
                     track.title,
                     fontSize = 14.sp,
+                    lineHeight = 18.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -81,6 +82,7 @@ fun TrackRow(model: MuwaModel, track: Track, play: (Track) -> Unit, playlist: (T
                 Text(
                     "${track.artist}  •  ${formatTime(track.duration * 1000)}",
                     fontSize = 10.sp,
+                    lineHeight = 14.sp,
                     color = MuwaColors.Secondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

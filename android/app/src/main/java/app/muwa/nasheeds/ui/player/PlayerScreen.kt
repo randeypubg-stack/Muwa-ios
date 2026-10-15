@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -72,6 +73,8 @@ fun PlayerSheet(
         val landscape = width > maxHeight * 1.2f && maxHeight < 600.dp
         val tablet = minOf(maxWidth, maxHeight) >= 600.dp
         val short = !tablet && maxHeight - top < 740.dp
+        val compactLandscape = landscape && bodyHeight < 260.dp
+        var controlsHeight by remember { mutableIntStateOf(0) }
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current).data(track.artwork).size(96).build(),
             contentDescription = null,
@@ -99,7 +102,9 @@ fun PlayerSheet(
                 .testTag("player.safe-content")
         ) {
             Row(
-                Modifier.fillMaxWidth().height(56.dp).pointerInput(Unit) {
+                Modifier.fillMaxWidth().height(if (compactLandscape) 48.dp else 56.dp).pointerInput(
+                    Unit
+                ) {
                     var distance = 0f
                     detectVerticalDragGestures(
                         onDragStart = { distance = 0f },
@@ -123,6 +128,7 @@ fun PlayerSheet(
                     Modifier.weight(1f),
                     textAlign = TextAlign.Center,
                     fontSize = 12.sp,
+                    lineHeight = 16.sp,
                     color = MuwaColors.Secondary,
                 )
                 PlayerMenu(
@@ -142,11 +148,15 @@ fun PlayerSheet(
                     Spacer(Modifier.height(if (landscape) 0.dp else if (short) 14.dp else 32.dp))
                     PlayerScrubber(model, compact = landscape)
                     Spacer(Modifier.height(if (landscape) 0.dp else if (short) 18.dp else 30.dp))
-                    PlayerTransport(model, compact = !tablet || landscape)
+                    PlayerTransport(
+                        model,
+                        compact = !tablet || landscape,
+                        shortWindow = compactLandscape,
+                    )
                     Spacer(Modifier.height(if (landscape) 0.dp else if (short) 14.dp else 22.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         PlayerAction(
-                            Icons.Default.Subtitles,
+                            MuwaSymbols.Captions,
                             if (lyricsVisible) "Скрыть субтитры" else "Показать субтитры",
                             { lyricsVisible = !lyricsVisible },
                             Modifier.testTag("player.subtitles"),
@@ -182,7 +192,14 @@ fun PlayerSheet(
                 val coverSize =
                     if (landscape) minOf(maxHeight - 12.dp, width * .39f).coerceAtLeast(60.dp)
                     else
-                        minOf(limit, maxHeight - if (short) 332.dp else 410.dp).coerceAtLeast(60.dp)
+                        minOf(
+                                limit,
+                                maxHeight -
+                                    with(density) { controlsHeight.toDp() } -
+                                    (if (short) 16.dp else 26.dp) -
+                                    28.dp,
+                            )
+                            .coerceAtLeast(60.dp)
                 if (landscape)
                     Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.weight(.44f), contentAlignment = Alignment.Center) {
@@ -214,7 +231,7 @@ fun PlayerSheet(
                             onSubtitles,
                         )
                         Spacer(Modifier.height(if (short) 16.dp else 24.dp))
-                        controls(Modifier)
+                        controls(Modifier.onSizeChanged { controlsHeight = it.height })
                         Spacer(Modifier.height(24.dp))
                     }
             }

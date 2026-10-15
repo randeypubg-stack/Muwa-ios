@@ -67,6 +67,7 @@ internal fun LibraryCollectionsScreen(
                             Text(
                                 "${playlist.ids.size} нашидов",
                                 fontSize = 12.sp,
+                                lineHeight = 16.sp,
                                 color = MuwaColors.Secondary,
                             )
                         }
@@ -123,6 +124,7 @@ internal fun LibraryCollectionsScreen(
                         publication.optString("artist"),
                         color = MuwaColors.Secondary,
                         fontSize = 12.sp,
+                        lineHeight = 16.sp,
                     )
                     Text("Отправлено на модерацию", color = MuwaColors.Ice, fontSize = 12.sp)
                 }

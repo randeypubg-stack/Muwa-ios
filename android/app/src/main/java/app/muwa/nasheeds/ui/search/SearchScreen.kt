@@ -74,7 +74,12 @@ fun SearchScreen(model: MuwaModel, play: (Track, List<Track>) -> Unit, playlist:
                         .clickable { filter = item }
                         .padding(horizontal = 13.dp, vertical = 10.dp)
                 ) {
-                    Text(item, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        item,
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
             }
         }
