@@ -270,6 +270,30 @@ class NavigationAndQueueTest {
     }
 
     @Test
+    fun searchReturnsToTheTabThatOpenedIt() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        ActivityScenario.launch<MainActivity>(
+                Intent(context, MainActivity::class.java).putExtra("review.route", "home")
+            )
+            .use {
+                for (tab in listOf("home", "library", "profile")) {
+                    compose.onNodeWithTag("tab.$tab").performClick()
+                    compose.onNodeWithContentDescription("Поиск").performClick()
+                    compose.onNodeWithTag("search.screen").assertIsDisplayed()
+                    UiDevice.getInstance(instrumentation).pressBack()
+                    compose.waitUntil(timeoutMillis = 10_000) {
+                        compose
+                            .onAllNodesWithTag("search.screen")
+                            .fetchSemanticsNodes(atLeastOneRootRequired = false)
+                            .isEmpty()
+                    }
+                    compose.onNodeWithTag("tab.$tab").assertIsSelected()
+                }
+            }
+    }
+
+    @Test
     fun collectionNavigationReturnsToHome() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         ActivityScenario.launch<MainActivity>(

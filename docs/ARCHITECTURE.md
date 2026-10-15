@@ -43,7 +43,7 @@ iOS использует системную типографику.
 | `MuwaModel.kt`, `PlaybackService.kt` | Состояние приложения, Media3 и системная медиасессия |
 | `Backend.kt`, `Downloads.kt`, `Diagnostics.kt`, `Data.kt` | Сеть, файлы и постоянные данные |
 | `ui/design` | Цвета, шрифты, движение, reduced-motion policy, фон, layout tokens |
-| `ui/navigation` | Верхний и нижний бар |
+| `ui/navigation` | Верхний/нижний бар и едиственная сохраняемая история MuwaNavigation |
 | `ui/components` | Общие элементы и мини-плеер |
 | `ui/home`, `catalog`, `library`, `search`, `profile` | Каталог, подборки и личная библиотека |
 | `ui/player`, `queue`, `playlists` | Плеер, очередь и диалоги плейлистов |

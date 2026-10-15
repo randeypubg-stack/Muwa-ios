@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,7 +36,7 @@ fun SearchScreen(model: MuwaModel, play: (Track, List<Track>) -> Unit, playlist:
             it.title.contains(query.trim(), true) || it.artist.contains(query.trim(), true)
         }
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 20.dp),
+        Modifier.fillMaxSize().testTag("search.screen").padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         TextField(

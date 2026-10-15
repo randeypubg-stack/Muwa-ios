@@ -41,6 +41,11 @@ at Build 54. No new reference mockup was selected or applied.
   Library store. Registration checks never submit a real account. Password input
   is ephemeral rather than saved to the Activity Bundle.
 
+- One saved navigation history replaces the old flat route string. Search,
+  authentication, nested Premium pages and playlist detail return to their actual
+  origin; selecting a tab resets its detail history. A player that has no connected
+  track cannot hide the catalog or select an empty player surface.
+
 ## Platform boundaries
 
 Apple SF Symbols/system fonts, AirPlay and iOS system sheets are platform APIs.
