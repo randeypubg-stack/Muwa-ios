@@ -9,7 +9,6 @@ import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -42,10 +41,10 @@ fun PlayerSheet(
     onSubtitles: () -> Unit,
     onPlaylist: () -> Unit,
     bottomClearance: Dp,
+    lyricsVisible: Boolean,
+    onLyricsChange: (Boolean) -> Unit,
 ) {
     val track = model.track ?: return
-    var lyricsVisible by
-        rememberSaveable(track.id, track.audio, track.captionsRevision) { mutableStateOf(false) }
     LaunchedEffect(track.id, track.audio, track.captionsRevision) { model.loadSubtitles() }
     val hasLyrics = model.subtitles.any { it.optString("ar").isNotBlank() }
     val close by rememberUpdatedState(onClose)
@@ -135,7 +134,7 @@ fun PlayerSheet(
                     model,
                     hasLyrics,
                     lyricsVisible,
-                    { lyricsVisible = !lyricsVisible },
+                    { onLyricsChange(!lyricsVisible) },
                     onPlaylist,
                 )
             }
@@ -158,7 +157,7 @@ fun PlayerSheet(
                         PlayerAction(
                             MuwaSymbols.Captions,
                             if (lyricsVisible) "Скрыть субтитры" else "Показать субтитры",
-                            { lyricsVisible = !lyricsVisible },
+                            { onLyricsChange(!lyricsVisible) },
                             Modifier.testTag("player.subtitles"),
                             enabled = hasLyrics,
                             active = lyricsVisible,

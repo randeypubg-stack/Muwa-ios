@@ -5,6 +5,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -137,6 +139,7 @@ internal fun PlayerArtworkAndLyrics(
                     .widthIn(max = 124.dp)
                     .weight(1f, fill = false)
                     .fillMaxHeight()
+                    .verticalScroll(rememberScrollState())
                     .testTag("player.lyrics")
                     .clickable(onClick = onReader),
                 verticalArrangement = Arrangement.Center,

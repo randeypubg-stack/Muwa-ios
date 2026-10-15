@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -60,11 +61,17 @@ fun MuwaApp(
             MuwaNavigation(listOf(if (initialRoute == "player") "home" else initialRoute))
         }
     val route = navigation.current
+    val screenState = rememberSaveableStateHolder()
+    val back: () -> Unit = {
+        screenState.removeState(navigation.current)
+        navigation.back()
+    }
     var expanded by rememberSaveableState(initialRoute == "player")
     var readerFromPlayer by rememberSaveableState(false)
     var readerTrackKey by rememberSaveableState("")
     val playerTrackKey =
         model.track?.let { "${it.id}|${it.audio}|${it.captionsRevision}" }.orEmpty()
+    var lyricsVisible by rememberSaveable(playerTrackKey) { mutableStateOf(false) }
     val motionAllowed = rememberAmbientMotionAllowed()
     LaunchedEffect(playerTrackKey, model.subtitles, model.subtitleLoading) {
         if (
@@ -73,7 +80,7 @@ fun MuwaApp(
                 (readerTrackKey != playerTrackKey ||
                     (!model.subtitleLoading && model.subtitles.isEmpty()))
         ) {
-            navigation.back()
+            back()
             expanded = model.track != null
             readerFromPlayer = false
         }
@@ -95,10 +102,10 @@ fun MuwaApp(
     }
     BackHandler(route !in listOf("home", "library", "profile") || expanded) {
         if (route == "subtitles" && readerFromPlayer) {
-            navigation.back()
+            back()
             expanded = model.track != null
             readerFromPlayer = false
-        } else if (expanded) expanded = false else navigation.back()
+        } else if (expanded) expanded = false else back()
     }
     val selected = navigation.selectedTab
     val playerVisible = expanded && model.track != null
@@ -124,9 +131,9 @@ fun MuwaApp(
                         model,
                         topScroll,
                         { navigation.open("search") },
-                        { navigation.back() },
+                        { back() },
                         {
-                            navigation.back()
+                            back()
                             expanded = readerFromPlayer && model.track != null
                             readerFromPlayer = false
                         },
@@ -145,89 +152,94 @@ fun MuwaApp(
                 Modifier.fillMaxSize()
                     .padding(padding)
                     .padding(bottom = if (route == "subtitles") 0.dp else chromeHeight)
-                    .nestedScroll(topScroll.nestedScrollConnection)
+                    .then(
+                        if (route == "home") Modifier.nestedScroll(topScroll.nestedScrollConnection)
+                        else Modifier
+                    )
             ) {
-                when (route) {
-                    "home" ->
-                        HomeScreen(
-                            model,
-                            {
-                                model.play(it, model.library.catalog)
-                                requestNotifications()
-                            },
-                            { addingTrack = it },
-                            { navigation.open("collection:$it") },
-                            {
-                                model.resume()
-                                requestNotifications()
-                            },
-                            openResume = {
-                                model.resume(autoplay = false)
-                                expanded = model.track != null
-                            },
-                            openPlayer = {
-                                model.play(it, model.library.catalog)
-                                expanded = model.track?.id == it.id
-                                requestNotifications()
-                            },
-                        )
-                    "queue" -> QueueScreen(model, play)
-                    "library" -> LibraryScreen(model, { navigation.open(it) })
-                    "playlists",
-                    "publications",
-                    "drafts" ->
-                        LibraryCollectionsScreen(
-                            model,
-                            route,
-                            { navigation.open(it) },
-                            { newPlaylist = true },
-                        )
-                    "profile" -> ProfileScreen(model) { navigation.open(it) }
-                    "search" ->
-                        SearchScreen(
-                            model,
-                            { track, results ->
-                                model.play(track, results)
-                                requestNotifications()
-                            },
-                            { addingTrack = it },
-                        )
-                    "favorites",
-                    "history",
-                    "downloads" -> SavedTracksScreen(model, route, play, { addingTrack = it })
-                    "premium" ->
-                        PremiumScreen(
-                            model,
-                            { navigation.open("promo") },
-                            { navigation.open("auth") },
-                        )
-                    "promo" -> PromoScreen(model) { navigation.open("auth") }
-                    "auth" -> AuthScreen(model) { navigation.back() }
-                    "settings" -> SettingsScreen(model)
-                    "subtitles" -> SubtitleScreen(model)
-                    "publication" -> PublicationScreen(model)
-                    else ->
-                        if (route.startsWith("collection:")) {
-                            CollectionScreen(
+                screenState.SaveableStateProvider(route) {
+                    when (route) {
+                        "home" ->
+                            HomeScreen(
                                 model,
-                                route.substringAfter(':'),
-                                { track, tracks ->
-                                    model.play(track, tracks)
+                                {
+                                    model.play(it, model.library.catalog)
+                                    requestNotifications()
+                                },
+                                { addingTrack = it },
+                                { navigation.open("collection:$it") },
+                                {
+                                    model.resume()
+                                    requestNotifications()
+                                },
+                                openResume = {
+                                    model.resume(autoplay = false)
+                                    expanded = model.track != null
+                                },
+                                openPlayer = {
+                                    model.play(it, model.library.catalog)
+                                    expanded = model.track?.id == it.id
+                                    requestNotifications()
+                                },
+                            )
+                        "queue" -> QueueScreen(model, play)
+                        "library" -> LibraryScreen(model, { navigation.open(it) })
+                        "playlists",
+                        "publications",
+                        "drafts" ->
+                            LibraryCollectionsScreen(
+                                model,
+                                route,
+                                { navigation.open(it) },
+                                { newPlaylist = true },
+                            )
+                        "profile" -> ProfileScreen(model) { navigation.open(it) }
+                        "search" ->
+                            SearchScreen(
+                                model,
+                                { track, results ->
+                                    model.play(track, results)
                                     requestNotifications()
                                 },
                                 { addingTrack = it },
                             )
-                        } else if (route.startsWith("playlist:")) {
-                            PlaylistScreen(
+                        "favorites",
+                        "history",
+                        "downloads" -> SavedTracksScreen(model, route, play, { addingTrack = it })
+                        "premium" ->
+                            PremiumScreen(
                                 model,
-                                route.substringAfter(':'),
-                                { track, tracks ->
-                                    model.play(track, tracks)
-                                    requestNotifications()
-                                },
-                                { addingTrack = it },
+                                { navigation.open("promo") },
+                                { navigation.open("auth") },
                             )
-                        }
+                        "promo" -> PromoScreen(model) { navigation.open("auth") }
+                        "auth" -> AuthScreen(model) { back() }
+                        "settings" -> SettingsScreen(model)
+                        "subtitles" -> SubtitleScreen(model)
+                        "publication" -> PublicationScreen(model)
+                        else ->
+                            if (route.startsWith("collection:")) {
+                                CollectionScreen(
+                                    model,
+                                    route.substringAfter(':'),
+                                    { track, tracks ->
+                                        model.play(track, tracks)
+                                        requestNotifications()
+                                    },
+                                    { addingTrack = it },
+                                )
+                            } else if (route.startsWith("playlist:")) {
+                                PlaylistScreen(
+                                    model,
+                                    route.substringAfter(':'),
+                                    { track, tracks ->
+                                        model.play(track, tracks)
+                                        requestNotifications()
+                                    },
+                                    { addingTrack = it },
+                                )
+                            }
+                    }
                 }
             }
         }
@@ -258,6 +270,8 @@ fun MuwaApp(
                 },
                 onPlaylist = { addingTrack = model.track },
                 bottomClearance = bottomClearanceDp.dp,
+                lyricsVisible = lyricsVisible,
+                onLyricsChange = { lyricsVisible = it },
             )
         }
         if (route != "subtitles")
@@ -268,6 +282,7 @@ fun MuwaApp(
                 systemInsets = systemInsets,
                 extraBottomPadding = extraBottomPadding,
                 onNavigate = {
+                    navigation.history.drop(1).forEach(screenState::removeState)
                     navigation.selectTab(it)
                     expanded = false
                 },

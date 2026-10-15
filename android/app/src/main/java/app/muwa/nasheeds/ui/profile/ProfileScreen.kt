@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -117,14 +118,16 @@ fun ProfileScreen(model: MuwaModel, onRoute: (String) -> Unit) {
             }
         }
     }
+    val smallestWidth = LocalConfiguration.current.smallestScreenWidthDp
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = maxWidth >= 700.dp
+        val layout = MuwaAdaptiveLayout(maxWidth.value, maxHeight.value, smallestWidth)
+        val wide = layout.wideTablet
         Column(
             Modifier.widthIn(max = 920.dp)
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = if (wide) 28.dp else 5.dp, vertical = 18.dp),
+                .padding(horizontal = layout.screenPadding.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
             if (wide)

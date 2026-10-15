@@ -51,7 +51,7 @@ fun Cover(
             Icon(
                 Icons.Default.MusicNote,
                 null,
-                Modifier.fillMaxSize(.25f).sizeIn(maxWidth = 30.dp, maxHeight = 30.dp),
+                Modifier.size(30.dp),
                 tint = Color.White.copy(alpha = .72f),
             )
     }
@@ -97,7 +97,7 @@ fun TrackRow(model: MuwaModel, track: Track, play: (Track) -> Unit, playlist: (T
                 )
         }
         Box {
-            IconButton(onClick = { menu = true }) {
+            IconButton(onClick = { menu = true }, modifier = Modifier.size(44.dp)) {
                 Icon(Icons.Default.MoreVert, "Действия ${track.title}")
             }
             DropdownMenu(menu, { menu = false }) {

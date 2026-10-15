@@ -46,6 +46,14 @@ at Build 54. No new reference mockup was selected or applied.
   origin; selecting a tab resets its detail history. A player that has no connected
   track cannot hide the catalog or select an empty player surface.
 
+- Form-factor rules match the iOS reference: rotating a phone keeps its
+  recommendation carousel and single-column profile; tablets use grids and
+  paired quick-access cards. Shared adaptive rules do not alter system insets.
+
+- Compose saveable screen state retains list positions while a detail screen is
+  open; popped detail state is removed. The caption rail remains enabled after
+  closing the reader and scrolls long Arabic phrases within its artwork bounds.
+
 ## Platform boundaries
 
 Apple SF Symbols/system fonts, AirPlay and iOS system sheets are platform APIs.

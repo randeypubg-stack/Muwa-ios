@@ -42,7 +42,7 @@ iOS использует системную типографику.
 | `MuwaApp.kt` | Составление экранов и один расчёт нижних insets |
 | `MuwaModel.kt`, `PlaybackService.kt` | Состояние приложения, Media3 и системная медиасессия |
 | `Backend.kt`, `Downloads.kt`, `Diagnostics.kt`, `Data.kt` | Сеть, файлы и постоянные данные |
-| `ui/design` | Цвета, шрифты, движение, reduced-motion policy, фон, layout tokens |
+| `ui/design` | Цвета, шрифты, движение, reduced-motion policy, фон, layout tokens и правила MuwaAdaptiveLayout |
 | `ui/navigation` | Верхний/нижний бар и едиственная сохраняемая история MuwaNavigation |
 | `ui/components` | Общие элементы и мини-плеер |
 | `ui/home`, `catalog`, `library`, `search`, `profile` | Каталог, подборки и личная библиотека |

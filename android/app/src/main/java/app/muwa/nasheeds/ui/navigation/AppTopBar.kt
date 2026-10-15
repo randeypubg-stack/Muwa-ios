@@ -8,8 +8,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import app.muwa.nasheeds.MuwaModel
 import app.muwa.nasheeds.ui.design.*
 
@@ -24,6 +26,12 @@ internal fun AppTopBar(
     onReaderClose: () -> Unit,
 ) {
     val main = route in listOf("home", "library", "profile")
+    val configuration = LocalConfiguration.current
+    val compactPhone =
+        configuration.smallestScreenWidthDp < 600 &&
+            configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val fontScale = LocalDensity.current.fontScale
+    val collapse = scroll.state.collapsedFraction.coerceIn(0f, 1f)
     val title =
         when {
             route.startsWith("collection:") ->
@@ -66,16 +74,44 @@ internal fun AppTopBar(
                 Icon(Icons.Default.Search, "Поиск", Modifier.size(24.dp))
             }
     }
-    if (route == "home")
+    if (route == "home" && !compactPhone)
         LargeTopAppBar(
-            title = { Text(title, fontWeight = FontWeight.Bold) },
+            title = {
+                Text(
+                    title,
+                    Modifier.offset(y = 12.dp * (1f - collapse)),
+                    style =
+                        MaterialTheme.typography.headlineLarge.copy(
+                            fontSize =
+                                lerp(
+                                    MaterialTheme.typography.headlineLarge.fontSize,
+                                    MaterialTheme.typography.titleMedium.fontSize,
+                                    collapse,
+                                ),
+                            lineHeight =
+                                lerp(
+                                    MaterialTheme.typography.headlineLarge.lineHeight,
+                                    MaterialTheme.typography.titleMedium.lineHeight,
+                                    collapse,
+                                ),
+                        ),
+                )
+            },
+            expandedHeight = 103.dp + (48f * (fontScale - 1f).coerceAtLeast(0f)).dp,
             actions = search,
             scrollBehavior = scroll,
             colors =
                 TopAppBarDefaults.largeTopAppBarColors(
                     containerColor = Color.Transparent,
-                    scrolledContainerColor = MuwaColors.Background.copy(alpha = .96f),
+                    scrolledContainerColor = Color.Transparent,
                 ),
+        )
+    else if (route == "home")
+        CenterAlignedTopAppBar(
+            title = { Text(title, style = MaterialTheme.typography.titleMedium) },
+            actions = search,
+            colors =
+                TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
         )
     else if (main)
         Column(

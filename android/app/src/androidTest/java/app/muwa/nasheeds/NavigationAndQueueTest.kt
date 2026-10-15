@@ -491,7 +491,13 @@ class NavigationAndQueueTest {
                                 .fetchSemanticsNodes()
                                 .isNotEmpty()
                         }
-                        compose.onNodeWithTag("player.subtitles").performClick()
+                        if (
+                            compose
+                                .onAllNodesWithTag("player.lyrics")
+                                .fetchSemanticsNodes()
+                                .isEmpty()
+                        )
+                            compose.onNodeWithTag("player.subtitles").performClick()
                         compose.onNodeWithTag("player.lyrics").assertIsDisplayed().performClick()
                         compose.onNodeWithTag("subtitles.screen").assertIsDisplayed()
                         compose.waitUntil(timeoutMillis = 10_000) {
@@ -503,6 +509,7 @@ class NavigationAndQueueTest {
                         compose.onNodeWithTag("bottom-navigation").assertDoesNotExist()
                         compose.onNodeWithText("Готово").performClick()
                         compose.onNodeWithTag("player.screen").assertIsDisplayed()
+                        compose.onNodeWithTag("player.lyrics").assertIsDisplayed()
                         assertBottomAnchor(scenario)
                     }
                 }

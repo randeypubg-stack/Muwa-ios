@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -22,9 +23,11 @@ import app.muwa.nasheeds.ui.design.*
 
 @Composable
 fun LibraryScreen(model: MuwaModel, onRoute: (String) -> Unit) {
+    val smallestWidth = LocalConfiguration.current.smallestScreenWidthDp
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val columns = if (maxWidth >= 700.dp) 4 else if (maxWidth >= 560.dp) 3 else 2
-        val outer = if (maxWidth >= 700.dp) 28.dp else 5.dp
+        val layout = MuwaAdaptiveLayout(maxWidth.value, maxHeight.value, smallestWidth)
+        val columns = layout.libraryColumns
+        val outer = layout.screenPadding.dp
         LazyColumn(
             Modifier.widthIn(max = 1180.dp).align(Alignment.TopCenter).fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = outer, vertical = 14.dp),
@@ -118,23 +121,48 @@ fun LibraryScreen(model: MuwaModel, onRoute: (String) -> Unit) {
                 }
             }
             item { Text("Быстрый доступ", style = MaterialTheme.typography.titleMedium) }
-            item {
-                QuickAccess(
-                    "Черновики публикаций",
-                    "Незавершённые публикации",
-                    Icons.Default.Description,
-                ) {
-                    onRoute("drafts")
+            if (layout.wideTablet)
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        QuickAccess(
+                            "Черновики публикаций",
+                            "Незавершённые публикации",
+                            Icons.Default.Description,
+                            Modifier.weight(1f),
+                        ) {
+                            onRoute("drafts")
+                        }
+                        QuickAccess(
+                            "Загрузки",
+                            if (model.downloads.downloaded.isEmpty())
+                                "Офлайн-сохранения появятся здесь"
+                            else "${model.downloads.downloaded.size} сохранено офлайн",
+                            Icons.Default.DownloadForOffline,
+                            Modifier.weight(1f),
+                        ) {
+                            onRoute("downloads")
+                        }
+                    }
                 }
-            }
-            item {
-                QuickAccess(
-                    "Загрузки",
-                    if (model.downloads.downloaded.isEmpty()) "Офлайн-сохранения появятся здесь"
-                    else "${model.downloads.downloaded.size} сохранено офлайн",
-                    Icons.Default.DownloadForOffline,
-                ) {
-                    onRoute("downloads")
+            else {
+                item {
+                    QuickAccess(
+                        "Черновики публикаций",
+                        "Незавершённые публикации",
+                        Icons.Default.Description,
+                    ) {
+                        onRoute("drafts")
+                    }
+                }
+                item {
+                    QuickAccess(
+                        "Загрузки",
+                        if (model.downloads.downloaded.isEmpty()) "Офлайн-сохранения появятся здесь"
+                        else "${model.downloads.downloaded.size} сохранено офлайн",
+                        Icons.Default.DownloadForOffline,
+                    ) {
+                        onRoute("downloads")
+                    }
                 }
             }
         }
@@ -179,9 +207,16 @@ private fun LibraryTileCard(tile: LibraryTile, modifier: Modifier, click: () -> 
 }
 
 @Composable
-private fun QuickAccess(title: String, subtitle: String, icon: ImageVector, click: () -> Unit) {
+private fun QuickAccess(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    click: () -> Unit,
+) {
     Row(
-        Modifier.fillMaxWidth()
+        modifier
+            .fillMaxWidth()
             .glassPanel(20.dp)
             .clickable(onClick = click)
             .padding(15.dp)
