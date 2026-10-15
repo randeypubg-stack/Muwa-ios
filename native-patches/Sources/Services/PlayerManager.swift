@@ -1,0 +1,698 @@
+import AVFoundation
+import Combine
+import MediaPlayer
+import SwiftUI
+import UIKit
+
+struct PlaybackResumeCandidate: Equatable {
+  let trackID: String
+  let position: TimeInterval
+  let duration: TimeInterval
+}
+
+@MainActor
+final class PlayerManager: ObservableObject {
+  @Published var currentTrack: Track?
+  @Published var isPlaying = false
+  let timeline = PlaybackTimeline()
+  var progress: Double {
+    get { timeline.snapshot.progress }
+    set { timeline.update(time: newValue * duration, duration: duration) }
+  }
+  var currentTime: TimeInterval {
+    get { timeline.snapshot.time }
+    set { timeline.update(time: newValue, duration: duration) }
+  }
+  @Published var duration: TimeInterval = 0
+  @Published var shuffleOn = false
+  enum RepeatMode: String { case off, all, one }
+  @Published private(set) var repeatMode: RepeatMode = .off
+  var repeatOn: Bool { repeatMode != .off }
+  func cycleRepeatMode() { repeatMode = repeatMode == .off ? .all : (repeatMode == .all ? .one : .off) }
+  @Published private(set) var playbackError: String?
+  @Published private(set) var isBuffering = false
+  private var itemStatusObserver: NSKeyValueObservation?
+  private var controlStatusObserver: NSKeyValueObservation?
+  private var prefetchTask: Task<Void, Never>?
+  private var catalogChanges: AnyCancellable?
+  private var sleepTask: Task<Void, Never>?
+  @Published private(set) var hasStartedPlaybackThisSession = false
+  @Published private(set) var resumeCandidate: PlaybackResumeCandidate?
+  @Published private(set) var sleepTimerEndDate: Date?
+  @Published private(set) var sleepAfterCurrentTrack = false
+
+  private var player: AVPlayer?
+  private var timeObserver: Any?
+  private var endObserver: NSObjectProtocol?
+  private var artworkTask: Task<Void, Never>?
+  private var currentArtwork: MPMediaItemArtwork?
+  private var interruptionObserver: NSObjectProtocol?
+  private var routeChangeObserver: NSObjectProtocol?
+  private var wasPlayingBeforeInterruption = false
+  private var lastResumePersistBucket = -1
+  private var lastNowPlayingUpdate = Date.distantPast
+  private var prefetchedTrackID: String?
+  private var prefetchedURL: URL?
+  private var prefetchedAsset: AVURLAsset?
+
+  private let defaults = UserDefaults.standard
+
+  private enum ResumeKey {
+    static let trackID = "muwa.native.resume.track"
+    static let position = "muwa.native.resume.position"
+    static let duration = "muwa.native.resume.duration"
+  }
+
+  private let library: LibraryStore
+  private let downloads: DownloadManager
+  private let premium: PremiumManager
+
+  init(library: LibraryStore, downloads: DownloadManager, premium: PremiumManager) {
+    self.library = library
+    self.downloads = downloads
+    self.premium = premium
+
+    catalogChanges = CatalogStore.shared.$tracks.dropFirst().sink { [weak self] tracks in
+      guard let self, let playing = self.currentTrack,
+        let updated = tracks.first(where: { $0.id == playing.id }),
+        updated.audioURL == playing.audioURL, updated != playing else { return }
+      // New caption revisions update the reader without recreating AVPlayer or
+      // resetting playback. Replaced audio keeps its own original metadata.
+      self.currentTrack = updated
+      self.updateNowPlaying(force: true)
+    }
+
+    // A fresh app process must not expose stale system Now Playing metadata
+    // from a previous listening session before the user starts a track again.
+    MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    restoreResumeCandidate()
+
+    configureAudioSession()
+    configureRemoteCommands()
+    configureAudioNotifications()
+  }
+
+  deinit {
+    if let timeObserver, let player { player.removeTimeObserver(timeObserver) }
+    if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+    if let interruptionObserver { NotificationCenter.default.removeObserver(interruptionObserver) }
+    if let routeChangeObserver { NotificationCenter.default.removeObserver(routeChangeObserver) }
+    artworkTask?.cancel()
+    prefetchTask?.cancel()
+    sleepTask?.cancel()
+  }
+
+  var resumeTrack: Track? {
+    guard let candidate = resumeCandidate else { return nil }
+    return Track.track(id: candidate.trackID)
+  }
+  var sleepTimerSummary: String? {
+    if sleepAfterCurrentTrack {
+      return "После текущего нашида"
+    }
+    guard let endDate = sleepTimerEndDate else { return nil }
+    let remaining = max(
+      0,
+      Int((endDate.timeIntervalSinceNow / 60.0).rounded(.up))
+    )
+    return remaining > 0 ? "Осталось ~\(remaining) мин" : "Завершается"
+  }
+
+  func startSleepTimer(minutes: Int) {
+    guard minutes > 0 else { return }
+    sleepAfterCurrentTrack = false
+    sleepTimerEndDate = Date().addingTimeInterval(TimeInterval(minutes * 60))
+    sleepTask?.cancel()
+    sleepTask = Task { [weak self] in
+      try? await Task.sleep(for: .seconds(minutes * 60))
+      guard !Task.isCancelled else { return }
+      self?.enforceSleepTimerIfNeeded()
+    }
+  }
+
+  func sleepAfterCurrentTrackEnds() {
+    sleepTask?.cancel()
+    sleepTimerEndDate = nil
+    sleepAfterCurrentTrack = currentTrack != nil
+  }
+
+  func cancelSleepTimer() {
+    sleepTask?.cancel()
+    sleepTimerEndDate = nil
+    sleepAfterCurrentTrack = false
+  }
+
+
+  func dismissResumeCandidate() {
+    clearResumeCandidate()
+  }
+
+  func resumeSavedPlayback(autoplay: Bool = true) {
+    guard let candidate = resumeCandidate, let track = Track.track(id: candidate.trackID) else {
+      clearResumeCandidate()
+      return
+    }
+
+    let savedPosition = candidate.position
+    play(track, autoplay: false)
+
+    let baseDuration = duration > 0 ? duration : max(candidate.duration, track.duration)
+    if baseDuration > 0 {
+      let clampedSeconds = min(max(0, savedPosition), max(0, baseDuration - 0.5))
+      seek(to: clampedSeconds / baseDuration)
+    }
+
+    if autoplay {
+      player?.play()
+      isPlaying = true
+      updateNowPlaying()
+    }
+
+    persistResumeCandidate(force: true)
+  }
+
+  func play(_ track: Track, in collection: [Track], autoplay: Bool = true) {
+    guard collection.contains(where: { $0.id == track.id }) else { return }
+    library.replaceQueue(with: collection)
+    play(track, autoplay: autoplay)
+  }
+
+  func play(_ track: Track, autoplay: Bool = true) {
+    hasStartedPlaybackThisSession = true
+    playbackError = nil
+    isBuffering = false
+    configureAudioSession()
+    clearResumeCandidate()
+    lastResumePersistBucket = -1
+    currentTrack = track
+    library.ensureQueueContains(track)
+    library.recordHistory(track)
+    currentArtwork = nil
+    artworkTask?.cancel()
+
+    player?.pause()
+    removeTimeObserver()
+    removeEndObserver()
+
+    let canUseOfflineCopy = FeatureAccess.allowsPremiumFeature(isPremium: premium.isPremium) && downloads.isDownloaded(track)
+    let playbackURL =
+      canUseOfflineCopy ? (downloads.localURL(for: track) ?? track.audioURL) : track.audioURL
+    let item: AVPlayerItem
+    if
+      prefetchedTrackID == track.id,
+      prefetchedURL == playbackURL,
+      let prefetchedAsset
+    {
+      item = AVPlayerItem(asset: prefetchedAsset)
+    } else {
+      item = AVPlayerItem(asset: playbackAsset(url: playbackURL))
+    }
+    prefetchedTrackID = nil
+    prefetchedURL = nil
+    prefetchedAsset = nil
+
+    let newPlayer = AVPlayer(playerItem: item)
+    player = newPlayer
+    itemStatusObserver = item.observe(\.status, options: [.initial, .new]) { [weak self, weak item] _, _ in
+      Task { @MainActor in
+        guard let self, let item, self.player?.currentItem === item else { return }
+        if item.status == .failed {
+          let error = item.error ?? URLError(.cannotDecodeContentData)
+          self.playbackError = "Не удалось воспроизвести нашид. Проверьте подключение и попробуйте снова."
+          self.isPlaying = false
+          self.isBuffering = false
+          Diagnostics.shared.record("playback", error: error)
+          self.updateNowPlaying()
+        }
+      }
+    }
+    controlStatusObserver = newPlayer.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self, weak newPlayer] _, _ in
+      Task { @MainActor in
+        guard let self, let newPlayer, self.player === newPlayer else { return }
+        let buffering = newPlayer.timeControlStatus == .waitingToPlayAtSpecifiedRate
+        if self.isBuffering != buffering { self.isBuffering = buffering }
+      }
+    }
+    duration = track.duration
+    currentTime = 0
+    progress = 0
+    addTimeObserver(to: newPlayer)
+    addEndObserver(for: item)
+
+    if autoplay {
+      newPlayer.play()
+      isPlaying = true
+    } else {
+      isPlaying = false
+    }
+    loadNowPlayingArtwork(for: track)
+    prefetchFollowingTrack(after: track)
+    updateNowPlaying()
+  }
+
+  func retryPlayback() {
+    guard let track = currentTrack else { return }
+    let position = currentTime
+    play(track)
+    if duration > 0 { seek(to: position / duration) }
+  }
+
+  func toggle() {
+    if playbackError != nil { retryPlayback(); return }
+    guard let player else {
+      if let track = currentTrack { play(track) }
+      return
+    }
+    if isPlaying {
+      persistResumeCandidate(force: true)
+      player.pause()
+      isBuffering = false
+      isPlaying = false
+    } else {
+      if duration > 0, currentTime >= duration - 0.35 {
+        player.seek(to: .zero)
+        currentTime = 0
+        progress = 0
+      }
+      hasStartedPlaybackThisSession = true
+      player.play()
+      isPlaying = true
+    }
+    updateNowPlaying()
+  }
+
+  func seek(to fraction: Double) {
+    guard duration > 0 else { return }
+    guard fraction.isFinite else { return }
+    let clamped = max(0, min(1, fraction))
+    let seconds = clamped * duration
+    player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
+    currentTime = seconds
+    progress = clamped
+    persistResumeCandidate(force: true)
+    updateNowPlaying()
+  }
+
+  func next() {
+    guard let current = currentTrack else {
+      if let first = library.queueTracks.first { play(first) }
+      return
+    }
+    let queue = library.queueTracks
+    guard !queue.isEmpty else { finishPlayback(); return }
+
+    if shuffleOn, queue.count > 1 {
+      let candidates = queue.filter { $0.id != current.id }
+      if let random = candidates.randomElement() { play(random) }
+      return
+    }
+
+    guard let index = queue.firstIndex(where: { $0.id == current.id }) else {
+      play(queue[0])
+      return
+    }
+    let nextIndex = index + 1
+    if nextIndex < queue.count {
+      play(queue[nextIndex])
+    } else if repeatOn {
+      play(queue[0])
+    } else {
+      finishPlayback()
+    }
+  }
+
+  private func finishPlayback() {
+    player?.pause()
+    isPlaying = false
+    currentTime = duration
+    progress = duration > 0 ? 1 : 0
+    clearResumeCandidate()
+    updateNowPlaying()
+  }
+
+  func previous() {
+    if currentTime > 4 {
+      seek(to: 0)
+      return
+    }
+    guard let current = currentTrack else { return }
+    let queue = library.queueTracks
+    guard let index = queue.firstIndex(where: { $0.id == current.id }), !queue.isEmpty else {
+      return
+    }
+    let previousIndex = index > 0 ? index - 1 : (repeatOn ? queue.count - 1 : 0)
+    play(queue[previousIndex])
+  }
+
+  private func configureAudioSession() {
+    do {
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.playback, mode: .default, options: [.allowAirPlay])
+      try session.setActive(true)
+    } catch {
+      Diagnostics.shared.record("audio-session", error: error)
+    }
+  }
+
+  private func configureRemoteCommands() {
+    let center = MPRemoteCommandCenter.shared()
+    center.playCommand.addTarget { [weak self] _ in
+      Task { @MainActor in
+        guard let self, self.player != nil, FeatureAccess.allowsPremiumFeature(isPremium: self.premium.isPremium) else { return }
+        self.hasStartedPlaybackThisSession = true
+        self.player?.play()
+        self.isPlaying = true
+        self.updateNowPlaying()
+      }
+      return .success
+    }
+    center.pauseCommand.addTarget { [weak self] _ in
+      Task { @MainActor in
+        guard let self, self.player != nil, FeatureAccess.allowsPremiumFeature(isPremium: self.premium.isPremium) else { return }
+        self.player?.pause()
+        self.isPlaying = false
+        self.updateNowPlaying()
+      }
+      return .success
+    }
+    center.togglePlayPauseCommand.addTarget { [weak self] _ in
+      Task { @MainActor in
+        guard let self, self.player != nil, FeatureAccess.allowsPremiumFeature(isPremium: self.premium.isPremium) else { return }
+        self.toggle()
+      }
+      return .success
+    }
+    center.nextTrackCommand.addTarget { [weak self] _ in
+      Task { @MainActor in
+        guard let self, self.player != nil, FeatureAccess.allowsPremiumFeature(isPremium: self.premium.isPremium) else { return }
+        self.next()
+      }
+      return .success
+    }
+    center.previousTrackCommand.addTarget { [weak self] _ in
+      Task { @MainActor in
+        guard let self, self.player != nil, FeatureAccess.allowsPremiumFeature(isPremium: self.premium.isPremium) else { return }
+        self.previous()
+      }
+      return .success
+    }
+    center.changePlaybackPositionCommand.addTarget { [weak self] event in
+      guard let event = event as? MPChangePlaybackPositionCommandEvent else {
+        return .commandFailed
+      }
+      Task { @MainActor in
+        guard let self, FeatureAccess.allowsPremiumFeature(isPremium: self.premium.isPremium), self.duration > 0 else { return }
+        self.seek(to: event.positionTime / self.duration)
+      }
+      return .success
+    }
+  }
+
+  func handleScenePhase(_ phase: ScenePhase) {
+    switch phase {
+    case .background:
+      persistResumeCandidate(force: true)
+      guard !FeatureAccess.allowsPremiumFeature(isPremium: premium.isPremium) else { return }
+      player?.pause()
+      isPlaying = false
+      MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    case .active:
+      updateNowPlaying()
+    default:
+      break
+    }
+  }
+
+  private func configureAudioNotifications() {
+    interruptionObserver = NotificationCenter.default.addObserver(
+      forName: AVAudioSession.interruptionNotification,
+      object: AVAudioSession.sharedInstance(),
+      queue: .main
+    ) { [weak self] notification in
+      Task { @MainActor in
+        guard let self,
+          let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+          let type = AVAudioSession.InterruptionType(rawValue: rawType)
+        else { return }
+        switch type {
+        case .began:
+          self.wasPlayingBeforeInterruption = self.isPlaying
+          self.player?.pause()
+          self.isPlaying = false
+          self.updateNowPlaying()
+        case .ended:
+          let rawOptions = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+          let options = AVAudioSession.InterruptionOptions(rawValue: rawOptions)
+          if self.wasPlayingBeforeInterruption, options.contains(.shouldResume) {
+            let canResume =
+              FeatureAccess.allowsPremiumFeature(isPremium: self.premium.isPremium) || UIApplication.shared.applicationState == .active
+            if canResume {
+              self.player?.play()
+              self.isPlaying = true
+              self.updateNowPlaying()
+            }
+          }
+          self.wasPlayingBeforeInterruption = false
+        @unknown default:
+          break
+        }
+      }
+    }
+
+    routeChangeObserver = NotificationCenter.default.addObserver(
+      forName: AVAudioSession.routeChangeNotification,
+      object: AVAudioSession.sharedInstance(),
+      queue: .main
+    ) { [weak self] notification in
+      Task { @MainActor in
+        guard let self,
+          let rawReason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+          let reason = AVAudioSession.RouteChangeReason(rawValue: rawReason),
+          reason == .oldDeviceUnavailable
+        else { return }
+        self.player?.pause()
+        self.isPlaying = false
+        self.updateNowPlaying()
+      }
+    }
+  }
+
+  private func addTimeObserver(to player: AVPlayer) {
+    timeObserver = player.addPeriodicTimeObserver(
+      forInterval: CMTime(seconds: 0.35, preferredTimescale: 600),
+      queue: .main
+    ) { [weak self, weak player] time in
+      Task { @MainActor in
+        guard let self, let player, self.player === player else { return }
+        let actual = player.currentItem?.duration.seconds ?? self.duration
+        if actual.isFinite && actual > 0 && self.duration != actual { self.duration = actual }
+        self.timeline.update(time: time.seconds, duration: self.duration)
+        self.persistResumeCandidate()
+        self.enforceSleepTimerIfNeeded()
+        self.updateNowPlaying(force: false)
+      }
+    }
+  }
+
+  private func removeTimeObserver() {
+    if let timeObserver, let player { player.removeTimeObserver(timeObserver) }
+    timeObserver = nil
+  }
+
+  private func addEndObserver(for item: AVPlayerItem) {
+    endObserver = NotificationCenter.default.addObserver(
+      forName: .AVPlayerItemDidPlayToEndTime,
+      object: item,
+      queue: .main
+    ) { [weak self, weak item] _ in
+      Task { @MainActor in
+        guard let self, let item, self.player?.currentItem === item else { return }
+
+        if self.sleepAfterCurrentTrack {
+          self.sleepAfterCurrentTrack = false
+          self.sleepTimerEndDate = nil
+          self.player?.pause()
+          self.isPlaying = false
+          self.currentTime = self.duration
+          self.progress = self.duration > 0 ? 1 : 0
+          self.clearResumeCandidate()
+          self.updateNowPlaying()
+          return
+        }
+
+        if self.repeatMode == .one, let track = self.currentTrack {
+          self.play(track)
+        } else {
+          self.next()
+        }
+      }
+    }
+  }
+
+  private func removeEndObserver() {
+    if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+    endObserver = nil
+  }
+
+  private func enforceSleepTimerIfNeeded() {
+    guard let endDate = sleepTimerEndDate, Date() >= endDate else { return }
+
+    sleepTimerEndDate = nil
+    sleepAfterCurrentTrack = false
+    persistResumeCandidate(force: true)
+    player?.pause()
+    isPlaying = false
+    updateNowPlaying()
+  }
+
+  private func playbackAsset(url: URL) -> AVURLAsset {
+    guard !url.isFileURL else { return AVURLAsset(url: url) }
+    let cookies = HTTPCookieStorage.shared.cookies(for: url) ?? []
+    return AVURLAsset(url: url, options: [AVURLAssetHTTPCookiesKey: cookies])
+  }
+
+  private func prefetchFollowingTrack(after track: Track) {
+    prefetchTask?.cancel()
+    prefetchedTrackID = nil
+    prefetchedURL = nil
+    prefetchedAsset = nil
+    guard !shuffleOn else {
+      return
+    }
+
+    let queue = library.queueTracks
+    guard !queue.isEmpty, let index = queue.firstIndex(where: { $0.id == track.id }) else {
+      return
+    }
+
+    let nextTrack: Track?
+    let nextIndex = index + 1
+    if nextIndex < queue.count {
+      nextTrack = queue[nextIndex]
+    } else if repeatOn {
+      nextTrack = queue.first
+    } else {
+      nextTrack = nil
+    }
+
+    guard let nextTrack else {
+      prefetchedTrackID = nil
+      prefetchedURL = nil
+      prefetchedAsset = nil
+      return
+    }
+
+    let canUseOfflineCopy = FeatureAccess.allowsPremiumFeature(isPremium: premium.isPremium) && downloads.isDownloaded(nextTrack)
+    let url =
+      canUseOfflineCopy
+      ? (downloads.localURL(for: nextTrack) ?? nextTrack.audioURL)
+      : nextTrack.audioURL
+
+    let asset = playbackAsset(url: url)
+    prefetchedTrackID = nextTrack.id
+    prefetchedURL = url
+    prefetchedAsset = asset
+
+    // Warm metadata/network resolution without starting playback.
+    prefetchTask = Task { _ = try? await asset.load(.isPlayable) }
+  }
+
+  private func loadNowPlayingArtwork(for track: Track) {
+    guard let url = track.artworkURL else { return }
+    artworkTask = Task { [weak self] in
+      guard let image = await ArtworkImageStore.shared.image(for: url), !Task.isCancelled,
+        let self, self.currentTrack?.id == track.id else { return }
+      self.currentArtwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+      self.updateNowPlaying()
+    }
+  }
+
+  private func restoreResumeCandidate() {
+    guard
+      let trackID = defaults.string(forKey: ResumeKey.trackID),
+      Track.track(id: trackID) != nil
+    else {
+      clearResumeCandidate()
+      return
+    }
+
+    let position = defaults.double(forKey: ResumeKey.position)
+    let savedDuration = defaults.double(forKey: ResumeKey.duration)
+    guard position >= 1, savedDuration > 1, position < savedDuration - 1 else {
+      clearResumeCandidate()
+      return
+    }
+
+    resumeCandidate = PlaybackResumeCandidate(
+      trackID: trackID,
+      position: position,
+      duration: savedDuration
+    )
+  }
+
+  private func persistResumeCandidate(force: Bool = false) {
+    guard let track = currentTrack else { return }
+
+    let effectiveDuration = duration > 0 ? duration : track.duration
+    guard effectiveDuration > 1 else { return }
+
+    let position = currentTime
+    if position >= effectiveDuration - 1 {
+      clearResumeCandidate()
+      return
+    }
+
+    guard position >= 1 else { return }
+
+    let bucket = Int(position / 5)
+    if !force, bucket == lastResumePersistBucket { return }
+    lastResumePersistBucket = bucket
+
+    // This is next-launch persistence, not live UI state. Publishing it here
+    // invalidated every PlayerManager observer during playback.
+    defaults.set(track.id, forKey: ResumeKey.trackID)
+    defaults.set(position, forKey: ResumeKey.position)
+    defaults.set(effectiveDuration, forKey: ResumeKey.duration)
+  }
+
+  private func clearResumeCandidate() {
+    if resumeCandidate != nil { resumeCandidate = nil }
+    defaults.removeObject(forKey: ResumeKey.trackID)
+    defaults.removeObject(forKey: ResumeKey.position)
+    defaults.removeObject(forKey: ResumeKey.duration)
+  }
+
+  private func updateNowPlaying(force: Bool = true) {
+    guard let track = currentTrack else { return }
+    let now = Date()
+    guard force || now.timeIntervalSince(lastNowPlayingUpdate) >= 5 else { return }
+    lastNowPlayingUpdate = now
+    var info: [String: Any] = [
+      MPMediaItemPropertyTitle: track.title,
+      MPMediaItemPropertyArtist: track.artist,
+      MPMediaItemPropertyPlaybackDuration: duration,
+      MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
+      MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
+    ]
+    if let currentArtwork { info[MPMediaItemPropertyArtwork] = currentArtwork }
+    MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+  }
+}
+
+// High-frequency playback updates are observed only by progress/subtitle views.
+@MainActor
+final class PlaybackTimeline: ObservableObject {
+  struct Snapshot: Equatable {
+    let time: TimeInterval
+    let duration: TimeInterval
+    var progress: Double { duration > 0 ? min(1, max(0, time / duration)) : 0 }
+  }
+  @Published private(set) var snapshot = Snapshot(time: 0, duration: 0)
+
+  func update(time: TimeInterval, duration: TimeInterval) {
+    let safeDuration = duration.isFinite ? max(0, duration) : 0
+    let safeTime = time.isFinite ? max(0, time) : 0
+    let next = Snapshot(time: safeTime, duration: safeDuration)
+    if snapshot != next { snapshot = next }
+  }
+}

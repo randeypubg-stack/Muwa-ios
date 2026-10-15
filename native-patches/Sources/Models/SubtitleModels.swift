@@ -1,0 +1,134 @@
+import Foundation
+
+enum PublishedSubtitleAvailability: String, Codable {
+  case available, processing, review, unavailable
+  var title: String {
+    switch self {
+    case .available: return "Текст нашида"
+    case .processing: return "Распознаём текст"
+    case .review: return "Текст на проверке"
+    case .unavailable: return "Текст пока недоступен"
+    }
+  }
+  var message: String {
+    switch self {
+    case .available: return ""
+    case .processing: return "Субтитры появятся после распознавания. Можно продолжать слушать нашид."
+    case .review: return "Арабский текст распознан, но в нём есть сомнительные фразы. Он появится после проверки владельцем."
+    case .unavailable: return "Для этого нашида ещё нет опубликованных субтитров. Можно продолжать слушать."
+    }
+  }
+}
+
+enum SubtitleLanguage: String, CaseIterable, Identifiable, Codable, Sendable {
+  case arabic = "AR"
+  case russian = "RU"
+  case english = "EN"
+  var id: String { rawValue }
+}
+
+struct SubtitleWord: Codable, Hashable, Sendable {
+  let text: String
+  let start: TimeInterval
+  let end: TimeInterval
+}
+
+struct SubtitleSegment: Codable, Hashable, Sendable, Identifiable {
+  var id: String { "\(start)-\(end)-\(ar)" }
+  let start: TimeInterval
+  let end: TimeInterval
+  let ar: String
+  let ru: String
+  let en: String
+  let words: [SubtitleWord]?
+
+  func text(for language: SubtitleLanguage) -> String {
+    switch language {
+    case .arabic: return ar
+    case .russian: return ru
+    case .english: return en
+    }
+  }
+}
+
+
+// V2 is separate: old subtitles and their cache keep their original format.
+enum AITranslationLanguage: String, CaseIterable, Identifiable, Codable {
+  case original, ru, en, tr, uz, kk, fr
+  var id: String { rawValue }
+  var title: String {
+    switch self {
+    case .original: return "Оригинал"
+    case .ru: return "Русский"
+    case .en: return "English"
+    case .tr: return "Türkçe"
+    case .uz: return "O‘zbekcha"
+    case .kk: return "Қазақша"
+    case .fr: return "Français"
+    }
+  }
+}
+
+struct AISubtitleDocument: Codable, Equatable {
+  let version: Int
+  let id: String
+  let language: String
+  let segments: [AISubtitleSegment]
+  static func published(trackID: String, revision: Int, captions: [SubtitleSegment]) throws -> Self {
+    // Arabic is the original, including colloquial spelling. Never replace it
+    // with a translation or normalize dialectal lyrics into invented MSA text.
+    let language: SubtitleLanguage = captions.contains(where: { !$0.ar.isEmpty }) ? .arabic
+      : captions.contains(where: { !$0.ru.isEmpty }) ? .russian : .english
+    let rows = captions.enumerated().compactMap { index, caption -> AISubtitleSegment? in
+      let original = caption.text(for: language).trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !original.isEmpty else { return nil }
+      let words = caption.words ?? []
+      return AISubtitleSegment(id: "s\(index)", start: caption.start, end: caption.end,
+        original: original, words: words, timing: words.isEmpty ? "phrase" : "estimated")
+    }
+    return try Self(version: 2, id: "catalog-\(trackID)-r\(revision)", language: language.rawValue.lowercased(), segments: rows).validated()
+  }
+  var isRTL: Bool { ["ar", "fa", "he", "ur"].contains(language.components(separatedBy: "-")[0]) }
+  func activeIndex(at time: Double) -> Int? {
+    guard time.isFinite else { return nil }
+    var low = 0, high = segments.count
+    while low < high {
+      let mid = (low + high) / 2
+      if segments[mid].start <= time { low = mid + 1 } else { high = mid }
+    }
+    let index = low - 1
+    return index >= 0 && time < segments[index].end ? index : nil
+  }
+  func validated() throws -> Self {
+    guard version == 2, !id.isEmpty, !segments.isEmpty, segments.count <= 600 else { throw URLError(.cannotParseResponse) }
+    var lastEnd: Double = 0
+    var ids = Set<String>()
+    for segment in segments {
+      guard ids.insert(segment.id).inserted, segment.start.isFinite, segment.end.isFinite,
+        segment.start >= lastEnd, segment.end > segment.start, !segment.original.isEmpty
+      else { throw URLError(.cannotParseResponse) }
+      lastEnd = segment.end
+      var wordEnd = segment.start
+      for word in segment.words {
+        guard word.start.isFinite, word.end.isFinite, word.start >= wordEnd,
+          word.end > word.start, word.end <= segment.end, !word.text.isEmpty
+        else { throw URLError(.cannotParseResponse) }
+        wordEnd = word.end
+      }
+    }
+    return self
+  }
+}
+struct AISubtitleSegment: Codable, Equatable, Identifiable {
+  let id: String
+  let start: Double
+  let end: Double
+  let original: String
+  let words: [SubtitleWord]
+  let timing: String
+}
+struct AISubtitleTranslation: Codable, Equatable {
+  let documentId: String
+  let language: String
+  let segments: [String: String]
+}

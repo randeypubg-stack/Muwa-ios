@@ -1,0 +1,6 @@
+[Unit]
+Description=Renew the Muwa IP certificate
+[Service]
+Type=oneshot
+TimeoutStartSec=10min
+ExecStart=/opt/muwa/infra/renew-muwa-cert.sh

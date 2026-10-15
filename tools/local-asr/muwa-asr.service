@@ -1,0 +1,49 @@
+[Unit]
+Description=Muwa local original-language subtitle recognition
+After=postgresql@18-main.service muwa-api.service
+Requires=postgresql@18-main.service
+ConditionPathExists=/opt/muwa/asr/models/large-v3/model.bin
+[Service]
+Type=simple
+User=muwa-asr
+Group=muwa-asr
+SupplementaryGroups=muwa-media
+WorkingDirectory=/var/lib/muwa-asr
+ExecStart=/opt/muwa/asr/venv/bin/python /opt/muwa/asr/worker.py
+Environment=HF_HUB_OFFLINE=1
+Environment=TOKENIZERS_PARALLELISM=false
+Environment=OMP_NUM_THREADS=1
+Environment=OPENBLAS_NUM_THREADS=1
+Environment=MUWA_ASR_MODEL=/opt/muwa/asr/models/large-v3
+Environment=MUWA_ASR_STORAGE=/var/lib/muwa-app/media/private
+Environment=MUWA_ASR_STATE=/var/lib/muwa-asr
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=30
+UMask=0027
+Nice=10
+CPUQuota=100%
+MemoryHigh=2700M
+MemoryMax=3000M
+MemorySwapMax=1000M
+TasksMax=64
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/muwa-asr
+ReadOnlyPaths=/var/lib/muwa-app/media /opt/muwa/asr
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+LimitCORE=0
+[Install]
+WantedBy=multi-user.target

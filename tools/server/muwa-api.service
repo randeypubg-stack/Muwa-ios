@@ -1,0 +1,38 @@
+[Unit]
+Description=Muwa closed beta API
+After=network.target postgresql@18-main.service
+Requires=postgresql@18-main.service
+
+[Service]
+Type=simple
+User=muwa
+Group=muwa
+WorkingDirectory=/srv/muwa/current/backend
+EnvironmentFile=/etc/muwa/backend.env
+ExecStart=/usr/bin/node dist/server.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=35
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+LimitCORE=0
+ReadWritePaths=/var/lib/muwa-app
+MemoryMax=768M
+TasksMax=64
+LimitNOFILE=8192
+
+[Install]
+WantedBy=multi-user.target

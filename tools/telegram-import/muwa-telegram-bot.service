@@ -1,0 +1,41 @@
+[Unit]
+Description=Muwa owner-only Telegram forwarding bot
+Wants=network-online.target
+After=network-online.target muwa-api.service
+ConditionPathExists=/etc/muwa/telegram-bot.json
+
+[Service]
+Type=simple
+User=muwa-bot
+Group=muwa-bot
+WorkingDirectory=/var/lib/muwa-telegram-bot
+UMask=0077
+LoadCredential=bot-config:/etc/muwa/telegram-bot.json
+ExecStart=/srv/muwa/telegram-import/.venv/bin/python /srv/muwa/telegram-import/setup-owner.py --run-bot
+Restart=no
+TimeoutStopSec=60
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/muwa-telegram-bot
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+PrivateDevices=true
+ProtectKernelLogs=true
+ProtectClock=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+LimitCORE=0
+MemoryMax=384M
+CPUQuota=50%
+TasksMax=64
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,38 @@
+@import "./styles/tokens.css";
+@import "./styles/typography.css";
+@import "./styles/motion.css";
+html,
+body,
+#root {
+  min-height: 100%;
+  background: #05070b;
+  touch-action: pan-x pan-y;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+html {
+  overscroll-behavior: none;
+}
+body {
+  margin: 0;
+  overscroll-behavior: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (display-mode: standalone) {
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+  }
+  body {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: #05070b;
+  }
+}
+
+.dark {
+}

@@ -1,0 +1,196 @@
+import SwiftUI
+import UIKit
+
+struct RootView: View {
+  @EnvironmentObject private var player: PlayerManager
+  @EnvironmentObject private var auth: AuthManager
+
+  @State private var selection: AppTab = .home
+  @State private var playerExpansion: CGFloat = 0
+  @State private var searchPresented = false
+  @State private var requestedLibraryDestination: LibraryDestination?
+
+  var body: some View {
+    ZStack {
+      Group {
+        if auth.registrationJustCompleted {
+          RegistrationSuccessView()
+            .transition(.opacity.combined(with: .scale(scale: 0.985)))
+        } else {
+          switch auth.state {
+          case .signedOut:
+            AuthFlowView()
+              .transition(.opacity)
+
+          case .checking, .guest, .authenticated:
+            appShell
+              .transition(.opacity)
+          }
+        }
+      }
+    }
+    .background(Color.black.ignoresSafeArea())
+    .animation(.easeInOut(duration: 0.24), value: auth.state)
+    .animation(.easeInOut(duration: 0.24), value: auth.registrationJustCompleted)
+    .fullScreenCover(isPresented: $searchPresented) {
+      SearchView(openPlayer: {
+        searchPresented = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+          expandPlayer()
+        }
+      })
+    }
+  }
+
+  private var appShell: some View {
+    GeometryReader { proxy in
+      let layout = AdaptiveLayout(size: proxy.size, safeArea: proxy.safeAreaInsets)
+      let progress = min(max(playerExpansion, 0), 1)
+      let windowInsets = activeWindowSafeAreaInsets
+      let safeTop = max(proxy.safeAreaInsets.top, windowInsets.top)
+      let safeBottom = max(proxy.safeAreaInsets.bottom, windowInsets.bottom)
+      let safeLeading = max(proxy.safeAreaInsets.leading, windowInsets.left)
+      let safeTrailing = max(proxy.safeAreaInsets.trailing, windowInsets.right)
+      let chromeSideInset = max(
+        layout.horizontalPadding,
+        max(safeLeading, safeTrailing)
+      )
+
+      let chromeLimit = layout.bottomChromeMaxWidth.isFinite
+        ? layout.bottomChromeMaxWidth
+        : max(0, layout.viewportWidth - layout.horizontalPadding * 2)
+
+      let chromeWidth = min(
+        chromeLimit,
+        max(0, layout.viewportWidth - chromeSideInset * 2)
+      )
+
+      let windowHeight = layout.viewportHeight + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom
+      // Keyboard avoidance can increase the proposed root inset. It must not
+      // change the physical navigation reference or the system gesture margin.
+      let systemBottom = activeWindow?.safeAreaInsets.bottom ?? proxy.safeAreaInsets.bottom
+      let chrome = BottomChromeLayout(viewportHeight: windowHeight, safeBottom: systemBottom,
+                                     rootBottomInset: safeBottom)
+
+      ZStack(alignment: .bottom) {
+        tabContent
+          .scaleEffect(1 - (0.003 * progress))
+
+        if player.hasStartedPlaybackThisSession, player.currentTrack != nil {
+          MorphingPlayerView(
+            expansion: $playerExpansion,
+            chromeBottomPadding: chrome.bottomPadding,
+            safeTopInset: safeTop,
+            safeBottomInset: safeBottom,
+            safeLeadingInset: safeLeading,
+            safeTrailingInset: safeTrailing
+          )
+          .ignoresSafeArea(
+            .container,
+            edges: layout.isLandscape ? .horizontal : []
+          )
+          .opacity(Double(min(1, progress * 10)))
+          .allowsHitTesting(progress > 0.004)
+          .zIndex(20)
+        }
+
+        VStack(spacing: BottomChromeLayout.playerGap) {
+          if player.hasStartedPlaybackThisSession, player.currentTrack != nil {
+            MiniPlayerView(openPlayer: expandPlayer)
+              .opacity(Double(1 - smoothStep(progress / 0.18)))
+              .allowsHitTesting(progress < 0.08)
+          }
+
+          BottomBar(
+            selection: $selection,
+            playerActive: progress > 0.56,
+            openPlayer: expandPlayer,
+            selectTab: { tab in
+              selection = tab
+              if progress > 0.001 {
+                collapsePlayer()
+              }
+            }
+          )
+          .padding(.horizontal, layout.isPhone ? 4 : 0)
+        }
+        .frame(width: chromeWidth)
+        .padding(.bottom, chrome.bottomPadding)
+        .zIndex(40)
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .coordinateSpace(name: "playerContainer")
+      .background {
+        if selection == .profile {
+          AppBackground().ignoresSafeArea()
+        } else {
+          MuwaPalette.background.ignoresSafeArea()
+        }
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var tabContent: some View {
+    Group {
+      switch selection {
+      case .home:
+        HomeView(
+          openPlayer: expandPlayer,
+          openSearch: { searchPresented = true }
+        )
+
+      case .library:
+        LibraryView(
+          requestedDestination: $requestedLibraryDestination,
+          openSearch: { searchPresented = true }
+        )
+
+      case .profile:
+        ProfileView(
+          openSearch: { searchPresented = true }
+        )
+      }
+    }
+    .transition(.opacity)
+  }
+
+  private func expandPlayer() {
+    guard player.hasStartedPlaybackThisSession, player.currentTrack != nil else { return }
+
+    withAnimation(
+      .spring(response: 0.50, dampingFraction: 0.94, blendDuration: 0.12)
+    ) {
+      playerExpansion = 1
+    }
+  }
+
+  private func collapsePlayer() {
+    withAnimation(
+      .spring(response: 0.48, dampingFraction: 0.96, blendDuration: 0.14)
+    ) {
+      playerExpansion = 0
+    }
+  }
+
+  private var activeWindowSafeAreaInsets: UIEdgeInsets {
+    activeWindow?.safeAreaInsets ?? .zero
+  }
+
+  private var activeWindow: UIWindow? {
+    UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .filter { $0.activationState == .foregroundActive }
+      .flatMap { $0.windows }
+      .first(where: \ .isKeyWindow)
+  }
+
+  private func smoothStep(_ value: CGFloat) -> CGFloat {
+    let x = min(1, max(0, value))
+    return x * x * (3 - (2 * x))
+  }
+}
+
+enum AppTab: Hashable {
+  case home, library, profile
+}
