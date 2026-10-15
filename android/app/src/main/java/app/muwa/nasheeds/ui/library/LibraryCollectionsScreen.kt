@@ -142,17 +142,5 @@ internal fun LibraryCollectionsScreen(
 
 @Composable
 private fun LibraryEmpty(title: String, detail: String) {
-    Column(
-        Modifier.fillMaxWidth().padding(vertical = 40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Icon(Icons.Default.LibraryMusic, null, Modifier.size(44.dp), tint = MuwaColors.Secondary)
-        Text(title, style = MaterialTheme.typography.titleLarge)
-        Text(
-            detail,
-            color = MuwaColors.Secondary,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        )
-    }
+    app.muwa.nasheeds.ui.components.EmptyState(Icons.Default.LibraryMusic, title, detail)
 }

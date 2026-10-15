@@ -532,6 +532,41 @@ class NavigationAndQueueTest {
     }
 
     @Test
+    fun playlistPickerTogglesTracksInTheExistingPersistentLibrary() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val library = AppGraph.library
+        var id = ""
+        instrumentation.runOnMainSync { id = library.createPlaylist("Проверка выбора") }
+        val track = library.catalog.first()
+        try {
+            ActivityScenario.launch<MainActivity>(
+                    Intent(context, MainActivity::class.java)
+                        .putExtra("review.route", "playlist:$id")
+                )
+                .use {
+                    compose.onNodeWithTag("playlist.add").performClick()
+                    compose.onNodeWithTag("playlist.pick.${track.id}").performClick()
+                    compose.waitUntil(timeoutMillis = 10_000) {
+                        library.playlists.first { it.id == id }.ids == listOf(track.id)
+                    }
+                    assertEquals(
+                        listOf(track.id),
+                        Library(context).playlists.first { it.id == id }.ids,
+                    )
+                    compose.onNodeWithTag("playlist.pick.${track.id}").performClick()
+                    compose.waitUntil(timeoutMillis = 10_000) {
+                        library.playlists.first { it.id == id }.ids.isEmpty()
+                    }
+                    assertTrue(Library(context).playlists.first { it.id == id }.ids.isEmpty())
+                    compose.onNodeWithText("Готово").performClick()
+                }
+        } finally {
+            instrumentation.runOnMainSync { library.deletePlaylist(id) }
+        }
+    }
+
+    @Test
     fun queueControlsReorderAndRemovePersistedItems() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

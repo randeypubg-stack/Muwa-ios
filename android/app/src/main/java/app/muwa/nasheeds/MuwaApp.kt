@@ -203,7 +203,7 @@ fun MuwaApp(
                     "downloads" -> SavedTracksScreen(model, route, play, { addingTrack = it })
                     "premium" -> PremiumScreen(model, { route = "promo" }, { route = "auth" })
                     "promo" -> PromoScreen(model) { route = "auth" }
-                    "auth" -> AuthScreen(model)
+                    "auth" -> AuthScreen(model) { route = "profile" }
                     "settings" -> SettingsScreen(model)
                     "subtitles" -> SubtitleScreen(model)
                     "publication" -> PublicationScreen(model)
@@ -222,7 +222,10 @@ fun MuwaApp(
                             PlaylistScreen(
                                 model,
                                 route.substringAfter(':'),
-                                play,
+                                { track, tracks ->
+                                    model.play(track, tracks)
+                                    requestNotifications()
+                                },
                                 { addingTrack = it },
                             )
                         }

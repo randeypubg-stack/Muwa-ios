@@ -17,7 +17,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.muwa.nasheeds.*
 import app.muwa.nasheeds.ui.components.TrackRow
-import app.muwa.nasheeds.ui.design.MuwaColors
 import app.muwa.nasheeds.ui.state.rememberSaveableState
 
 @Composable
@@ -86,7 +85,11 @@ fun SearchScreen(model: MuwaModel, play: (Track, List<Track>) -> Unit, playlist:
         LazyColumn {
             if (results.isEmpty())
                 item {
-                    Text("Ничего не найдено", Modifier.padding(24.dp), color = MuwaColors.Secondary)
+                    app.muwa.nasheeds.ui.components.EmptyState(
+                        Icons.Default.Search,
+                        "Ничего не найдено",
+                        "Попробуйте другое название или имя автора.",
+                    )
                 }
             items(results, key = { it.id }) {
                 TrackRow(model, it, { track -> play(track, results) }, playlist)

@@ -35,6 +35,12 @@ at Build 54. No new reference mockup was selected or applied.
 - Profile follows the same identity, Premium and settings grouping. Android
   restores server-account access; it does not pretend to restore Apple purchases.
 
+- Secondary screens share the iOS card hierarchy: sign-in/registration (including
+  password confirmation), Premium benefit grid, and empty library/search states.
+  Playlist detail can select/remove catalog tracks and rename through the existing
+  Library store. Registration checks never submit a real account. Password input
+  is ephemeral rather than saved to the Activity Bundle.
+
 ## Platform boundaries
 
 Apple SF Symbols/system fonts, AirPlay and iOS system sheets are platform APIs.

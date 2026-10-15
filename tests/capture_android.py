@@ -8,7 +8,7 @@ import time
 from android_review_device import assert_frame_dimensions, review_device
 
 PACKAGE = 'app.muwa.nasheeds'
-ROUTES = ['home', 'library', 'profile', 'premium', 'promo', 'settings', 'search', 'queue', 'downloads', 'auth', 'publication', 'player']
+ROUTES = ['home', 'library', 'profile', 'premium', 'promo', 'settings', 'search', 'queue', 'downloads', 'favorites', 'history', 'playlists', 'drafts', 'publications', 'auth', 'publication', 'player']
 
 def adb(*args, binary=False):
     return subprocess.check_output(['adb', *args], text=not binary, timeout=30)

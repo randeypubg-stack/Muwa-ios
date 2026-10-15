@@ -1,6 +1,7 @@
 package app.muwa.nasheeds
 
 import android.content.Intent
+import androidx.compose.ui.test.*
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
@@ -12,6 +13,8 @@ import org.junit.Before
 import org.junit.Test
 
 class NativeScreensTest {
+    @get:org.junit.Rule val compose = androidx.compose.ui.test.junit4.createEmptyComposeRule()
+
     @Before
     fun loadReviewCatalog() {
         installReviewCatalog()
@@ -39,6 +42,11 @@ class NativeScreensTest {
                 "search",
                 "queue",
                 "downloads",
+                "favorites",
+                "history",
+                "playlists",
+                "drafts",
+                "publications",
                 "auth",
                 "publication",
                 "player",
@@ -60,6 +68,31 @@ class NativeScreensTest {
                 }
         }
         assertTrue(File(output, "player.png").length() > 0)
+    }
+
+    @Test
+    fun registrationRequiresMatchingConfirmationWithoutCreatingAnAccount() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        ActivityScenario.launch<MainActivity>(
+                Intent(context, MainActivity::class.java).putExtra("review.route", "auth")
+            )
+            .use {
+                compose.onNodeWithTag("auth.register-switch").performClick()
+                compose.onNodeWithTag("auth.name").performTextInput("Проверка")
+                compose.onNodeWithTag("auth.email").performTextInput("review@example.invalid")
+                compose
+                    .onNodeWithTag("auth.password")
+                    .performScrollTo()
+                    .performTextInput("test-password")
+                compose
+                    .onNodeWithTag("auth.confirmation")
+                    .performScrollTo()
+                    .performTextInput("different-password")
+                compose.onNodeWithTag("auth.submit").assertIsNotEnabled()
+                compose.onNodeWithTag("auth.confirmation").performTextClearance()
+                compose.onNodeWithTag("auth.confirmation").performTextInput("test-password")
+                compose.onNodeWithTag("auth.submit").assertIsEnabled()
+            }
     }
 
     @Test
