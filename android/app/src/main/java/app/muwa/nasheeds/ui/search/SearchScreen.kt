@@ -21,7 +21,7 @@ import app.muwa.nasheeds.ui.design.MuwaColors
 import app.muwa.nasheeds.ui.state.rememberSaveableState
 
 @Composable
-fun SearchScreen(model: MuwaModel, play: (Track) -> Unit, playlist: (Track) -> Unit) {
+fun SearchScreen(model: MuwaModel, play: (Track, List<Track>) -> Unit, playlist: (Track) -> Unit) {
     var query by rememberSaveableState("")
     var filter by rememberSaveableState("Все")
     val rows =
@@ -84,7 +84,7 @@ fun SearchScreen(model: MuwaModel, play: (Track) -> Unit, playlist: (Track) -> U
                     Text("Ничего не найдено", Modifier.padding(24.dp), color = MuwaColors.Secondary)
                 }
             items(results, key = { it.id }) {
-                TrackRow(model, it, { track -> model.play(track, results) }, playlist)
+                TrackRow(model, it, { track -> play(track, results) }, playlist)
                 HorizontalDivider(color = Color.White.copy(alpha = .05f))
             }
         }

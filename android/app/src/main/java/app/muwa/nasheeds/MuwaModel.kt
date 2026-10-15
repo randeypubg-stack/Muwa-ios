@@ -265,10 +265,10 @@ class MuwaModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
-    fun resume() {
+    fun resume(autoplay: Boolean = true) {
         val value = resumeCandidate ?: return
         library.track(value.first)?.let {
-            play(it)
+            play(it, autoplay = autoplay)
             controller?.seekTo(value.second)
         }
     }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.NorthEast
 import androidx.compose.material3.*
@@ -42,6 +43,7 @@ fun HomeScreen(
     onCollection: (String) -> Unit,
     resume: () -> Unit,
     openPlayer: (Track) -> Unit,
+    openResume: () -> Unit,
 ) {
     val catalog = model.library.catalog
     LazyColumn(
@@ -49,21 +51,86 @@ fun HomeScreen(
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp),
     ) {
-        if (model.resumeCandidate != null && model.track == null)
+        val saved = model.resumeCandidate
+        val resumeTrack = saved?.let { model.library.track(it.first) }
+        if (saved != null && resumeTrack != null && model.track == null)
             item {
-                Card(
-                    colors =
-                        CardDefaults.cardColors(containerColor = MuwaColors.Ice.copy(alpha = .07f)),
-                    shape = RoundedCornerShape(24.dp),
+                Column(
+                    Modifier.fillMaxWidth()
+                        .background(Color.White.copy(alpha = .025f), RoundedCornerShape(22.dp))
+                        .border(1.dp, Color.White.copy(alpha = .05f), RoundedCornerShape(22.dp))
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Column(Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "Продолжить прослушивание",
-                            style = MaterialTheme.typography.titleMedium,
+                            "ПРОДОЛЖИТЬ СЛУШАТЬ",
+                            Modifier.weight(1f),
+                            fontSize = 10.sp,
+                            letterSpacing = 2.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MuwaColors.Secondary,
                         )
-                        Row {
-                            TextButton(onClick = resume) { Text("Продолжить") }
-                            TextButton(onClick = model::dismissResume) { Text("Скрыть") }
+                        IconButton(
+                            onClick = model::dismissResume,
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                androidx.compose.material.icons.Icons.Default.Close,
+                                "Скрыть предложение продолжить",
+                                Modifier.size(14.dp),
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Cover(
+                            resumeTrack,
+                            Modifier.size(82.dp).clickable(onClick = openResume),
+                            19.dp,
+                        )
+                        Column(
+                            Modifier.weight(1f).padding(start = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            Text(
+                                resumeTrack.title,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                resumeTrack.artist,
+                                fontSize = 12.sp,
+                                color = MuwaColors.Secondary,
+                                maxLines = 1,
+                            )
+                            Text(
+                                app.muwa.nasheeds.formatTime(saved.second),
+                                fontSize = 11.sp,
+                                color = MuwaColors.Secondary,
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = resume,
+                                    colors =
+                                        ButtonDefaults.buttonColors(
+                                            containerColor = Color.White,
+                                            contentColor = Color.Black,
+                                        ),
+                                    contentPadding =
+                                        PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                ) {
+                                    Text("Продолжить", fontSize = 11.sp)
+                                }
+                                TextButton(
+                                    onClick = openResume,
+                                    contentPadding =
+                                        PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                ) {
+                                    Text("Открыть", fontSize = 11.sp)
+                                }
+                            }
                         }
                     }
                 }

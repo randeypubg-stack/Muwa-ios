@@ -358,6 +358,19 @@ class NavigationAndQueueTest {
                                 AppGraph.reviewPlaybackEnabled = reviewMode
                             }
                         }
+                        val shots = File("/sdcard/Download/muwa-player-review")
+                        val device = UiDevice.getInstance(instrumentation)
+                        device.executeShellCommand("mkdir -p ${shots.path}")
+                        assertTrue(
+                            device.takeScreenshot(
+                                File(
+                                    shots,
+                                    if (orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)
+                                        "portrait.png"
+                                    else "landscape.png",
+                                )
+                            )
+                        )
                         val viewport =
                             compose.onNodeWithTag("player.screen").getUnclippedBoundsInRoot()
                         val safeContent =

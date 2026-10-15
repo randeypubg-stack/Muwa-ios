@@ -58,25 +58,6 @@ fun Cover(
 }
 
 @Composable
-fun ActionCard(
-    title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    action: () -> Unit,
-) {
-    Card(
-        onClick = action,
-        modifier = Modifier.fillMaxWidth().glassPanel(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-    ) {
-        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null)
-            Text(title, Modifier.weight(1f).padding(start = 16.dp))
-            Icon(Icons.AutoMirrored.Filled.ArrowForward, null)
-        }
-    }
-}
-
-@Composable
 fun TrackRow(model: MuwaModel, track: Track, play: (Track) -> Unit, playlist: (Track) -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val context = LocalContext.current

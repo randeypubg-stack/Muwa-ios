@@ -1,6 +1,9 @@
 package app.muwa.nasheeds
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -53,6 +56,23 @@ fun MuwaApp(
     var route by rememberSaveableState(if (initialRoute == "player") "home" else initialRoute)
     var expanded by rememberSaveableState(initialRoute == "player")
     var readerFromPlayer by rememberSaveableState(false)
+    var readerReturnRoute by rememberSaveableState("home")
+    var readerTrackKey by rememberSaveableState("")
+    val playerTrackKey =
+        model.track?.let { "${it.id}|${it.audio}|${it.captionsRevision}" }.orEmpty()
+    val motionAllowed = rememberAmbientMotionAllowed()
+    LaunchedEffect(playerTrackKey, model.subtitles, model.subtitleLoading) {
+        if (
+            route == "subtitles" &&
+                readerFromPlayer &&
+                (readerTrackKey != playerTrackKey ||
+                    (!model.subtitleLoading && model.subtitles.isEmpty()))
+        ) {
+            route = readerReturnRoute
+            expanded = model.track != null
+            readerFromPlayer = false
+        }
+    }
     var playerQueue by rememberSaveableState(false)
     val topScroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var newPlaylist by remember { mutableStateOf(false) }
@@ -70,7 +90,7 @@ fun MuwaApp(
     }
     BackHandler(route !in listOf("home", "library", "profile") || expanded) {
         if (route == "subtitles" && readerFromPlayer) {
-            route = "home"
+            route = readerReturnRoute
             expanded = true
             readerFromPlayer = false
         } else if (expanded) expanded = false
@@ -112,7 +132,7 @@ fun MuwaApp(
                                 else if (selected == "profile") "profile" else "library"
                         },
                         {
-                            route = "home"
+                            route = if (readerFromPlayer) readerReturnRoute else "home"
                             expanded = readerFromPlayer
                             readerFromPlayer = false
                         },
@@ -147,6 +167,10 @@ fun MuwaApp(
                                 model.resume()
                                 requestNotifications()
                             },
+                            openResume = {
+                                model.resume(autoplay = false)
+                                expanded = true
+                            },
                             openPlayer = {
                                 model.play(it, model.library.catalog)
                                 expanded = true
@@ -154,7 +178,7 @@ fun MuwaApp(
                             },
                         )
                     "queue" -> QueueScreen(model, play)
-                    "library" -> LibraryScreen(model, { route = it }, { newPlaylist = true })
+                    "library" -> LibraryScreen(model, { route = it })
                     "playlists",
                     "publications",
                     "drafts" ->
@@ -165,7 +189,15 @@ fun MuwaApp(
                             { newPlaylist = true },
                         )
                     "profile" -> ProfileScreen(model) { route = it }
-                    "search" -> SearchScreen(model, play, { addingTrack = it })
+                    "search" ->
+                        SearchScreen(
+                            model,
+                            { track, results ->
+                                model.play(track, results)
+                                requestNotifications()
+                            },
+                            { addingTrack = it },
+                        )
                     "favorites",
                     "history",
                     "downloads" -> SavedTracksScreen(model, route, play, { addingTrack = it })
@@ -197,12 +229,27 @@ fun MuwaApp(
                 }
             }
         }
-        if (expanded && model.track != null)
+        AnimatedVisibility(
+            visible = expanded && model.track != null,
+            modifier = Modifier.fillMaxSize(),
+            enter =
+                if (motionAllowed)
+                    fadeIn(tween(180)) +
+                        slideInVertically(spring(dampingRatio = .94f, stiffness = 240f)) { it / 4 }
+                else EnterTransition.None,
+            exit =
+                if (motionAllowed)
+                    fadeOut(tween(140)) +
+                        slideOutVertically(spring(dampingRatio = .94f, stiffness = 240f)) { it / 4 }
+                else ExitTransition.None,
+        ) {
             PlayerSheet(
                 model,
                 onClose = { expanded = false },
                 onQueue = { playerQueue = true },
                 onSubtitles = {
+                    readerReturnRoute = route
+                    readerTrackKey = playerTrackKey
                     readerFromPlayer = true
                     model.loadSubtitles()
                     expanded = false
@@ -211,6 +258,7 @@ fun MuwaApp(
                 onPlaylist = { addingTrack = model.track },
                 bottomClearance = bottomClearanceDp.dp,
             )
+        }
         if (route != "subtitles")
             AppBottomBar(
                 model = model,

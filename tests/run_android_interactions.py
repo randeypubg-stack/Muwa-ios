@@ -13,6 +13,12 @@ for orientation in ("portrait", "landscape"):
     capture = subprocess.run(["adb", "pull", source, str(output / f"{orientation}.png")])
     if capture.returncode:
         missing.append(orientation)
+# Preserve actual native frames even when a later layout assertion fails.
+# App-scoped files disappear when connected-test cleanup uninstalls its APK.
+for source, folder in (("muwa-screen-review", "native-screen-checkpoints"),
+                       ("muwa-player-review", "player-checkpoints")):
+    subprocess.run(["adb", "pull", f"/sdcard/Download/{source}",
+                    str(Path(os.environ["MUWA_ANDROID_OUTPUT"]) / folder)])
 if result.returncode:
     sys.exit(result.returncode)
 if missing:

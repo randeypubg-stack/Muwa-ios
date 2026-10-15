@@ -21,7 +21,7 @@ import app.muwa.nasheeds.*
 import app.muwa.nasheeds.ui.design.*
 
 @Composable
-fun LibraryScreen(model: MuwaModel, onRoute: (String) -> Unit, onCreatePlaylist: () -> Unit) {
+fun LibraryScreen(model: MuwaModel, onRoute: (String) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val columns = if (maxWidth >= 700.dp) 4 else if (maxWidth >= 560.dp) 3 else 2
         val outer = if (maxWidth >= 700.dp) 28.dp else 5.dp
